@@ -76,6 +76,12 @@ export type PropertySummaryAssetsByCategoryItem = {
   count: number;
 };
 
+export type PropertySummaryScoringBreakdown = {
+  assetAgeScore?: number;
+  overdueScore?: number;
+  criticalAssets?: AssetHealthScore[];
+};
+
 export interface MaintenanceTask {
   id: string;
   assetId: string;
@@ -86,6 +92,20 @@ export interface MaintenanceTask {
   completedAt?: string;
   isDiy: boolean;
   estimatedCost?: number;
+  createdAt: string;
+}
+
+export interface ServiceRecord {
+  id: string;
+  assetId: string;
+  date: string;
+  technicianName?: string;
+  companyName?: string;
+  description: string;
+  cost?: number;
+  nextServiceDate?: string;
+  receiptUrl?: string;
+  verified?: boolean;
   createdAt: string;
 }
 
@@ -101,6 +121,8 @@ export interface PropertySummary {
   upcomingTasks: MaintenanceTask[];
   assetsByCategory: PropertySummaryAssetsByCategoryItem[];
   assetScores: AssetHealthScore[];
+  scoringBreakdown?: PropertySummaryScoringBreakdown;
+  recentRecords?: ServiceRecord[];
 }
 
 export type AssetCategory = (typeof AssetCategory)[keyof typeof AssetCategory];
@@ -199,20 +221,6 @@ export interface UpdateAssetBody {
   status?: UpdateAssetBodyStatus;
   notes?: string;
   photoUrl?: string;
-}
-
-export interface ServiceRecord {
-  id: string;
-  assetId: string;
-  date: string;
-  technicianName?: string;
-  companyName?: string;
-  description: string;
-  cost?: number;
-  nextServiceDate?: string;
-  receiptUrl?: string;
-  verified?: boolean;
-  createdAt: string;
 }
 
 export interface CreateServiceRecordBody {

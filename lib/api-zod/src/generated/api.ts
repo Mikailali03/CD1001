@@ -154,6 +154,46 @@ export const GetPropertySummaryResponse = zod.object({
       installDate: zod.string().optional(),
     }),
   ),
+  scoringBreakdown: zod
+    .object({
+      assetAgeScore: zod.number().optional(),
+      overdueScore: zod.number().optional(),
+      criticalAssets: zod
+        .array(
+          zod.object({
+            assetId: zod.string(),
+            assetName: zod.string(),
+            category: zod.string(),
+            score: zod
+              .number()
+              .describe(
+                "0–100 health score for this asset based on age vs expected lifespan",
+              ),
+            ageYears: zod.number(),
+            lifespanYears: zod.number(),
+            installDate: zod.string().optional(),
+          }),
+        )
+        .optional(),
+    })
+    .optional(),
+  recentRecords: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        assetId: zod.string(),
+        date: zod.coerce.date(),
+        technicianName: zod.string().optional(),
+        companyName: zod.string().optional(),
+        description: zod.string(),
+        cost: zod.number().optional(),
+        nextServiceDate: zod.coerce.date().optional(),
+        receiptUrl: zod.string().optional(),
+        verified: zod.boolean().optional(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
 });
 
 /**

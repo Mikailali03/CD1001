@@ -615,6 +615,21 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AssetHealthScore"
+        scoringBreakdown:
+          type: object
+          properties:
+            assetAgeScore:
+              type: integer
+            overdueScore:
+              type: integer
+            criticalAssets:
+              type: array
+              items:
+                $ref: "#/components/schemas/AssetHealthScore"
+        recentRecords:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceRecord"
 
     # ─── Asset ─────────────────────────────────────────────────────────────────
     Asset:

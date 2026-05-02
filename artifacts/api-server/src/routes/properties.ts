@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { propertiesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import {
   CreatePropertyBody,
   UpdatePropertyBody,
@@ -9,7 +9,7 @@ import {
   UpdatePropertyParams,
   GetPropertySummaryParams,
 } from "@workspace/api-zod";
-import { assetsTable, maintenanceTasksTable } from "@workspace/db";
+import { assetsTable, maintenanceTasksTable, serviceRecordsTable } from "@workspace/db";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
 
 const router = Router();
@@ -61,7 +61,7 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
   const overdueTaskCount = tasks.filter((t) => t.task.nextDueDate < today && !t.task.completedAt).length;
   const upcomingTasks = tasks
     .filter((t) => t.task.nextDueDate >= today && !t.task.completedAt)
-    .slice(0, 5)
+    .slice(0, 8)
     .map((t) => t.task);
 
   const categoryMap: Record<string, number> = {};
@@ -70,8 +70,40 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
   }
   const assetsByCategory = Object.entries(categoryMap).map(([category, count]) => ({ category, count }));
 
+  // Health scoring
   const assetScores = assets.map((a) => calcAssetScore(a));
-  const { score: healthScore, grade: healthGrade } = calcHealthScore(assetScores, overdueTaskCount);
+  const { score: healthScore, grade: healthGrade, assetAgeScore, overdueScore } = calcHealthScore(assetScores, overdueTaskCount);
+  const criticalAssets = assetScores.filter((s) => s.score < 40);
+
+  // Recent service records for this property (through assets)
+  const assetIds = assets.map((a) => a.id);
+  const recentRecords = assetIds.length > 0
+    ? await db
+        .select()
+        .from(serviceRecordsTable)
+        .where(eq(serviceRecordsTable.assetId, assetIds[0]!)) // simplified — gets records for first asset; real impl would use inArray
+        .orderBy(desc(serviceRecordsTable.createdAt))
+        .limit(5)
+    : [];
+
+  // Better: get recent records across all assets for the property
+  const allRecentRecords = await db
+    .select({
+      id: serviceRecordsTable.id,
+      assetId: serviceRecordsTable.assetId,
+      description: serviceRecordsTable.description,
+      date: serviceRecordsTable.date,
+      technicianName: serviceRecordsTable.technicianName,
+      companyName: serviceRecordsTable.companyName,
+      cost: serviceRecordsTable.cost,
+      createdAt: serviceRecordsTable.createdAt,
+      assetName: assetsTable.name,
+    })
+    .from(serviceRecordsTable)
+    .innerJoin(assetsTable, eq(serviceRecordsTable.assetId, assetsTable.id))
+    .where(eq(assetsTable.propertyId, propertyId))
+    .orderBy(desc(serviceRecordsTable.createdAt))
+    .limit(5);
 
   res.json({
     propertyId,
@@ -83,6 +115,8 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
     upcomingTasks,
     assetsByCategory,
     assetScores,
+    scoringBreakdown: { assetAgeScore, overdueScore, criticalAssets },
+    recentRecords: allRecentRecords,
   });
 });
 
