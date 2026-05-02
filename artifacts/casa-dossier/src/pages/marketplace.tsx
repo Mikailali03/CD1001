@@ -1,119 +1,304 @@
-import { useListMarketplaceJobs } from "@workspace/api-client-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { useState } from "react";
+import {
+  useListMarketplaceJobs,
+  useCreateMarketplaceJob,
+  useListProperties,
+  useListAssets,
+  getListMarketplaceJobsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Wrench, MapPin, AlertCircle, ShieldAlert, FileText, CheckCircle2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import {
+  UserSearch,
+  MapPin,
+  Wrench,
+  Plus,
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  FileText,
+} from "lucide-react";
 import { format } from "date-fns";
+
+function PostJobDialog() {
+  const [open, setOpen] = useState(false);
+  const [propertyId, setPropertyId] = useState("");
+  const [assetId, setAssetId] = useState("");
+  const [urgency, setUrgency] = useState("medium");
+  const [description, setDescription] = useState("");
+
+  const { data: properties } = useListProperties();
+  const { data: assets } = useListAssets(propertyId, undefined, {
+    query: { enabled: !!propertyId, queryKey: ["assets", propertyId] },
+  });
+
+  const queryClient = useQueryClient();
+  const createJob = useCreateMarketplaceJob();
+  const { toast } = useToast();
+
+  function handleSubmit() {
+    if (!assetId || !description.trim()) return;
+    createJob.mutate(
+      { data: { assetId, description, urgency: urgency as "low" | "medium" | "high" | "emergency" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
+          toast({ title: "Request posted", description: "Qualified pros will be notified of your request." });
+          setOpen(false);
+          setPropertyId("");
+          setAssetId("");
+          setDescription("");
+          setUrgency("medium");
+        },
+        onError: () => {
+          toast({ title: "Error", description: "Could not post your request. Please try again.", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="gap-2" data-testid="button-post-job">
+          <Plus className="h-4 w-4" />
+          Post a Request
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Request a Service Pro</DialogTitle>
+          <DialogDescription>
+            Tell us what needs attention. Pros will see the asset specs so they arrive prepared.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="property-select">Property</Label>
+            <Select value={propertyId} onValueChange={(v) => { setPropertyId(v); setAssetId(""); }}>
+              <SelectTrigger id="property-select" data-testid="select-property">
+                <SelectValue placeholder="Choose a property..." />
+              </SelectTrigger>
+              <SelectContent>
+                {properties?.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="asset-select">Which item needs service?</Label>
+            <Select value={assetId} onValueChange={setAssetId} disabled={!propertyId}>
+              <SelectTrigger id="asset-select" data-testid="select-asset">
+                <SelectValue placeholder={propertyId ? "Choose an asset..." : "Select a property first"} />
+              </SelectTrigger>
+              <SelectContent>
+                {assets?.map((a) => (
+                  <SelectItem key={a.id} value={a.id}>
+                    {a.name} {a.brand ? `— ${a.brand}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="urgency-select">How urgent is this?</Label>
+            <Select value={urgency} onValueChange={setUrgency}>
+              <SelectTrigger id="urgency-select" data-testid="select-urgency">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Not urgent — just planning ahead</SelectItem>
+                <SelectItem value="medium">Moderate — within the next few weeks</SelectItem>
+                <SelectItem value="high">Soon — within the next few days</SelectItem>
+                <SelectItem value="emergency">Emergency — needs immediate attention</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description-input">Describe what's going on</Label>
+            <Textarea
+              id="description-input"
+              data-testid="textarea-description"
+              placeholder="e.g. My AC unit stopped cooling. It runs but only blows warm air."
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="resize-none"
+              rows={4}
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!assetId || !description.trim() || createJob.isPending}
+            data-testid="button-submit-job"
+          >
+            {createJob.isPending ? "Posting..." : "Post Request"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const urgencyConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+  emergency: { label: "Emergency", className: "border-l-destructive", icon: <AlertCircle className="h-3.5 w-3.5 text-destructive" /> },
+  high:      { label: "High",      className: "border-l-orange-500",  icon: <AlertCircle className="h-3.5 w-3.5 text-orange-500" /> },
+  medium:    { label: "Medium",    className: "border-l-chart-3",     icon: <Clock className="h-3.5 w-3.5 text-chart-3" /> },
+  low:       { label: "Low",       className: "border-l-muted-foreground/30", icon: <Clock className="h-3.5 w-3.5 text-muted-foreground" /> },
+};
+
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
+  open:      { label: "Awaiting a Pro", variant: "secondary" },
+  claimed:   { label: "Pro Assigned",   variant: "default" },
+  completed: { label: "Completed",      variant: "outline" },
+};
 
 export default function Marketplace() {
   const { data: jobs, isLoading } = useListMarketplaceJobs();
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
-        <Skeleton className="h-10 w-48 mb-2" />
-        <Skeleton className="h-4 w-96 mb-8" />
-        <div className="grid gap-6">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-48 rounded-xl" />
+      <div className="p-6 space-y-6 max-w-3xl mx-auto">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-9 w-48" />
+          <Skeleton className="h-9 w-36" />
+        </div>
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-44 rounded-xl" />
           ))}
         </div>
       </div>
     );
   }
 
-  const getUrgencyBadge = (urgency?: string) => {
-    switch (urgency) {
-      case 'emergency': return <Badge variant="destructive" className="animate-pulse">Emergency</Badge>;
-      case 'high': return <Badge className="bg-orange-500 hover:bg-orange-600 text-white">High Priority</Badge>;
-      case 'medium': return <Badge variant="secondary">Medium</Badge>;
-      case 'low': return <Badge variant="outline">Low</Badge>;
-      default: return null;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'open': return <Badge className="bg-chart-5/10 text-chart-5 border-chart-5/20">Open</Badge>;
-      case 'claimed': return <Badge className="bg-chart-3/10 text-chart-3 border-chart-3/20">Claimed</Badge>;
-      case 'completed': return <Badge className="bg-chart-1/10 text-chart-1 border-chart-1/20"><CheckCircle2 className="w-3 h-3 mr-1"/> Completed</Badge>;
-      default: return null;
-    }
-  }
-
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+    <div className="p-6 space-y-6 max-w-3xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Pro Marketplace</h1>
-          <p className="text-muted-foreground">Browse open service requests and connect with homeowners.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">Find a Pro</h1>
+          <p className="text-muted-foreground mt-1">
+            Post a service request — pros see your asset specs before they arrive.
+          </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" className="bg-background">Filter by Category</Button>
-          <Button variant="outline" className="bg-background">Sort by Urgency</Button>
-        </div>
+        <PostJobDialog />
       </div>
 
       {jobs && jobs.length > 0 ? (
         <div className="space-y-4">
-          {jobs.map(job => (
-            <Card key={job.id} className={`overflow-hidden hover-elevate transition-all border-l-4 ${job.urgency === 'emergency' ? 'border-l-destructive' : job.urgency === 'high' ? 'border-l-orange-500' : 'border-l-muted'}`}>
-              <div className="p-6 flex flex-col sm:flex-row gap-6">
-                <div className="flex-1 space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {getStatusBadge(job.status)}
-                      {getUrgencyBadge(job.urgency)}
+          {jobs.map((job) => {
+            const urgency = urgencyConfig[job.urgency ?? "medium"] ?? urgencyConfig.medium;
+            const status = statusConfig[job.status ?? "open"] ?? statusConfig.open;
+
+            return (
+              <Card
+                key={job.id}
+                data-testid={`card-job-${job.id}`}
+                className={`border-l-4 ${urgency.className} hover-elevate transition-all`}
+              >
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={status.variant}>{status.label}</Badge>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        {urgency.icon}
+                        {urgency.label} priority
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground bg-secondary px-2 py-1 rounded-full">
-                      Posted {format(new Date(job.createdAt), 'MMM d')}
+                    <span className="text-xs text-muted-foreground">
+                      Posted {format(new Date(job.createdAt), "MMM d, yyyy")}
                     </span>
                   </div>
 
-                  <div>
-                    <h3 className="text-lg font-semibold">{job.description}</h3>
-                    <p className="text-muted-foreground flex items-center gap-1.5 text-sm mt-1">
-                      <MapPin className="h-3.5 w-3.5" />
-                      {job.city || 'Unknown City'}, {job.state || 'Unknown State'}
-                    </p>
-                  </div>
+                  <p className="text-sm leading-relaxed">{job.description}</p>
 
-                  <div className="bg-muted/40 rounded-lg p-4 border border-dashed flex flex-col sm:flex-row sm:items-center gap-4">
-                    <div className="bg-background p-2 rounded-md shadow-sm self-start">
-                      <Wrench className="h-5 w-5 text-primary" />
+                  <div className="bg-muted/40 rounded-lg p-3.5 border border-dashed flex gap-4 items-start">
+                    <div className="bg-background p-2 rounded-md shadow-sm shrink-0">
+                      <Wrench className="h-4 w-4 text-primary" />
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Target Asset</p>
-                      <p className="font-medium text-sm">{job.assetName} <span className="text-muted-foreground font-normal">({job.assetCategory})</span></p>
-                      <p className="text-xs text-muted-foreground font-mono mt-1">
-                        {job.assetBrand || 'No brand'} • {job.assetModel || 'No model'} • {job.assetSerialNumber || 'No S/N'}
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
+                        Asset on File
+                      </p>
+                      <p className="font-medium text-sm">{job.assetName}</p>
+                      <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                        {[job.assetBrand, job.assetModel, job.assetSerialNumber && `S/N ${job.assetSerialNumber}`]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     </div>
+                    {(job.city || job.state) && (
+                      <div className="ml-auto shrink-0 flex items-center gap-1 text-xs text-muted-foreground">
+                        <MapPin className="h-3 w-3" />
+                        {[job.city, job.state].filter(Boolean).join(", ")}
+                      </div>
+                    )}
                   </div>
-                </div>
 
-                <div className="sm:w-48 flex flex-col justify-center sm:border-l sm:pl-6 gap-3 shrink-0">
-                  <Button className="w-full font-semibold shadow-sm" disabled={job.status !== 'open'}>
-                    {job.status === 'open' ? 'Claim Job' : job.status === 'claimed' ? 'Already Claimed' : 'Completed'}
-                  </Button>
-                  <Button variant="outline" className="w-full">
-                    View Asset History
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
+                  {job.status === "completed" && (
+                    <div className="flex items-center gap-2 text-sm text-chart-1 font-medium">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Service completed
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       ) : (
-        <div className="text-center py-20 bg-muted/30 rounded-xl border border-dashed">
-          <FileText className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No active jobs</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto mt-2">
-            There are currently no open service requests in the marketplace.
+        <div className="text-center py-24 bg-muted/30 rounded-xl border border-dashed">
+          <UserSearch className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground">No service requests yet</h3>
+          <p className="text-muted-foreground max-w-xs mx-auto mt-2 text-sm">
+            When something needs attention, post a request and qualified local pros will reach out.
           </p>
+          <div className="mt-6">
+            <PostJobDialog />
+          </div>
         </div>
       )}
+
+      <div className="rounded-xl bg-accent/50 border border-accent p-5 flex gap-4">
+        <FileText className="h-5 w-5 text-accent-foreground shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium text-sm text-accent-foreground">Why your asset data matters</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            When you post a request, pros automatically receive your asset's make, model, and serial number.
+            They arrive with the right parts and no guesswork — saving you time and money.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

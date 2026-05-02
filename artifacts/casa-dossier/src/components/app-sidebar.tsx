@@ -9,22 +9,21 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
-import { 
-  Home, 
-  Building2, 
-  ClipboardList, 
-  Wrench, 
-  BookOpen, 
+import {
+  LayoutDashboard,
+  Building2,
+  BookOpen,
+  UserSearch,
   Settings,
-  ShieldCheck
+  ShieldCheck,
 } from "lucide-react";
 
 const navigation = [
-  { name: "Dashboard", href: "/", icon: Home },
-  { name: "Properties", href: "/properties", icon: Building2 },
-  { name: "Intake Form", href: "/intake", icon: ClipboardList },
-  { name: "Marketplace", href: "/marketplace", icon: Wrench },
+  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "My Properties", href: "/properties", icon: Building2 },
+  { name: "Find a Pro", href: "/marketplace", icon: UserSearch },
   { name: "DIY Guides", href: "/guides", icon: BookOpen },
 ];
 
@@ -33,25 +32,40 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="border-b px-6 py-4">
-        <div className="flex items-center gap-2 font-semibold text-lg text-primary">
-          <ShieldCheck className="h-6 w-6 text-chart-1" />
-          <span>Casa Dossier</span>
+      <SidebarHeader className="border-b px-6 py-5">
+        <div className="flex items-center gap-2.5">
+          <div className="bg-primary rounded-lg p-1.5">
+            <ShieldCheck className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <div>
+            <p className="font-bold text-base leading-none text-primary">Casa Dossier</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Your Home, Documented.</p>
+          </div>
         </div>
       </SidebarHeader>
-      <SidebarContent>
+
+      <SidebarContent className="pt-4">
         <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-4 mb-1">
+            Homeowner Portal
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigation.map((item) => {
-                const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+                const isActive =
+                  location === item.href ||
+                  (item.href !== "/" && location.startsWith(item.href));
                 return (
                   <SidebarMenuItem key={item.name}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      tooltip={item.name}
+                      className="h-10 px-4 rounded-lg"
+                    >
                       <Link href={item.href} className="flex items-center gap-3">
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.name}</span>
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span className="font-medium">{item.name}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -60,22 +74,24 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        <SidebarGroup className="mt-auto">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/settings"}>
-                  <Link href="/settings" className="flex items-center gap-3">
-                    <Settings className="h-4 w-4" />
-                    <span>Settings</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
       </SidebarContent>
+
+      <SidebarFooter className="border-t pb-4 pt-3">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              isActive={location === "/settings"}
+              className="h-10 px-4 rounded-lg"
+            >
+              <Link href="/settings" className="flex items-center gap-3">
+                <Settings className="h-4 w-4 shrink-0" />
+                <span className="font-medium">Settings</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
     </Sidebar>
   );
 }
