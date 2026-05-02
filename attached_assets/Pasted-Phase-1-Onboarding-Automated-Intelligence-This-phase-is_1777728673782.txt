@@ -1,0 +1,47 @@
+Phase 1: Onboarding & Automated Intelligence
+This phase is designed to provide "Instant Value" by reducing data entry friction through third-party integrations.
+1. Smart Property Initialization
+Workflow: User enters a street address. The app triggers a fetch to the RentCast API, which returns the Year Built, Square Footage, Bedrooms, Bathrooms, and Lot Size. The user verifies/edits this data before committing.
+The AI Scout Hook: Upon commitment, the app automatically triggers the "Property Scout" Edge Function. This AI researches the local climate and home age to generate a "Whole-Home Stewardship Plan" (e.g., Gutter cleaning, winterizing hose bibs).
+Interconnectivity: These tasks are automatically assigned to a default "Home Stewardship" asset, ensuring that general home care has a historical log just like a physical appliance.
+Phase 2: Asset Management & The "AI Lens"
+The core of the dossier is the catalog of physical systems (HVAC, Plumbing, Electrical, etc.).
+2. AI Lens Intake (Multimodal OCR)
+Workflow: User clicks "Add Asset" and selects "Use Camera" or "Browse Files." A photo of the technical specification plate is sent as a Base64 string to the Gemini 2.5 Flash Edge Function.
+Extraction: The AI extracts the Brand, Model Number, Serial Number, Manufacture Date, and Estimated Replacement Cost, then auto-fills the modal fields.
+Interconnectivity: This accuracy directly powers the Capital Outlook (math depends on the date) and the Technician Handoff (techs need serial numbers).
+3. Autonomous Task Generation
+Workflow: Once an asset is saved, the AI Research Agent identifies the official manufacturer-recommended maintenance schedule for that specific brand/model.
+Detailed Content: It generates not just a title (e.g., "Replace Filter"), but a detailed, bulleted "How Do I...?" instruction set.
+Interconnectivity: These tasks feed the Maintenance Inbox and the Home Health Score.
+Phase 3: The Maintenance Operating System (OS)
+This is the "Living" part of the app where the homeowner performs actions.
+4. Maintenance Inbox (The Carousel)
+Workflow: A dashboard carousel that filters and sorts all tasks (Hardware + Stewardship) due within the next 30 days.
+Prioritization: Items are sorted chronologically (Soonest first). Clicking the arrow takes the user directly to that asset's deep-dive record.
+5. Unified Service Logging (The "Chain of Custody")
+Workflow: Clicking "Complete" on a task or "Log Service" opens a unified modal. The user toggles between DIY (Self-Performed) or Professional.
+Validation: For Professional service, users select a pro from their Directory, enter the cost, and attach an image/PDF of the invoice.
+Date Recalculation: Upon saving, the system calculates the next due date by adding the frequency_months to the actual date performed, resetting the maintenance clock perfectly.
+Interconnectivity: Every dollar entered here is instantly aggregated in the Investment Ledger.
+Phase 4: Financial & Capital Planning
+This phase addresses the "Home as an Investment" persona.
+6. Capital Outlook (10-Year Liability Horizon)
+Workflow: Uses the Manufacture Date and Industry Longevity Standards to project the "Death Date" of every major system.
+Visualization: An interactive Recharts Line Graph showing projected spend over the next decade. Hovering over data points reveals which specific assets are due for replacement and their estimated cost.
+7. Investment Ledger (The Cost Basis)
+Workflow: A unified financial ledger that merges Capital Expenses (Original Install Costs) and Operating Expenses (Service/Maintenance Logs).
+Visualization: A Pie Chart showing "Capital Allocation" by category (e.g., 60% of spend is in HVAC) and a chronological transaction audit.
+Phase 5: Documentation & The Physical Bridge
+The final phase makes the data portable and physically accessible.
+8. QR Identity Protocol (The Tech Bridge)
+Workflow: Every asset (except Stewardship) generates a unique CDA Protocol QR Code (CDA|UUID|Registry_ID).
+Physical Tag: Homeowners can print these labels to stick on their actual equipment.
+Interconnectivity: When scanned by the Technician App, it bypasses the search UI and lands the tech directly on that specific unit's history and manual.
+9. Verified Report Generation
+Workflow: A one-tap button generates a high-contrast, black-and-white, Print-Optimized Audit.
+Content: It includes property specs, active system inventory, and a Decommissioned Systems Archive (soft-retired assets). Costs are hidden to maintain homeowner privacy while proving technical care.
+10. Digital Deed Transfer
+Workflow: Homeowner enters a recipient's email in Settings.
+Escrow Logic: If the user exists, a Postgres RPC Function performs an instant ownership handshake. If they don't exist, an invite is created in "Escrow," and a Resend Webhook emails the new owner to claim the history.
+Interconnectivity: Ensures the "Carfax" narrative stays with the house, not the person.
