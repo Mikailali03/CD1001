@@ -7,6 +7,16 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +38,8 @@ import {
   DollarSign,
   FileText,
   ShieldCheck,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -65,6 +77,7 @@ type Asset = {
   warrantyExpiry?: string | null;
   notes?: string | null;
   status?: string | null;
+  retiredAt?: string | Date | null;
 };
 
 type Props = {
@@ -78,6 +91,8 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [retireDialogOpen, setRetireDialogOpen] = useState(false);
+  const [unretireDialogOpen, setUnretireDialogOpen] = useState(false);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState<Category>("HVAC");
@@ -88,6 +103,8 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
   const [replacementCost, setReplacementCost] = useState("");
   const [warrantyExpiry, setWarrantyExpiry] = useState("");
   const [notes, setNotes] = useState("");
+
+  const isRetired = !!asset?.retiredAt;
 
   useEffect(() => {
     if (!asset) return;
@@ -105,6 +122,19 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     );
     setNotes(asset.notes ?? "");
   }, [asset]);
+
+  function invalidateAssetQueries() {
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey.some(
+          (k) =>
+            typeof k === "string" &&
+            (k.includes("assets") ||
+              k.includes(asset!.id) ||
+              k.includes("summary"))
+        ),
+    });
+  }
 
   async function handleSave() {
     if (!asset || !name.trim()) return;
@@ -132,18 +162,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
 
       const updated = await res.json();
       toast({ title: "Asset updated", description: `${name} has been saved.` });
-
-      queryClient.invalidateQueries({
-        predicate: (q) =>
-          q.queryKey.some(
-            (k) =>
-              typeof k === "string" &&
-              (k.includes("assets") ||
-                k.includes(asset.id) ||
-                k.includes("summary"))
-          ),
-      });
-
+      invalidateAssetQueries();
       onSaved?.(updated);
       onOpenChange(false);
     } catch {
@@ -153,164 +172,287 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     }
   }
 
+  async function handleRetire() {
+    if (!asset) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`${BASE}/api/assets/${asset.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retiredAt: new Date().toISOString() }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const updated = await res.json();
+      toast({ title: "Asset retired", description: `${asset.name} has been moved to Retired Assets. Its service history is preserved.` });
+      invalidateAssetQueries();
+      onSaved?.(updated);
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Could not retire asset", variant: "destructive" });
+    } finally {
+      setBusy(false);
+      setRetireDialogOpen(false);
+    }
+  }
+
+  async function handleUnretire() {
+    if (!asset) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`${BASE}/api/assets/${asset.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ retiredAt: null }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const updated = await res.json();
+      toast({ title: "Asset restored", description: `${asset.name} is back in your active asset list.` });
+      invalidateAssetQueries();
+      onSaved?.(updated);
+      onOpenChange(false);
+    } catch {
+      toast({ title: "Could not restore asset", variant: "destructive" });
+    } finally {
+      setBusy(false);
+      setUnretireDialogOpen(false);
+    }
+  }
+
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-        <SheetHeader className="mb-5">
-          <SheetTitle className="flex items-center gap-2">
-            {asset ? CATEGORY_ICONS[asset.category] ?? "📦" : ""}
-            Edit Asset
-          </SheetTitle>
-          <SheetDescription>
-            Update the details for this asset. Changes are saved immediately.
-          </SheetDescription>
-        </SheetHeader>
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+          <SheetHeader className="mb-5">
+            <SheetTitle className="flex items-center gap-2">
+              {asset ? CATEGORY_ICONS[asset.category] ?? "📦" : ""}
+              {isRetired ? "Retired Asset" : "Edit Asset"}
+            </SheetTitle>
+            <SheetDescription>
+              {isRetired
+                ? "This asset is retired. You can restore it to your active list or update its details."
+                : "Update the details for this asset. Changes are saved immediately."}
+            </SheetDescription>
+          </SheetHeader>
 
-        <div className="space-y-4">
-          {/* Name */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">
-              Asset Name <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Carrier Central AC Unit"
-              autoFocus
-            />
-          </div>
+          {isRetired && (
+            <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <Archive className="h-4 w-4 shrink-0 text-amber-600" />
+              <span>Retired — removed from active inventory but service history is preserved.</span>
+            </div>
+          )}
 
-          {/* Category */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold">Category</Label>
-            <Select
-              value={category}
-              onValueChange={(v) => setCategory(v as Category)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((c) => (
-                  <SelectItem key={c} value={c}>
-                    {CATEGORY_ICONS[c]} {c}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Brand + Model */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4">
+            {/* Name */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center gap-1">
-                <Tag className="h-3 w-3" /> Brand / Make
+              <Label className="text-xs font-semibold">
+                Asset Name <span className="text-destructive">*</span>
               </Label>
               <Input
-                value={brand}
-                onChange={(e) => setBrand(e.target.value)}
-                placeholder="e.g. Carrier"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Carrier Central AC Unit"
+                autoFocus
               />
             </div>
+
+            {/* Category */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Model Number</Label>
+              <Label className="text-xs font-semibold">Category</Label>
+              <Select
+                value={category}
+                onValueChange={(v) => setCategory(v as Category)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {CATEGORY_ICONS[c]} {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Brand + Model */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Brand / Make
+                </Label>
+                <Input
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  placeholder="e.g. Carrier"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Model Number</Label>
+                <Input
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  placeholder="Optional"
+                  className="font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Serial Number */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <Hash className="h-3 w-3" /> Serial Number
+              </Label>
               <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="Optional"
+                value={serialNumber}
+                onChange={(e) => setSerialNumber(e.target.value)}
+                placeholder="Found on the unit's label"
                 className="font-mono text-sm"
               />
             </div>
-          </div>
 
-          {/* Serial Number */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <Hash className="h-3 w-3" /> Serial Number
-            </Label>
-            <Input
-              value={serialNumber}
-              onChange={(e) => setSerialNumber(e.target.value)}
-              placeholder="Found on the unit's label"
-              className="font-mono text-sm"
-            />
-          </div>
+            {/* Install Date + Replacement Cost */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold flex items-center gap-1">
+                  <Calendar className="h-3 w-3" /> Mfr / Install Date
+                </Label>
+                <Input
+                  type="month"
+                  value={installDate}
+                  onChange={(e) => setInstallDate(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" /> Est. Replacement Cost
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step="1"
+                  placeholder="0"
+                  value={replacementCost}
+                  onChange={(e) => setReplacementCost(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+            </div>
 
-          {/* Install Date + Replacement Cost */}
-          <div className="grid grid-cols-2 gap-3">
+            {/* Warranty Expiry */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold flex items-center gap-1">
-                <Calendar className="h-3 w-3" /> Mfr / Install Date
+                <ShieldCheck className="h-3 w-3" /> Warranty Expiry (optional)
               </Label>
               <Input
                 type="month"
-                value={installDate}
-                onChange={(e) => setInstallDate(e.target.value)}
+                value={warrantyExpiry}
+                onChange={(e) => setWarrantyExpiry(e.target.value)}
                 className="text-sm"
               />
             </div>
+
+            {/* Notes */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold flex items-center gap-1">
-                <DollarSign className="h-3 w-3" /> Est. Replacement Cost
+                <FileText className="h-3 w-3" /> Notes
               </Label>
-              <Input
-                type="number"
-                min={0}
-                step="1"
-                placeholder="0"
-                value={replacementCost}
-                onChange={(e) => setReplacementCost(e.target.value)}
-                className="text-sm"
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Any additional notes about this asset…"
+                className="resize-none h-20 text-sm"
               />
             </div>
-          </div>
 
-          {/* Warranty Expiry */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3" /> Warranty Expiry (optional)
-            </Label>
-            <Input
-              type="month"
-              value={warrantyExpiry}
-              onChange={(e) => setWarrantyExpiry(e.target.value)}
-              className="text-sm"
-            />
-          </div>
+            {/* Save */}
+            <div className="pt-2">
+              <Button
+                className="w-full gap-2"
+                onClick={handleSave}
+                disabled={!name.trim() || busy}
+              >
+                {busy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" /> Save Changes
+                  </>
+                )}
+              </Button>
+            </div>
 
-          {/* Notes */}
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <FileText className="h-3 w-3" /> Notes
-            </Label>
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Any additional notes about this asset…"
-              className="resize-none h-20 text-sm"
-            />
-          </div>
-
-          {/* Save */}
-          <div className="pt-2">
-            <Button
-              className="w-full gap-2"
-              onClick={handleSave}
-              disabled={!name.trim() || busy}
-            >
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Saving…
-                </>
+            {/* Retire / Unretire */}
+            <div className="pt-1 border-t">
+              {isRetired ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 text-chart-1 border-chart-1/30 hover:bg-chart-1/5 hover:text-chart-1"
+                  onClick={() => setUnretireDialogOpen(true)}
+                  disabled={busy}
+                >
+                  <ArchiveRestore className="h-4 w-4" />
+                  Restore to Active Assets
+                </Button>
               ) : (
-                <>
-                  <Save className="h-4 w-4" /> Save Changes
-                </>
+                <Button
+                  variant="ghost"
+                  className="w-full gap-2 text-muted-foreground hover:text-amber-700 hover:bg-amber-50"
+                  onClick={() => setRetireDialogOpen(true)}
+                  disabled={busy}
+                >
+                  <Archive className="h-4 w-4" />
+                  Retire this Asset
+                </Button>
               )}
-            </Button>
+            </div>
           </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+        </SheetContent>
+      </Sheet>
+
+      {/* Retire confirm */}
+      <AlertDialog open={retireDialogOpen} onOpenChange={setRetireDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Retire "{asset?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This asset will be removed from your active inventory. All service history, maintenance records, and cost data will be preserved. You can restore it at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleRetire}
+            >
+              <Archive className="h-4 w-4 mr-2" />
+              Yes, Retire Asset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unretire confirm */}
+      <AlertDialog open={unretireDialogOpen} onOpenChange={setUnretireDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore "{asset?.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This asset will be moved back into your active inventory and will appear in maintenance schedules and health scoring again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnretire}>
+              <ArchiveRestore className="h-4 w-4 mr-2" />
+              Yes, Restore Asset
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

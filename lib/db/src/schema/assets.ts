@@ -22,6 +22,7 @@ export const assetsTable = pgTable("assets", {
   photoUrl: text("photo_url"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  retiredAt: timestamp("retired_at"),
 });
 
 export const insertAssetSchema = createInsertSchema(assetsTable).omit({ id: true, createdAt: true, updatedAt: true });

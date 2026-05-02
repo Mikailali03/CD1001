@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   useGetProperty,
   getGetPropertyQueryKey,
@@ -30,6 +31,9 @@ import {
   Bath,
   DollarSign,
   Pencil,
+  Archive,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -50,6 +54,7 @@ export default function PropertyDetail() {
   const { toast } = useToast();
   const [addAssetOpen, setAddAssetOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<(typeof assets)[0] | null>(null);
+  const [retiredOpen, setRetiredOpen] = useState(false);
 
   const { data: property, isLoading: propertyLoading } = useGetProperty(id!, {
     query: { enabled: !!id, queryKey: getGetPropertyQueryKey(id!) },
@@ -59,6 +64,17 @@ export default function PropertyDetail() {
   });
   const { data: assets, isLoading: assetsLoading, refetch: refetchAssets } = useListAssets(id!, undefined, {
     query: { enabled: !!id, queryKey: getListAssetsQueryKey(id!) },
+  });
+
+  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const { data: retiredAssets = [], refetch: refetchRetired } = useQuery<any[]>({
+    queryKey: ["retired-assets", id],
+    enabled: !!id,
+    queryFn: async () => {
+      const res = await fetch(`${BASE}/api/properties/${id}/assets?includeRetired=true`);
+      const all = await res.json();
+      return all.filter((a: any) => !!a.retiredAt);
+    },
   });
 
   if (propertyLoading || summaryLoading || assetsLoading) {
@@ -298,6 +314,55 @@ export default function PropertyDetail() {
               </div>
             </button>
           )}
+
+          {/* Retired Assets */}
+          {retiredAssets.length > 0 && (
+            <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 overflow-hidden">
+              <button
+                onClick={() => setRetiredOpen((o) => !o)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-amber-800 hover:bg-amber-100/50 transition-colors"
+              >
+                <span className="flex items-center gap-2">
+                  <Archive className="h-4 w-4 text-amber-600" />
+                  Retired Assets
+                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200 ml-1">
+                    {retiredAssets.length}
+                  </Badge>
+                </span>
+                {retiredOpen
+                  ? <ChevronDown className="h-4 w-4 text-amber-600" />
+                  : <ChevronRight className="h-4 w-4 text-amber-600" />
+                }
+              </button>
+              {retiredOpen && (
+                <div className="divide-y divide-amber-200/50 border-t border-amber-200">
+                  {retiredAssets.map((asset: any) => (
+                    <div key={asset.id} className="flex items-center justify-between py-3 px-4 hover:bg-amber-100/30 transition-colors group">
+                      <Link href={`/properties/${property!.id}/assets/${asset.id}`} className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                        <div className="bg-amber-100 p-2 rounded-lg shrink-0">
+                          <Archive className="h-3.5 w-3.5 text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate text-amber-900">{asset.name}</p>
+                          <p className="text-xs text-amber-600 truncate">
+                            {[asset.brand, asset.model].filter(Boolean).join(" · ") || asset.category}
+                            {asset.retiredAt && ` · Retired ${format(new Date(asset.retiredAt), "MMM yyyy")}`}
+                          </p>
+                        </div>
+                      </Link>
+                      <button
+                        onClick={() => setEditAsset(asset)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-amber-200/50 text-amber-600 hover:text-amber-800"
+                        title="Edit / Restore asset"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -314,7 +379,7 @@ export default function PropertyDetail() {
         asset={editAsset as any}
         open={!!editAsset}
         onOpenChange={(open) => { if (!open) setEditAsset(null); }}
-        onSaved={() => refetchAssets()}
+        onSaved={() => { refetchAssets(); refetchRetired(); refetchSummary(); }}
       />
     </div>
   );

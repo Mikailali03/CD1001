@@ -665,12 +665,18 @@ components:
           type: string
         photoUrl:
           type: string
+        replacementCost:
+          type: number
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
+        retiredAt:
+          type: string
+          format: date-time
+          nullable: true
 
     CreateAssetBody:
       type: object
@@ -725,6 +731,10 @@ components:
           type: string
         photoUrl:
           type: string
+        retiredAt:
+          type: string
+          format: date-time
+          nullable: true
 
     # ─── Service Record ─────────────────────────────────────────────────────────
     ServiceRecord:

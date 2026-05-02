@@ -232,8 +232,10 @@ export const ListAssetsResponseItem = zod.object({
   status: zod.enum(["verified", "unverified", "needs_attention"]),
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
+  replacementCost: zod.number().optional(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
+  retiredAt: zod.coerce.date().nullish(),
 });
 export const ListAssetsResponse = zod.array(ListAssetsResponseItem);
 
@@ -296,8 +298,10 @@ export const GetAssetResponse = zod.object({
   status: zod.enum(["verified", "unverified", "needs_attention"]),
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
+  replacementCost: zod.number().optional(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
+  retiredAt: zod.coerce.date().nullish(),
 });
 
 /**
@@ -328,6 +332,7 @@ export const UpdateAssetBody = zod.object({
   status: zod.enum(["verified", "unverified", "needs_attention"]).optional(),
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
+  retiredAt: zod.coerce.date().nullish(),
 });
 
 export const UpdateAssetResponse = zod.object({
@@ -355,8 +360,10 @@ export const UpdateAssetResponse = zod.object({
   status: zod.enum(["verified", "unverified", "needs_attention"]),
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
+  replacementCost: zod.number().optional(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
+  retiredAt: zod.coerce.date().nullish(),
 });
 
 /**

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { assetsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, isNotNull } from "drizzle-orm";
 import {
   CreateAssetBody,
   CreateAssetParams,
@@ -12,16 +12,21 @@ import {
   ListAssetsParams,
   ListAssetsQueryParams,
 } from "@workspace/api-zod";
+import { z } from "zod/v4";
 
 const router = Router();
 
 router.get("/properties/:propertyId/assets", async (req, res) => {
   const { propertyId } = ListAssetsParams.parse(req.params);
   const query = ListAssetsQueryParams.parse(req.query);
+  const includeRetired = req.query.includeRetired === "true";
 
   const conditions = [eq(assetsTable.propertyId, propertyId)];
   if (query.category) {
     conditions.push(eq(assetsTable.category, query.category));
+  }
+  if (!includeRetired) {
+    conditions.push(isNull(assetsTable.retiredAt));
   }
 
   const assets = await db
@@ -50,9 +55,16 @@ router.get("/assets/:assetId", async (req, res) => {
 router.patch("/assets/:assetId", async (req, res) => {
   const { assetId } = UpdateAssetParams.parse(req.params);
   const body = UpdateAssetBody.parse(req.body);
+
+  const setValues: Record<string, unknown> = { ...body, updatedAt: new Date() };
+
+  if ("retiredAt" in body) {
+    setValues.retiredAt = body.retiredAt ?? null;
+  }
+
   const [asset] = await db
     .update(assetsTable)
-    .set({ ...body, updatedAt: new Date() })
+    .set(setValues)
     .where(eq(assetsTable.id, assetId))
     .returning();
   if (!asset) return res.status(404).json({ error: "Asset not found" });

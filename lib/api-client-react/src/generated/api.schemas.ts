@@ -159,8 +159,10 @@ export interface Asset {
   status: AssetStatus;
   notes?: string;
   photoUrl?: string;
+  replacementCost?: number;
   createdAt: string;
   updatedAt?: string;
+  retiredAt?: string | null;
 }
 
 export type CreateAssetBodyCategory =
@@ -221,6 +223,7 @@ export interface UpdateAssetBody {
   status?: UpdateAssetBodyStatus;
   notes?: string;
   photoUrl?: string;
+  retiredAt?: string | null;
 }
 
 export interface CreateServiceRecordBody {
