@@ -41,6 +41,28 @@ import {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+async function compressForScan(file: File, maxPx = 1600, quality = 0.82): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext("2d")!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve({ base64: dataUrl.split(",")[1]!, mimeType: "image/jpeg" });
+      };
+      img.onerror = reject;
+      img.src = e.target!.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 const CATEGORIES = ["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"] as const;
 type Category = typeof CATEGORIES[number];
 
@@ -216,21 +238,12 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
     setScanError(null);
 
     try {
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          // Strip the data URL prefix to get pure base64
-          resolve(result.split(",")[1]!);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(imageFile);
-      });
+      const { base64, mimeType } = await compressForScan(imageFile);
 
       const res = await fetch(`${BASE}/api/assets/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mimeType: imageFile.type }),
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
       });
 
       if (!res.ok) {
