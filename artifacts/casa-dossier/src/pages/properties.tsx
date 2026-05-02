@@ -1,13 +1,16 @@
+import { useState } from "react";
 import { useListProperties } from "@workspace/api-client-react";
+import { AddPropertyDialog } from "@/components/add-property-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, MapPin, Plus } from "lucide-react";
+import { Building2, MapPin, Plus, BedDouble, Bath, Maximize, Calendar } from "lucide-react";
 import { Link } from "wouter";
 
 export default function Properties() {
   const { data: properties, isLoading } = useListProperties();
+  const [addOpen, setAddOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -29,10 +32,10 @@ export default function Properties() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Properties</h1>
-          <p className="text-muted-foreground">Manage your real estate portfolio and track asset health.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">My Properties</h1>
+          <p className="text-muted-foreground">Manage your homes and track their health.</p>
         </div>
-        <Button className="shrink-0 gap-2">
+        <Button className="shrink-0 gap-2" onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" />
           Add Property
         </Button>
@@ -40,67 +43,100 @@ export default function Properties() {
 
       {properties && properties.length > 0 ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {properties.map(property => (
+          {properties.map((property) => (
             <Link key={property.id} href={`/properties/${property.id}`}>
-              <Card className="h-full flex flex-col hover-elevate cursor-pointer transition-shadow">
+              <Card className="h-full flex flex-col hover:shadow-md cursor-pointer transition-shadow">
                 {property.photoUrl ? (
                   <div className="h-40 w-full overflow-hidden rounded-t-xl bg-muted">
-                    <img 
-                      src={property.photoUrl} 
-                      alt={property.name} 
+                    <img
+                      src={property.photoUrl}
+                      alt={property.name}
                       className="h-full w-full object-cover transition-transform hover:scale-105 duration-500"
                     />
                   </div>
                 ) : (
-                  <div className="h-40 w-full bg-muted/50 rounded-t-xl flex items-center justify-center">
+                  <div className="h-40 w-full bg-gradient-to-br from-muted to-muted/60 rounded-t-xl flex items-center justify-center">
                     <Building2 className="h-12 w-12 text-muted-foreground/30" />
                   </div>
                 )}
-                
-                <CardHeader>
+
+                <CardHeader className="pb-2">
                   <CardTitle className="line-clamp-1">{property.name}</CardTitle>
                   <CardDescription className="flex items-center gap-1.5 text-xs line-clamp-1">
                     <MapPin className="h-3 w-3 shrink-0" />
-                    {property.address}
+                    {[property.address, property.city, property.state].filter(Boolean).join(", ")}
                   </CardDescription>
                 </CardHeader>
-                
-                <CardContent className="flex-1">
-                  <div className="flex flex-wrap gap-2">
+
+                <CardContent className="flex-1 pb-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {property.yearBuilt && (
+                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                        <Calendar className="h-3 w-3" />
+                        Built {property.yearBuilt}
+                      </Badge>
+                    )}
                     {property.sqft && (
-                      <Badge variant="secondary" className="font-normal">
+                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                        <Maximize className="h-3 w-3" />
                         {property.sqft.toLocaleString()} sqft
                       </Badge>
                     )}
-                    {property.yearBuilt && (
-                      <Badge variant="secondary" className="font-normal">
-                        Built {property.yearBuilt}
+                    {property.bedrooms && (
+                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                        <BedDouble className="h-3 w-3" />
+                        {property.bedrooms} bd
+                      </Badge>
+                    )}
+                    {property.bathrooms && (
+                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                        <Bath className="h-3 w-3" />
+                        {property.bathrooms} ba
                       </Badge>
                     )}
                   </div>
                 </CardContent>
-                
-                <CardFooter className="pt-4 border-t text-sm text-muted-foreground flex justify-between">
+
+                <CardFooter className="pt-3 border-t text-sm text-muted-foreground flex justify-between">
                   <span>View Details</span>
                   <span className="text-primary font-medium">&rarr;</span>
                 </CardFooter>
               </Card>
             </Link>
           ))}
+
+          {/* Add property card */}
+          <button
+            onClick={() => setAddOpen(true)}
+            className="h-full min-h-[260px] rounded-xl border-2 border-dashed border-muted-foreground/20 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer"
+          >
+            <div className="bg-muted rounded-full p-3">
+              <Plus className="h-6 w-6" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium">Add Another Property</p>
+              <p className="text-xs opacity-60 mt-0.5">AI-powered setup in minutes</p>
+            </div>
+          </button>
         </div>
       ) : (
         <div className="text-center py-20 bg-muted/30 rounded-xl border border-dashed">
           <Building2 className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No properties found</h3>
-          <p className="text-muted-foreground max-w-sm mx-auto mt-2 mb-6">
-            Get started by adding your first property to begin tracking assets and maintenance.
+          <h3 className="text-lg font-medium text-foreground">No properties yet</h3>
+          <p className="text-muted-foreground max-w-sm mx-auto mt-2 mb-6 text-sm">
+            Add your home to get a personalized maintenance plan generated by AI in seconds.
           </p>
-          <Button gap-2>
+          <Button className="gap-2" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4" />
-            Add Your First Property
+            Add Your First Home
           </Button>
         </div>
       )}
+
+      <AddPropertyDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+      />
     </div>
   );
 }
