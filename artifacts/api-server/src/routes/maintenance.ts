@@ -141,26 +141,31 @@ router.post("/maintenance/:taskId/complete", async (req, res) => {
     })
     .returning();
 
-  // Write a service record whenever any meaningful completion detail is provided
-  let serviceRecord = null;
-  if (body.notes || body.cost != null || body.receiptUrl) {
-    const today = new Date().toISOString().split("T")[0]!;
-    const techName = body.technicianName?.trim()
-      || (body.isDiy ? "Homeowner (DIY)" : undefined);
-    const [sr] = await db
-      .insert(serviceRecordsTable)
-      .values({
-        assetId: existing.assetId,
-        date: today,
-        description: body.notes?.trim() || existing.title,
-        technicianName: techName,
-        companyName: body.companyName?.trim() || undefined,
-        cost: body.cost != null ? String(body.cost) : undefined,
-        receiptUrl: body.receiptUrl || undefined,
-      })
-      .returning();
-    serviceRecord = sr;
-  }
+  // Always write a service record so the ledger captures today as the completion date.
+  // If the caller didn't supply an explicit cost, fall back to the task's estimatedCost.
+  const today = new Date().toISOString().split("T")[0]!;
+  const effectiveCost =
+    body.cost != null
+      ? body.cost
+      : existing.estimatedCost != null
+      ? parseFloat(String(existing.estimatedCost))
+      : undefined;
+  const techName =
+    body.technicianName?.trim() ||
+    (body.isDiy !== false ? "Homeowner (DIY)" : undefined);
+
+  const [serviceRecord] = await db
+    .insert(serviceRecordsTable)
+    .values({
+      assetId: existing.assetId,
+      date: today,
+      description: body.notes?.trim() || `Completed: ${existing.title}`,
+      technicianName: techName,
+      companyName: body.companyName?.trim() || undefined,
+      cost: effectiveCost != null ? String(effectiveCost) : undefined,
+      receiptUrl: body.receiptUrl || undefined,
+    })
+    .returning();
 
   res.json({ completedTask, nextTask, serviceRecord });
 });
