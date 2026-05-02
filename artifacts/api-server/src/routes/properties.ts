@@ -53,16 +53,22 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
 
   const today = new Date().toISOString().split("T")[0]!;
   const tasks = await db
-    .select({ task: maintenanceTasksTable, assetId: assetsTable.id })
+    .select({ task: maintenanceTasksTable, assetId: assetsTable.id, assetName: assetsTable.name })
     .from(maintenanceTasksTable)
     .innerJoin(assetsTable, eq(maintenanceTasksTable.assetId, assetsTable.id))
     .where(eq(assetsTable.propertyId, propertyId));
 
-  const overdueTaskCount = tasks.filter((t) => t.task.nextDueDate < today && !t.task.completedAt).length;
-  const upcomingTasks = tasks
-    .filter((t) => t.task.nextDueDate >= today && !t.task.completedAt)
+  const pendingTasks = tasks.filter((t) => !t.task.completedAt);
+  const overdueTasks = pendingTasks
+    .filter((t) => t.task.nextDueDate < today)
+    .sort((a, b) => a.task.nextDueDate.localeCompare(b.task.nextDueDate))
+    .map((t) => ({ ...t.task, assetName: t.assetName }));
+  const overdueTaskCount = overdueTasks.length;
+  const upcomingTasks = pendingTasks
+    .filter((t) => t.task.nextDueDate >= today)
+    .sort((a, b) => a.task.nextDueDate.localeCompare(b.task.nextDueDate))
     .slice(0, 8)
-    .map((t) => t.task);
+    .map((t) => ({ ...t.task, assetName: t.assetName }));
 
   const categoryMap: Record<string, number> = {};
   for (const a of assets) {
@@ -112,6 +118,7 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
     totalAssets,
     verifiedAssets,
     overdueTaskCount,
+    overdueTasks,
     upcomingTasks,
     assetsByCategory,
     assetScores,
