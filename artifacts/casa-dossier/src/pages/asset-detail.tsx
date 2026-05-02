@@ -1,13 +1,26 @@
-import { useGetAsset, getGetAssetQueryKey, useListServiceRecords, useListMaintenanceTasks } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetAsset,
+  getGetAssetQueryKey,
+  useListServiceRecords,
+  useListMaintenanceTasks,
+  useCreateServiceRecord,
+} from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, ShieldAlert,
-  Calendar, Tag, Wrench, CheckCircle2, Clock, Hammer,
-  AlertCircle, FileText, DollarSign,
+  Calendar, Wrench, CheckCircle2, Clock, Hammer,
+  AlertCircle, FileText, DollarSign, Plus, X,
+  Loader2, UserCheck, UserRound,
 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 
@@ -90,9 +103,228 @@ function LifeBar({ installDate, category }: { installDate: string | null; catego
   );
 }
 
+// ── Inline Add Service Record Form ────────────────────────────────────────────
+const TODAY = new Date().toISOString().split("T")[0]!;
+
+type FormState = {
+  description: string;
+  date: string;
+  isDiy: boolean;
+  technicianName: string;
+  companyName: string;
+  cost: string;
+};
+
+const BLANK: FormState = { description: "", date: TODAY, isDiy: true, technicianName: "Homeowner (DIY)", companyName: "", cost: "" };
+
+function AddServiceRecordForm({ assetId, gradeColor, onSuccess }: {
+  assetId: string;
+  gradeColor: string;
+  onSuccess: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(BLANK);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const mutation = useCreateServiceRecord({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "Service record saved", description: "It now appears in the timeline." });
+        queryClient.invalidateQueries({ queryKey: ["service-records", assetId] });
+        queryClient.invalidateQueries({ predicate: (q) => q.queryKey.some((k) => typeof k === "string" && k.includes("summary")) });
+        setForm(BLANK);
+        setOpen(false);
+        onSuccess();
+      },
+      onError: () => {
+        toast({ title: "Could not save record", variant: "destructive" });
+      },
+    },
+  });
+
+  function set<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function toggleDiy(diy: boolean) {
+    setForm((f) => ({
+      ...f,
+      isDiy: diy,
+      technicianName: diy ? "Homeowner (DIY)" : "",
+    }));
+  }
+
+  function handleSubmit() {
+    if (!form.description.trim()) return;
+    mutation.mutate({
+      assetId,
+      createServiceRecordBody: {
+        description: form.description.trim(),
+        date: form.date,
+        technicianName: form.technicianName.trim() || undefined,
+        companyName: form.companyName.trim() || undefined,
+        cost: form.cost ? parseFloat(form.cost) : undefined,
+      },
+    });
+  }
+
+  if (!open) {
+    return (
+      <div className="pt-3 border-t mt-3">
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors w-full group"
+        >
+          <div className="h-6 w-6 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition-colors">
+            <Plus className="h-3.5 w-3.5" />
+          </div>
+          Log Service Record
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border-2 border-primary/20 bg-primary/3 overflow-hidden">
+      {/* Form header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-primary/10 bg-primary/5">
+        <p className="text-sm font-bold flex items-center gap-1.5">
+          <FileText className="h-3.5 w-3.5 text-primary" />
+          New Service Record
+        </p>
+        <button onClick={() => { setOpen(false); setForm(BLANK); }} className="text-muted-foreground hover:text-foreground transition-colors">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="p-4 space-y-3.5">
+        {/* Description */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">What was done? <span className="text-destructive">*</span></Label>
+          <Textarea
+            value={form.description}
+            onChange={(e) => set("description", e.target.value)}
+            placeholder="e.g. Annual HVAC tune-up. Cleaned coils, replaced filter."
+            className="resize-none h-16 text-sm bg-background"
+            autoFocus
+          />
+        </div>
+
+        {/* Date + Cost row */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> Date
+            </Label>
+            <Input
+              type="date"
+              value={form.date}
+              max={TODAY}
+              onChange={(e) => set("date", e.target.value)}
+              className="text-sm h-8 bg-background"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold flex items-center gap-1">
+              <DollarSign className="h-3 w-3" /> Cost (optional)
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="0.00"
+              value={form.cost}
+              onChange={(e) => set("cost", e.target.value)}
+              className="text-sm h-8 bg-background"
+            />
+          </div>
+        </div>
+
+        {/* DIY / Pro toggle */}
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">Who did the work?</Label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => toggleDiy(true)}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
+                form.isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
+              }`}
+            >
+              <Hammer className="h-3.5 w-3.5" />
+              I did it myself
+            </button>
+            <button
+              onClick={() => toggleDiy(false)}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
+                !form.isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
+              }`}
+            >
+              <UserCheck className="h-3.5 w-3.5" />
+              Hired a pro
+            </button>
+          </div>
+        </div>
+
+        {/* Technician + Company — only meaningful for pro */}
+        {!form.isDiy && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <UserRound className="h-3 w-3" /> Technician
+              </Label>
+              <Input
+                placeholder="Name"
+                value={form.technicianName}
+                onChange={(e) => set("technicianName", e.target.value)}
+                className="text-sm h-8 bg-background"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Company</Label>
+              <Input
+                placeholder="Company name"
+                value={form.companyName}
+                onChange={(e) => set("companyName", e.target.value)}
+                className="text-sm h-8 bg-background"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-0.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 h-8 text-xs"
+            onClick={() => { setOpen(false); setForm(BLANK); }}
+            disabled={mutation.isPending}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="flex-1 h-8 text-xs gap-1.5"
+            onClick={handleSubmit}
+            disabled={!form.description.trim() || mutation.isPending}
+          >
+            {mutation.isPending ? (
+              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</>
+            ) : (
+              <><CheckCircle2 className="h-3.5 w-3.5" /> Save Record</>
+            )}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function AssetDetail() {
   const { propertyId, assetId } = useParams<{ propertyId: string; assetId: string }>();
+  const queryClient = useQueryClient();
 
   const { data: asset, isLoading: assetLoading } = useGetAsset(assetId!, {
     query: { enabled: !!assetId, queryKey: getGetAssetQueryKey(assetId!) },
@@ -132,6 +364,9 @@ export default function AssetDetail() {
 
   const pendingTasks = (tasks as any[]).filter((t) => !t.completedAt);
   const completedTasks = (tasks as any[]).filter((t) => t.completedAt);
+  const sortedRecords = [...(records as any[])].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -144,8 +379,6 @@ export default function AssetDetail() {
 
       {/* ── Hero card ── */}
       <div className="rounded-2xl border bg-card p-5 flex flex-col sm:flex-row items-start gap-5" style={{ borderColor: cfg.color + "30" }}>
-
-        {/* Left: icon + meta */}
         <div className="flex items-start gap-4 flex-1 min-w-0">
           <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-3xl shrink-0" style={{ background: cfg.bg }}>
             {cfg.emoji}
@@ -155,34 +388,28 @@ export default function AssetDetail() {
               <h1 className="text-xl font-bold tracking-tight">{asset.name}</h1>
               {underWarranty && (
                 <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1 text-xs font-bold">
-                  <ShieldCheck className="h-3 w-3" />
-                  Under Warranty
+                  <ShieldCheck className="h-3 w-3" />Under Warranty
                 </Badge>
               )}
               {asset.status === "needs_attention" && (
                 <Badge variant="destructive" className="gap-1 text-xs">
-                  <AlertTriangle className="h-3 w-3" />
-                  Needs Attention
+                  <AlertTriangle className="h-3 w-3" />Needs Attention
                 </Badge>
               )}
               {asset.status === "verified" && (
                 <Badge className="bg-primary/10 text-primary border-primary/20 gap-1 text-xs">
-                  <ShieldCheck className="h-3 w-3" />
-                  Verified
+                  <ShieldCheck className="h-3 w-3" />Verified
                 </Badge>
               )}
               {asset.status === "unverified" && (
                 <Badge variant="secondary" className="gap-1 text-xs">
-                  <ShieldAlert className="h-3 w-3" />
-                  Unverified
+                  <ShieldAlert className="h-3 w-3" />Unverified
                 </Badge>
               )}
             </div>
             <p className="text-sm text-muted-foreground">
               {asset.category}{asset.brand ? ` · ${asset.brand}` : ""}{asset.model ? ` · ${asset.model}` : ""}
             </p>
-
-            {/* Key specs inline */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
               {asset.serialNumber && (
                 <div className="text-xs">
@@ -211,22 +438,18 @@ export default function AssetDetail() {
                 </div>
               )}
             </div>
-
-            {/* Life bar */}
             <div className="pt-2 max-w-xs">
               <LifeBar installDate={asset.installDate} category={asset.category} />
             </div>
           </div>
         </div>
-
-        {/* Right: radial gauge */}
         <div className="flex flex-col items-center gap-1 shrink-0">
           <LargeRadialGauge score={score} />
           <p className="text-[10px] text-muted-foreground font-medium">Asset Health</p>
         </div>
       </div>
 
-      {/* ── Notes ── */}
+      {/* Notes */}
       {asset.notes && (
         <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <span className="font-semibold text-foreground mr-1.5">Notes:</span>{asset.notes}
@@ -245,7 +468,9 @@ export default function AssetDetail() {
                 Maintenance Schedule
               </CardTitle>
               {pendingTasks.length > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{pendingTasks.length} task{pendingTasks.length !== 1 ? "s" : ""}</Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  {pendingTasks.length} task{pendingTasks.length !== 1 ? "s" : ""}
+                </Badge>
               )}
             </div>
           </CardHeader>
@@ -299,6 +524,23 @@ export default function AssetDetail() {
                 );
               })
             )}
+
+            {completedTasks.length > 0 && (
+              <div className="pt-2 space-y-1.5">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                  {completedTasks.length} Completed
+                </p>
+                {completedTasks.slice(0, 3).map((t: any) => (
+                  <div key={t.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <span className="flex-1 line-clamp-1">{t.title}</span>
+                    {t.completedAt && (
+                      <span className="shrink-0 text-[10px]">{format(new Date(t.completedAt), "MMM d")}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -310,35 +552,45 @@ export default function AssetDetail() {
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 Service History
               </CardTitle>
-              {(records as any[]).length > 0 && (
-                <Badge variant="secondary" className="text-[10px]">{(records as any[]).length} record{(records as any[]).length !== 1 ? "s" : ""}</Badge>
+              {sortedRecords.length > 0 && (
+                <Badge variant="secondary" className="text-[10px]">
+                  {sortedRecords.length} record{sortedRecords.length !== 1 ? "s" : ""}
+                </Badge>
               )}
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            {(records as any[]).length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+            {sortedRecords.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
                 <FileText className="h-7 w-7 opacity-20" />
                 <p className="text-sm font-medium">No service records yet</p>
-                <p className="text-xs text-center max-w-xs">Service history will appear here as you log work done on this asset.</p>
+                <p className="text-xs text-center max-w-[200px]">
+                  Log your first service record below.
+                </p>
               </div>
             ) : (
               <div className="relative border-l-2 border-border ml-2 space-y-5 py-1">
-                {(records as any[]).map((record: any) => (
+                {sortedRecords.map((record: any) => (
                   <div key={record.id} className="relative pl-5">
-                    {/* Timeline dot */}
-                    <div className="absolute -left-[9px] top-1 h-4 w-4 rounded-full bg-background border-2 flex items-center justify-center" style={{ borderColor: gradeColor }}>
+                    <div
+                      className="absolute -left-[9px] top-1 h-4 w-4 rounded-full bg-background border-2 flex items-center justify-center"
+                      style={{ borderColor: gradeColor }}
+                    >
                       <div className="h-1.5 w-1.5 rounded-full" style={{ background: gradeColor }} />
                     </div>
                     <div className="flex items-start justify-between gap-2 mb-0.5">
                       <p className="font-semibold text-sm leading-tight">{record.description}</p>
-                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0">
+                      <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full shrink-0 whitespace-nowrap">
                         {format(new Date(record.date), "MMM d, yyyy")}
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground space-y-0.5">
                       {(record.companyName || record.technicianName) && (
-                        <p>{[record.companyName, record.technicianName ? `(${record.technicianName})` : ""].filter(Boolean).join(" ")}</p>
+                        <p>
+                          {[record.companyName, record.technicianName ? `(${record.technicianName})` : ""]
+                            .filter(Boolean)
+                            .join(" ")}
+                        </p>
                       )}
                       {record.cost && Number(record.cost) > 0 && (
                         <p className="font-semibold text-foreground">${Number(record.cost).toLocaleString()}</p>
@@ -349,26 +601,21 @@ export default function AssetDetail() {
               </div>
             )}
 
-            {/* Completed tasks as lightweight history entries */}
-            {completedTasks.length > 0 && (records as any[]).length === 0 && (
-              <div className="space-y-2 mt-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Completed Tasks</p>
-                {completedTasks.map((t: any) => (
-                  <div key={t.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                    <span className="flex-1">{t.title}</span>
-                    {t.completedAt && <span className="shrink-0">{format(new Date(t.completedAt), "MMM d")}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Inline add form */}
+            <AddServiceRecordForm
+              assetId={assetId!}
+              gradeColor={gradeColor}
+              onSuccess={() =>
+                queryClient.invalidateQueries({ queryKey: ["service-records", assetId!] })
+              }
+            />
           </CardContent>
         </Card>
       </div>
 
       {/* Request service CTA */}
       <div className="flex justify-end">
-        <Link href={`/marketplace`}>
+        <Link href="/marketplace">
           <Button variant="outline" size="sm" className="gap-1.5">
             <Wrench className="h-3.5 w-3.5" />
             Request Service for This Asset
