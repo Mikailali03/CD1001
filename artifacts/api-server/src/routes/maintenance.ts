@@ -16,6 +16,9 @@ const CompleteTaskBody = z.object({
   notes: z.string().optional(),
   isDiy: z.boolean().optional(),
   cost: z.number().optional(),
+  technicianName: z.string().optional(),
+  companyName: z.string().optional(),
+  receiptUrl: z.string().optional(),
 });
 
 const router = Router();
@@ -138,18 +141,22 @@ router.post("/maintenance/:taskId/complete", async (req, res) => {
     })
     .returning();
 
-  // Optionally write a service record
+  // Write a service record whenever any meaningful completion detail is provided
   let serviceRecord = null;
-  if (body.notes) {
+  if (body.notes || body.cost != null || body.receiptUrl) {
     const today = new Date().toISOString().split("T")[0]!;
+    const techName = body.technicianName?.trim()
+      || (body.isDiy ? "Homeowner (DIY)" : undefined);
     const [sr] = await db
       .insert(serviceRecordsTable)
       .values({
         assetId: existing.assetId,
         date: today,
-        description: body.notes,
-        technicianName: body.isDiy ? "Homeowner (DIY)" : undefined,
+        description: body.notes?.trim() || existing.title,
+        technicianName: techName,
+        companyName: body.companyName?.trim() || undefined,
         cost: body.cost != null ? String(body.cost) : undefined,
+        receiptUrl: body.receiptUrl || undefined,
       })
       .returning();
     serviceRecord = sr;
