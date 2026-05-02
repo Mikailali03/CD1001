@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Properties from "@/pages/properties";
 import PropertyDetail from "@/pages/property-detail";
+import MyAssets from "@/pages/assets";
 import AssetDetail from "@/pages/asset-detail";
 import IntakeForm from "@/pages/intake";
 import Guides from "@/pages/guides";
@@ -27,6 +28,7 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/assets" component={MyAssets} />
         <Route path="/properties" component={Properties} />
         <Route path="/properties/:id" component={PropertyDetail} />
         <Route path="/properties/:propertyId/assets/:assetId" component={AssetDetail} />

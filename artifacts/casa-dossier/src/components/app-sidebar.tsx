@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
-  Building2,
+  Package,
   BookOpen,
   UserSearch,
   Settings,
@@ -23,7 +23,7 @@ import {
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "My Properties", href: "/properties", icon: Building2 },
+  { name: "My Assets", href: "/assets", icon: Package },
   { name: "Capital Outlook", href: "/capital-outlook", icon: TrendingUp },
   { name: "Find a Pro", href: "/marketplace", icon: UserSearch },
   { name: "DIY Guides", href: "/guides", icon: BookOpen },
