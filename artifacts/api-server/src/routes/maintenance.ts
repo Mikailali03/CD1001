@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { maintenanceTasksTable, serviceRecordsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { maintenanceTasksTable, serviceRecordsTable, assetsTable } from "@workspace/db";
+import { eq, and, lte, isNull } from "drizzle-orm";
 import { z } from "zod";
 import {
   ListMaintenanceTasksParams,
@@ -19,6 +19,49 @@ const CompleteTaskBody = z.object({
 });
 
 const router = Router();
+
+// ── Property-level inbox: overdue + due in next 30 days ──────────────────────
+const InboxParams = z.object({ propertyId: z.string() });
+
+router.get("/properties/:propertyId/inbox", async (req, res) => {
+  const { propertyId } = InboxParams.parse(req.params);
+
+  const today = new Date();
+  const cutoff = new Date(today);
+  cutoff.setDate(cutoff.getDate() + 30);
+
+  const todayStr   = today.toISOString().split("T")[0]!;
+  const cutoffStr  = cutoff.toISOString().split("T")[0]!;
+
+  const rows = await db
+    .select({
+      id:           maintenanceTasksTable.id,
+      assetId:      maintenanceTasksTable.assetId,
+      title:        maintenanceTasksTable.title,
+      description:  maintenanceTasksTable.description,
+      intervalDays: maintenanceTasksTable.intervalDays,
+      nextDueDate:  maintenanceTasksTable.nextDueDate,
+      isDiy:        maintenanceTasksTable.isDiy,
+      estimatedCost: maintenanceTasksTable.estimatedCost,
+      assetName:    assetsTable.name,
+      assetCategory: assetsTable.category,
+    })
+    .from(maintenanceTasksTable)
+    .innerJoin(assetsTable, eq(maintenanceTasksTable.assetId, assetsTable.id))
+    .where(
+      and(
+        eq(assetsTable.propertyId, propertyId),
+        isNull(maintenanceTasksTable.completedAt),
+        lte(maintenanceTasksTable.nextDueDate, cutoffStr)
+      )
+    )
+    .orderBy(maintenanceTasksTable.nextDueDate);
+
+  const overdue  = rows.filter((r) => r.nextDueDate < todayStr);
+  const upcoming = rows.filter((r) => r.nextDueDate >= todayStr);
+
+  res.json({ overdue, upcoming, totalCount: rows.length });
+});
 
 router.get("/assets/:assetId/maintenance", async (req, res) => {
   const { assetId } = ListMaintenanceTasksParams.parse(req.params);
