@@ -3,6 +3,7 @@ import { useGetPropertySummary } from "@workspace/api-client-react";
 import { useProperty } from "@/contexts/property-context";
 import { HealthScoreModal } from "@/components/health-score-modal";
 import { MaintenanceInbox } from "@/components/maintenance-inbox";
+import { InvestmentLedgerModal } from "@/components/investment-ledger-modal";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,8 @@ import {
   TrendingUp,
   ChevronRight,
   Hammer,
+  Receipt,
+  DollarSign,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -78,6 +81,44 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
   );
 }
 
+// ── Investment Ledger dashboard card ──────────────────────────────────────────
+function LedgerCard({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="group w-full text-left rounded-xl border bg-card hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all overflow-hidden"
+    >
+      <div className="flex items-center justify-between px-5 py-4">
+        <div className="flex items-center gap-3">
+          <div className="bg-primary/10 rounded-xl p-2.5 shrink-0">
+            <Receipt className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold text-sm leading-tight">Investment Ledger</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Spending by category · expected vs actual
+            </p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
+      </div>
+      <div className="grid grid-cols-3 divide-x border-t bg-muted/20">
+        {[
+          { icon: DollarSign, label: "Track spend", sub: "by system" },
+          { icon: TrendingUp,  label: "Compare",    sub: "est. vs actual" },
+          { icon: FileText,    label: "Full ledger", sub: "all records" },
+        ].map(({ icon: Icon, label, sub }) => (
+          <div key={label} className="flex flex-col items-center gap-0.5 py-3 px-2">
+            <Icon className="h-3.5 w-3.5 text-primary mb-0.5" />
+            <span className="text-[11px] font-semibold text-foreground">{label}</span>
+            <span className="text-[10px] text-muted-foreground">{sub}</span>
+          </div>
+        ))}
+      </div>
+    </button>
+  );
+}
+
 function NoPropertyState() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
@@ -118,7 +159,8 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { activePropertyId, activeProperty, isLoading: propLoading } = useProperty();
-  const [modalOpen, setModalOpen] = useState(false);
+  const [healthModalOpen, setHealthModalOpen] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
 
   const { data: summary, isLoading: summaryLoading } = useGetPropertySummary(
     activePropertyId ?? "",
@@ -163,7 +205,7 @@ export default function Dashboard() {
           score={summary.healthScore}
           grade={grade}
           overdueCount={summary.overdueTaskCount ?? 0}
-          onClick={() => setModalOpen(true)}
+          onClick={() => setHealthModalOpen(true)}
         />
       </div>
 
@@ -192,7 +234,7 @@ export default function Dashboard() {
               {summary.overdueTaskCount}
             </div>
             <button
-              onClick={() => setModalOpen(true)}
+              onClick={() => setHealthModalOpen(true)}
               className="text-xs text-primary underline-offset-2 hover:underline mt-1 flex items-center gap-0.5"
             >
               {(summary.overdueTaskCount ?? 0) > 0 ? "See what to fix →" : "All clear"}
@@ -216,10 +258,13 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* ── Investment Ledger card ── */}
+      <LedgerCard onClick={() => setLedgerOpen(true)} />
+
       {/* ── Bottom row: maintenance inbox + recent activity ── */}
       <div className="grid gap-4 lg:grid-cols-2">
 
-        {/* Maintenance Inbox — tasks due in next 30 days */}
+        {/* Maintenance Inbox */}
         <MaintenanceInbox propertyId={activePropertyId} />
 
         {/* Recent service activity */}
@@ -262,13 +307,20 @@ export default function Dashboard() {
 
       {/* ── Health score modal ── */}
       <HealthScoreModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
+        open={healthModalOpen}
+        onOpenChange={setHealthModalOpen}
         healthScore={summary.healthScore}
         healthGrade={summary.healthGrade ?? "C"}
         overdueTaskCount={summary.overdueTaskCount ?? 0}
         overdueTasks={overdueTasksList}
         assetScores={assetScores}
+        propertyId={activePropertyId}
+      />
+
+      {/* ── Investment ledger modal ── */}
+      <InvestmentLedgerModal
+        open={ledgerOpen}
+        onOpenChange={setLedgerOpen}
         propertyId={activePropertyId}
       />
     </div>

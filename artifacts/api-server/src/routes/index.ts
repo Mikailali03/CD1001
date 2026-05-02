@@ -11,6 +11,7 @@ import scoutRouter from "./scout";
 import lensRouter from "./lens";
 import capitalRouter from "./capital";
 import transferRouter from "./transfer";
+import ledgerRouter from "./ledger";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,7 @@ router.use(scoutRouter);
 router.use(lensRouter);
 router.use(capitalRouter);
 router.use(transferRouter);
+router.use(ledgerRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);
 router.use(serviceRecordsRouter);
