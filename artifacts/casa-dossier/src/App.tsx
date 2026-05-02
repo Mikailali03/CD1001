@@ -15,6 +15,7 @@ import IntakeForm from "@/pages/intake";
 import Guides from "@/pages/guides";
 import GuideDetail from "@/pages/guide-detail";
 import Marketplace from "@/pages/marketplace";
+import CapitalOutlook from "@/pages/capital-outlook";
 import Settings from "@/pages/settings";
 import Login from "@/pages/login";
 
@@ -31,6 +32,7 @@ function Router() {
         <Route path="/intake" component={IntakeForm} />
         <Route path="/guides" component={Guides} />
         <Route path="/guides/:id" component={GuideDetail} />
+        <Route path="/capital-outlook" component={CapitalOutlook} />
         <Route path="/marketplace" component={Marketplace} />
         <Route path="/settings" component={Settings} />
         <Route path="/login" component={Login} />

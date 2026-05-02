@@ -18,11 +18,13 @@ import {
   UserSearch,
   Settings,
   ShieldCheck,
+  TrendingUp,
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "My Properties", href: "/properties", icon: Building2 },
+  { name: "Capital Outlook", href: "/capital-outlook", icon: TrendingUp },
   { name: "Find a Pro", href: "/marketplace", icon: UserSearch },
   { name: "DIY Guides", href: "/guides", icon: BookOpen },
 ];

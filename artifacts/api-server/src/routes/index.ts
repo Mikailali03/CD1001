@@ -9,12 +9,14 @@ import marketplaceRouter from "./marketplace";
 import dashboardRouter from "./dashboard";
 import scoutRouter from "./scout";
 import lensRouter from "./lens";
+import capitalRouter from "./capital";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(scoutRouter);
 router.use(lensRouter);
+router.use(capitalRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);
 router.use(serviceRecordsRouter);
