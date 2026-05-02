@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
+import { EditAssetSheet } from "@/components/edit-asset-sheet";
 import { useToast } from "@/hooks/use-toast";
 import {
   Building2,
@@ -28,6 +29,7 @@ import {
   BedDouble,
   Bath,
   DollarSign,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -47,6 +49,7 @@ export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [addAssetOpen, setAddAssetOpen] = useState(false);
+  const [editAsset, setEditAsset] = useState<(typeof assets)[0] | null>(null);
 
   const { data: property, isLoading: propertyLoading } = useGetProperty(id!, {
     query: { enabled: !!id, queryKey: getGetPropertyQueryKey(id!) },
@@ -226,37 +229,39 @@ export default function PropertyDetail() {
                 <CardContent className="pt-0">
                   <div className="divide-y">
                     {categoryAssets!.map((asset) => (
-                      <Link key={asset!.id} href={`/properties/${property.id}/assets/${asset!.id}`}>
-                        <div
-                          data-testid={`asset-row-${asset!.id}`}
-                          className="flex items-center justify-between py-3.5 -mx-6 px-6 hover:bg-muted/40 cursor-pointer transition-colors group"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="bg-secondary p-2 rounded-lg group-hover:bg-background transition-colors shrink-0">
-                              {statusIcon[asset!.status as keyof typeof statusIcon] ?? statusIcon.unverified}
-                            </div>
-                            <div>
-                              <p className="font-medium text-sm">{asset!.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {[asset!.brand, asset!.model].filter(Boolean).join(" · ") || "No specs on file"}
-                              </p>
-                            </div>
+                      <div key={asset!.id} className="flex items-center justify-between py-3.5 -mx-6 px-6 hover:bg-muted/40 transition-colors group">
+                        <Link href={`/properties/${property.id}/assets/${asset!.id}`} className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
+                          <div className="bg-secondary p-2 rounded-lg group-hover:bg-background transition-colors shrink-0">
+                            {statusIcon[asset!.status as keyof typeof statusIcon] ?? statusIcon.unverified}
                           </div>
-                          <div className="flex items-center gap-3">
-                            {(asset as any).replacementCost && (
-                              <span className="hidden sm:block text-xs text-muted-foreground font-medium">
-                                ${Number((asset as any).replacementCost).toLocaleString()}
-                              </span>
-                            )}
-                            {asset!.installDate && (
-                              <span className="hidden sm:block text-xs text-muted-foreground">
-                                {format(new Date(asset!.installDate), "yyyy")}
-                              </span>
-                            )}
-                            {statusBadge[asset!.status as keyof typeof statusBadge] ?? statusBadge.unverified}
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{asset!.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {[asset!.brand, asset!.model].filter(Boolean).join(" · ") || "No specs on file"}
+                            </p>
                           </div>
+                        </Link>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          {(asset as any).replacementCost && (
+                            <span className="hidden sm:block text-xs text-muted-foreground font-medium">
+                              ${Number((asset as any).replacementCost).toLocaleString()}
+                            </span>
+                          )}
+                          {asset!.installDate && (
+                            <span className="hidden sm:block text-xs text-muted-foreground">
+                              {format(new Date(asset!.installDate), "MMM yyyy")}
+                            </span>
+                          )}
+                          {statusBadge[asset!.status as keyof typeof statusBadge] ?? statusBadge.unverified}
+                          <button
+                            onClick={(e) => { e.preventDefault(); setEditAsset(asset!); }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                            title="Edit asset"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
                         </div>
-                      </Link>
+                      </div>
                     ))}
                   </div>
                 </CardContent>
@@ -304,6 +309,13 @@ export default function PropertyDetail() {
           onCreated={handleAssetCreated}
         />
       )}
+
+      <EditAssetSheet
+        asset={editAsset as any}
+        open={!!editAsset}
+        onOpenChange={(open) => { if (!open) setEditAsset(null); }}
+        onSaved={() => refetchAssets()}
+      />
     </div>
   );
 }

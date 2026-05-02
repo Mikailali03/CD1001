@@ -21,9 +21,10 @@ import {
   Calendar, Wrench, CheckCircle2, Clock, Hammer,
   AlertCircle, FileText, DollarSign, Plus, X,
   Loader2, UserCheck, UserRound, ImagePlus, Receipt,
-  CheckCheck, Upload,
+  CheckCheck, Upload, Pencil,
 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
+import { EditAssetSheet } from "@/components/edit-asset-sheet";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -637,6 +638,8 @@ export default function AssetDetail() {
   const queryClient = useQueryClient();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
+  const [editOpen, setEditOpen] = useState(false);
+
   const { data: asset, isLoading: assetLoading } = useGetAsset(assetId!, {
     query: { enabled: !!assetId, queryKey: getGetAssetQueryKey(assetId!) },
   });
@@ -757,9 +760,16 @@ export default function AssetDetail() {
             </div>
           </div>
         </div>
-        <div className="flex flex-col items-center gap-1 shrink-0">
+        <div className="flex flex-col items-center gap-2 shrink-0">
           <LargeRadialGauge score={score} />
           <p className="text-[10px] text-muted-foreground font-medium">Asset Health</p>
+          <button
+            onClick={() => setEditOpen(true)}
+            className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground hover:text-foreground border border-border hover:border-foreground/30 rounded-lg px-2.5 py-1 transition-colors bg-background"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
         </div>
       </div>
 
@@ -911,6 +921,13 @@ export default function AssetDetail() {
           </Button>
         </Link>
       </div>
+
+      <EditAssetSheet
+        asset={asset as any}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: getGetAssetQueryKey(assetId!) })}
+      />
     </div>
   );
 }
