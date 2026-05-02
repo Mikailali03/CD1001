@@ -110,7 +110,12 @@ export const GetPropertySummaryResponse = zod.object({
   propertyId: zod.string(),
   healthScore: zod
     .number()
-    .describe("0–100 score based on verified assets and completed maintenance"),
+    .describe(
+      "0–100 score based on asset age vs lifespan and overdue maintenance tasks",
+    ),
+  healthGrade: zod
+    .enum(["A", "B", "C", "D", "F"])
+    .describe("Letter grade derived from healthScore"),
   totalAssets: zod.number(),
   verifiedAssets: zod.number(),
   overdueTaskCount: zod.number(),
@@ -132,6 +137,21 @@ export const GetPropertySummaryResponse = zod.object({
     zod.object({
       category: zod.string(),
       count: zod.number(),
+    }),
+  ),
+  assetScores: zod.array(
+    zod.object({
+      assetId: zod.string(),
+      assetName: zod.string(),
+      category: zod.string(),
+      score: zod
+        .number()
+        .describe(
+          "0–100 health score for this asset based on age vs expected lifespan",
+        ),
+      ageYears: zod.number(),
+      lifespanYears: zod.number(),
+      installDate: zod.string().optional(),
     }),
   ),
 });
@@ -549,6 +569,42 @@ export const GetDashboardResponse = zod.object({
   unverifiedAssets: zod.number().optional(),
   overdueTaskCount: zod.number(),
   dueSoonTaskCount: zod.number().optional(),
+  homeHealthScore: zod
+    .number()
+    .describe("Aggregate 0–100 health score across all properties"),
+  homeHealthGrade: zod
+    .enum(["A", "B", "C", "D", "F"])
+    .describe("Letter grade derived from homeHealthScore"),
+  scoringBreakdown: zod
+    .object({
+      assetAgeScore: zod
+        .number()
+        .optional()
+        .describe("Average score from asset age vs lifespan (0–100)"),
+      overdueScore: zod
+        .number()
+        .optional()
+        .describe("Penalty component from overdue tasks (0–100)"),
+      criticalAssets: zod
+        .array(
+          zod.object({
+            assetId: zod.string(),
+            assetName: zod.string(),
+            category: zod.string(),
+            score: zod
+              .number()
+              .describe(
+                "0–100 health score for this asset based on age vs expected lifespan",
+              ),
+            ageYears: zod.number(),
+            lifespanYears: zod.number(),
+            installDate: zod.string().optional(),
+          }),
+        )
+        .optional()
+        .describe("Assets with score below 40 — near end of life"),
+    })
+    .optional(),
   upcomingTasks: zod.array(
     zod.object({
       id: zod.string(),

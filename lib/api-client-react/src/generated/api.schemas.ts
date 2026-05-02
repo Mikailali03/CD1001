@@ -46,6 +46,31 @@ export interface UpdatePropertyBody {
   photoUrl?: string;
 }
 
+export interface AssetHealthScore {
+  assetId: string;
+  assetName: string;
+  category: string;
+  /** 0–100 health score for this asset based on age vs expected lifespan */
+  score: number;
+  ageYears: number;
+  lifespanYears: number;
+  installDate?: string;
+}
+
+/**
+ * Letter grade derived from healthScore
+ */
+export type PropertySummaryHealthGrade =
+  (typeof PropertySummaryHealthGrade)[keyof typeof PropertySummaryHealthGrade];
+
+export const PropertySummaryHealthGrade = {
+  A: "A",
+  B: "B",
+  C: "C",
+  D: "D",
+  F: "F",
+} as const;
+
 export type PropertySummaryAssetsByCategoryItem = {
   category: string;
   count: number;
@@ -66,13 +91,16 @@ export interface MaintenanceTask {
 
 export interface PropertySummary {
   propertyId: string;
-  /** 0–100 score based on verified assets and completed maintenance */
+  /** 0–100 score based on asset age vs lifespan and overdue maintenance tasks */
   healthScore: number;
+  /** Letter grade derived from healthScore */
+  healthGrade: PropertySummaryHealthGrade;
   totalAssets: number;
   verifiedAssets: number;
   overdueTaskCount: number;
   upcomingTasks: MaintenanceTask[];
   assetsByCategory: PropertySummaryAssetsByCategoryItem[];
+  assetScores: AssetHealthScore[];
 }
 
 export type AssetCategory = (typeof AssetCategory)[keyof typeof AssetCategory];
@@ -306,6 +334,29 @@ export interface CreateMarketplaceJobBody {
   urgency?: CreateMarketplaceJobBodyUrgency;
 }
 
+/**
+ * Letter grade derived from homeHealthScore
+ */
+export type DashboardHomeHealthGrade =
+  (typeof DashboardHomeHealthGrade)[keyof typeof DashboardHomeHealthGrade];
+
+export const DashboardHomeHealthGrade = {
+  A: "A",
+  B: "B",
+  C: "C",
+  D: "D",
+  F: "F",
+} as const;
+
+export type DashboardScoringBreakdown = {
+  /** Average score from asset age vs lifespan (0–100) */
+  assetAgeScore?: number;
+  /** Penalty component from overdue tasks (0–100) */
+  overdueScore?: number;
+  /** Assets with score below 40 — near end of life */
+  criticalAssets?: AssetHealthScore[];
+};
+
 export type DashboardAssetHealthByCategoryItem = {
   category: string;
   total: number;
@@ -319,6 +370,11 @@ export interface Dashboard {
   unverifiedAssets?: number;
   overdueTaskCount: number;
   dueSoonTaskCount?: number;
+  /** Aggregate 0–100 health score across all properties */
+  homeHealthScore: number;
+  /** Letter grade derived from homeHealthScore */
+  homeHealthGrade: DashboardHomeHealthGrade;
+  scoringBreakdown?: DashboardScoringBreakdown;
   upcomingTasks: MaintenanceTask[];
   recentRecords: ServiceRecord[];
   assetHealthByCategory?: DashboardAssetHealthByCategoryItem[];

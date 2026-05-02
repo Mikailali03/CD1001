@@ -7,6 +7,7 @@ import {
   serviceRecordsTable,
 } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
+import { calcAssetScore, calcHealthScore } from "../health-score.js";
 
 const router = Router();
 
@@ -14,8 +15,8 @@ router.get("/dashboard", async (req, res) => {
   const properties = await db.select().from(propertiesTable);
   const assets = await db.select().from(assetsTable);
 
-  const today = new Date().toISOString().split("T")[0];
-  const sevenDaysOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0]!;
+  const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]!;
 
   const tasks = await db.select().from(maintenanceTasksTable).orderBy(maintenanceTasksTable.nextDueDate);
   const recentRecords = await db
@@ -29,15 +30,20 @@ router.get("/dashboard", async (req, res) => {
   const unverifiedAssets = assets.filter((a) => a.status === "unverified").length;
   const overdueTaskCount = tasks.filter((t) => t.nextDueDate < today && !t.completedAt).length;
   const dueSoonTaskCount = tasks.filter(
-    (t) => t.nextDueDate >= today && t.nextDueDate <= sevenDaysOut && !t.completedAt
+    (t) => t.nextDueDate >= today && t.nextDueDate <= thirtyDaysOut && !t.completedAt
   ).length;
   const upcomingTasks = tasks.filter((t) => t.nextDueDate >= today && !t.completedAt).slice(0, 8);
+
+  // Health score calculation
+  const assetScores = assets.map((a) => calcAssetScore(a));
+  const { score: homeHealthScore, grade: homeHealthGrade, assetAgeScore, overdueScore } = calcHealthScore(assetScores, overdueTaskCount);
+  const criticalAssets = assetScores.filter((s) => s.score < 40);
 
   const categoryMap: Record<string, { total: number; verified: number }> = {};
   for (const a of assets) {
     if (!categoryMap[a.category]) categoryMap[a.category] = { total: 0, verified: 0 };
-    categoryMap[a.category].total++;
-    if (a.status === "verified") categoryMap[a.category].verified++;
+    categoryMap[a.category]!.total++;
+    if (a.status === "verified") categoryMap[a.category]!.verified++;
   }
   const assetHealthByCategory = Object.entries(categoryMap).map(([category, stats]) => ({
     category,
@@ -51,6 +57,13 @@ router.get("/dashboard", async (req, res) => {
     unverifiedAssets,
     overdueTaskCount,
     dueSoonTaskCount,
+    homeHealthScore,
+    homeHealthGrade,
+    scoringBreakdown: {
+      assetAgeScore,
+      overdueScore,
+      criticalAssets,
+    },
     upcomingTasks,
     recentRecords,
     assetHealthByCategory,

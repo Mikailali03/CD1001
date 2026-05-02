@@ -558,15 +558,39 @@ components:
         photoUrl:
           type: string
 
+    AssetHealthScore:
+      type: object
+      required: [assetId, assetName, category, score, ageYears, lifespanYears]
+      properties:
+        assetId:
+          type: string
+        assetName:
+          type: string
+        category:
+          type: string
+        score:
+          type: integer
+          description: 0–100 health score for this asset based on age vs expected lifespan
+        ageYears:
+          type: number
+        lifespanYears:
+          type: integer
+        installDate:
+          type: string
+
     PropertySummary:
       type: object
-      required: [propertyId, healthScore, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, assetsByCategory]
+      required: [propertyId, healthScore, healthGrade, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, assetsByCategory, assetScores]
       properties:
         propertyId:
           type: string
         healthScore:
           type: integer
-          description: 0–100 score based on verified assets and completed maintenance
+          description: 0–100 score based on asset age vs lifespan and overdue maintenance tasks
+        healthGrade:
+          type: string
+          enum: [A, B, C, D, F]
+          description: Letter grade derived from healthScore
         totalAssets:
           type: integer
         verifiedAssets:
@@ -587,6 +611,10 @@ components:
                 type: string
               count:
                 type: integer
+        assetScores:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssetHealthScore"
 
     # ─── Asset ─────────────────────────────────────────────────────────────────
     Asset:
@@ -891,7 +919,7 @@ components:
     # ─── Dashboard ──────────────────────────────────────────────────────────────
     Dashboard:
       type: object
-      required: [totalProperties, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, recentRecords]
+      required: [totalProperties, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, recentRecords, homeHealthScore, homeHealthGrade]
       properties:
         totalProperties:
           type: integer
@@ -905,6 +933,27 @@ components:
           type: integer
         dueSoonTaskCount:
           type: integer
+        homeHealthScore:
+          type: integer
+          description: Aggregate 0–100 health score across all properties
+        homeHealthGrade:
+          type: string
+          enum: [A, B, C, D, F]
+          description: Letter grade derived from homeHealthScore
+        scoringBreakdown:
+          type: object
+          properties:
+            assetAgeScore:
+              type: integer
+              description: Average score from asset age vs lifespan (0–100)
+            overdueScore:
+              type: integer
+              description: Penalty component from overdue tasks (0–100)
+            criticalAssets:
+              type: array
+              description: Assets with score below 40 — near end of life
+              items:
+                $ref: "#/components/schemas/AssetHealthScore"
         upcomingTasks:
           type: array
           items:

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { propertiesTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   CreatePropertyBody,
   UpdatePropertyBody,
@@ -10,6 +10,7 @@ import {
   GetPropertySummaryParams,
 } from "@workspace/api-zod";
 import { assetsTable, maintenanceTasksTable } from "@workspace/db";
+import { calcAssetScore, calcHealthScore } from "../health-score.js";
 
 const router = Router();
 
@@ -50,7 +51,7 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
   const totalAssets = assets.length;
   const verifiedAssets = assets.filter((a) => a.status === "verified").length;
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date().toISOString().split("T")[0]!;
   const tasks = await db
     .select({ task: maintenanceTasksTable, assetId: assetsTable.id })
     .from(maintenanceTasksTable)
@@ -69,11 +70,20 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
   }
   const assetsByCategory = Object.entries(categoryMap).map(([category, count]) => ({ category, count }));
 
-  const healthScore = totalAssets === 0
-    ? 100
-    : Math.round(((verifiedAssets / totalAssets) * 60) + (overdueTaskCount === 0 ? 40 : Math.max(0, 40 - overdueTaskCount * 8)));
+  const assetScores = assets.map((a) => calcAssetScore(a));
+  const { score: healthScore, grade: healthGrade } = calcHealthScore(assetScores, overdueTaskCount);
 
-  res.json({ propertyId, healthScore, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, assetsByCategory });
+  res.json({
+    propertyId,
+    healthScore,
+    healthGrade,
+    totalAssets,
+    verifiedAssets,
+    overdueTaskCount,
+    upcomingTasks,
+    assetsByCategory,
+    assetScores,
+  });
 });
 
 export default router;
