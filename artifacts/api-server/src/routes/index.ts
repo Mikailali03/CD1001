@@ -10,6 +10,7 @@ import dashboardRouter from "./dashboard";
 import scoutRouter from "./scout";
 import lensRouter from "./lens";
 import capitalRouter from "./capital";
+import transferRouter from "./transfer";
 
 const router: IRouter = Router();
 
@@ -17,6 +18,7 @@ router.use(healthRouter);
 router.use(scoutRouter);
 router.use(lensRouter);
 router.use(capitalRouter);
+router.use(transferRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);
 router.use(serviceRecordsRouter);
