@@ -263,7 +263,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
       if (data.brand) setBrand(data.brand);
       if (data.model) setModel(data.model);
       if (data.serialNumber) setSerialNumber(data.serialNumber);
-      if (data.manufactureDate) setInstallDate(data.manufactureDate.substring(0, 10));
+      if (data.manufactureDate) setInstallDate(data.manufactureDate.substring(0, 7));
       if (data.estimatedReplacementCost) setReplacementCost(String(data.estimatedReplacementCost));
 
       setStep("review");
@@ -590,7 +590,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
                     {scanResult?.manufactureDate && <span className="text-emerald-600 text-[10px]">✓ AI</span>}
                   </Label>
                   <Input
-                    type="date"
+                    type="month"
                     value={installDate}
                     onChange={(e) => setInstallDate(e.target.value)}
                     className="text-sm"

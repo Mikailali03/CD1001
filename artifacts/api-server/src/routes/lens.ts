@@ -44,7 +44,7 @@ Return ONLY a raw JSON object — no markdown fences, no explanation — with th
   "suggestedName": string | null
 }
 
-For "manufactureDate": look for labels such as "MFR DATE", "MANUF DATE", "DATE OF MFR", "MANUFACTURE DATE", "MFG DATE", "DOM", or any date-like value near the unit's serial/model info. Use YYYY-MM-DD format if day is visible, YYYY-MM if only month/year, or YYYY if only year.
+For "manufactureDate": look for labels such as "MFR DATE", "MANUF DATE", "DATE OF MFR", "MANUFACTURE DATE", "MFG DATE", "DOM", or any date-like value near the unit's serial/model info. Always return in YYYY-MM format (month and year only — do not include the day).
 For "estimatedReplacementCost": provide your best estimate in USD based on brand/model/type — even if not printed on the label.
 For "suggestedName": a short plain-English name like "Carrier Central AC Unit" or "Rheem Water Heater".`,
           },
