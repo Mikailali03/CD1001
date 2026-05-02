@@ -5,34 +5,15 @@ import {
   useGetPropertySummary,
   getGetPropertySummaryQueryKey,
   useListAssets,
-  useCreateAsset,
   getListAssetsQueryKey,
 } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   Building2,
@@ -44,112 +25,11 @@ import {
   ArrowLeft,
   CalendarDays,
   Ruler,
+  BedDouble,
+  Bath,
+  DollarSign,
 } from "lucide-react";
 import { format } from "date-fns";
-
-function AddAssetDialog({ propertyId }: { propertyId: string }) {
-  const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("HVAC");
-  const [brand, setBrand] = useState("");
-  const [model, setModel] = useState("");
-  const [serialNumber, setSerialNumber] = useState("");
-
-  const queryClient = useQueryClient();
-  const createAsset = useCreateAsset();
-  const { toast } = useToast();
-
-  function handleSubmit() {
-    if (!name.trim()) return;
-    createAsset.mutate(
-      {
-        propertyId,
-        data: { name, category: category as any, brand: brand || undefined, model: model || undefined, serialNumber: serialNumber || undefined },
-      },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey(propertyId) });
-          queryClient.invalidateQueries({ queryKey: getGetPropertySummaryQueryKey(propertyId) });
-          toast({ title: "Asset added", description: `${name} has been added to your dossier.` });
-          setOpen(false);
-          setName(""); setCategory("HVAC"); setBrand(""); setModel(""); setSerialNumber("");
-        },
-        onError: () => {
-          toast({ title: "Error", description: "Could not add asset. Please try again.", variant: "destructive" });
-        },
-      }
-    );
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="shrink-0 gap-2" data-testid="button-add-asset">
-          <Plus className="h-4 w-4" />
-          Add Asset
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Add an Asset</DialogTitle>
-          <DialogDescription>
-            Log a home system or appliance to start tracking its service history and maintenance.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="asset-name">What is it? <span className="text-destructive">*</span></Label>
-            <Input
-              id="asset-name"
-              data-testid="input-asset-name"
-              placeholder="e.g. Central Air Conditioner, Water Heater"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="asset-category">Category</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger id="asset-category" data-testid="select-asset-category">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"].map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="asset-brand">Brand / Make</Label>
-              <Input id="asset-brand" data-testid="input-asset-brand" placeholder="e.g. Carrier" value={brand} onChange={(e) => setBrand(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="asset-model">Model Number</Label>
-              <Input id="asset-model" data-testid="input-asset-model" placeholder="Optional" value={model} onChange={(e) => setModel(e.target.value)} className="font-mono" />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="asset-serial">Serial Number</Label>
-            <Input id="asset-serial" data-testid="input-asset-serial" placeholder="Optional — found on the unit's label" value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} className="font-mono" />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!name.trim() || createAsset.isPending} data-testid="button-submit-asset">
-            {createAsset.isPending ? "Adding..." : "Add to Dossier"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 const statusIcon = {
   verified:        <ShieldCheck className="h-4 w-4 text-chart-1" />,
@@ -165,14 +45,16 @@ const statusBadge = {
 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
+  const { toast } = useToast();
+  const [addAssetOpen, setAddAssetOpen] = useState(false);
 
   const { data: property, isLoading: propertyLoading } = useGetProperty(id!, {
     query: { enabled: !!id, queryKey: getGetPropertyQueryKey(id!) },
   });
-  const { data: summary, isLoading: summaryLoading } = useGetPropertySummary(id!, {
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetPropertySummary(id!, {
     query: { enabled: !!id, queryKey: getGetPropertySummaryQueryKey(id!) },
   });
-  const { data: assets, isLoading: assetsLoading } = useListAssets(id!, undefined, {
+  const { data: assets, isLoading: assetsLoading, refetch: refetchAssets } = useListAssets(id!, undefined, {
     query: { enabled: !!id, queryKey: getListAssetsQueryKey(id!) },
   });
 
@@ -193,12 +75,17 @@ export default function PropertyDetail() {
   const healthScore = summary?.healthScore ?? 0;
   const healthColor = healthScore >= 80 ? "text-chart-1" : healthScore >= 50 ? "text-chart-3" : "text-destructive";
 
-  // Group assets by category
   const grouped = (assets ?? []).reduce<Record<string, typeof assets>>((acc, a) => {
     if (!acc[a!.category]) acc[a!.category] = [];
     acc[a!.category]!.push(a);
     return acc;
   }, {});
+
+  function handleAssetCreated(assetId: string) {
+    refetchAssets();
+    refetchSummary();
+    toast({ title: "Asset added", description: "Maintenance plan generated and added to your dossier." });
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
@@ -215,11 +102,16 @@ export default function PropertyDetail() {
             {[property.address, property.city, property.state].filter(Boolean).join(", ")}
           </p>
         </div>
-        {id && <AddAssetDialog propertyId={id} />}
+        {id && (
+          <Button className="shrink-0 gap-2" onClick={() => setAddAssetOpen(true)} data-testid="button-add-asset">
+            <Plus className="h-4 w-4" />
+            Add Asset
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left — Property Summary Card */}
+        {/* Left — Property Summary */}
         <div className="space-y-4">
           <Card>
             {property.photoUrl ? (
@@ -256,24 +148,52 @@ export default function PropertyDetail() {
                 </div>
               </div>
 
-              {(property.yearBuilt || property.sqft) && (
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t text-sm">
-                  {property.yearBuilt && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <CalendarDays className="h-3.5 w-3.5" />
-                      <span>Built {property.yearBuilt}</span>
-                    </div>
-                  )}
-                  {property.sqft && (
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <Ruler className="h-3.5 w-3.5" />
-                      <span>{property.sqft.toLocaleString()} sqft</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Property metadata */}
+              <div className="grid grid-cols-2 gap-3 pt-4 border-t text-sm">
+                {property.yearBuilt && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+                    <span>Built {property.yearBuilt}</span>
+                  </div>
+                )}
+                {property.sqft && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Ruler className="h-3.5 w-3.5 shrink-0" />
+                    <span>{property.sqft.toLocaleString()} sqft</span>
+                  </div>
+                )}
+                {(property as any).bedrooms && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <BedDouble className="h-3.5 w-3.5 shrink-0" />
+                    <span>{(property as any).bedrooms} bed</span>
+                  </div>
+                )}
+                {(property as any).bathrooms && (
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    <Bath className="h-3.5 w-3.5 shrink-0" />
+                    <span>{(property as any).bathrooms} bath</span>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
+
+          {/* Capital Outlook teaser */}
+          {(assets ?? []).some((a) => (a as any).replacementCost) && (
+            <Card className="border-amber-200 bg-amber-50/50">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex items-start gap-2.5">
+                  <DollarSign className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800">Capital Outlook</p>
+                    <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                      Est. replacement costs tracked for {(assets ?? []).filter((a) => (a as any).replacementCost).length} assets.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Category breakdown */}
           {(summary?.assetsByCategory?.length ?? 0) > 0 && (
@@ -323,6 +243,11 @@ export default function PropertyDetail() {
                             </div>
                           </div>
                           <div className="flex items-center gap-3">
+                            {(asset as any).replacementCost && (
+                              <span className="hidden sm:block text-xs text-muted-foreground font-medium">
+                                ${Number((asset as any).replacementCost).toLocaleString()}
+                              </span>
+                            )}
                             {asset!.installDate && (
                               <span className="hidden sm:block text-xs text-muted-foreground">
                                 {format(new Date(asset!.installDate), "yyyy")}
@@ -345,12 +270,40 @@ export default function PropertyDetail() {
                 <p className="text-sm text-muted-foreground max-w-xs mb-5">
                   Start your dossier by adding your home's major systems — HVAC, water heater, roof, and more.
                 </p>
-                {id && <AddAssetDialog propertyId={id} />}
+                <Button className="gap-2" onClick={() => setAddAssetOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  Add Your First Asset
+                </Button>
               </CardContent>
             </Card>
           )}
+
+          {/* Add asset card at bottom */}
+          {Object.keys(grouped).length > 0 && (
+            <button
+              onClick={() => setAddAssetOpen(true)}
+              className="w-full rounded-xl border-2 border-dashed border-muted-foreground/20 py-5 flex items-center justify-center gap-2.5 text-muted-foreground hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all cursor-pointer"
+            >
+              <div className="bg-muted rounded-full p-1.5">
+                <Plus className="h-4 w-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-sm font-medium">Add Another Asset</p>
+                <p className="text-xs opacity-60">AI Lens auto-fills from a photo</p>
+              </div>
+            </button>
+          )}
         </div>
       </div>
+
+      {id && (
+        <AddAssetDialog
+          propertyId={id}
+          open={addAssetOpen}
+          onOpenChange={setAddAssetOpen}
+          onCreated={handleAssetCreated}
+        />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { propertiesTable } from "./properties";
@@ -16,6 +16,7 @@ export const assetsTable = pgTable("assets", {
   serialNumber: text("serial_number"),
   installDate: text("install_date"),
   warrantyExpiry: text("warranty_expiry"),
+  replacementCost: numeric("replacement_cost", { precision: 10, scale: 2 }),
   status: text("status").notNull().default("unverified").$type<typeof assetStatusEnum[number]>(),
   notes: text("notes"),
   photoUrl: text("photo_url"),
