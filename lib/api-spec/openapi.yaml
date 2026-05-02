@@ -3,20 +3,34 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Casa Dossier — Home Maintenance OS API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: properties
+    description: Property management
+  - name: assets
+    description: Asset (appliance/system) management
+  - name: records
+    description: Service history records
+  - name: maintenance
+    description: Maintenance schedules and tasks
+  - name: guides
+    description: DIY guide library
+  - name: marketplace
+    description: Service pro marketplace
+  - name: dashboard
+    description: Dashboard summaries and analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +38,911 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Properties ────────────────────────────────────────────────────────────
+  /properties:
+    get:
+      operationId: listProperties
+      tags: [properties]
+      summary: List all properties for the current user
+      responses:
+        "200":
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Property"
+    post:
+      operationId: createProperty
+      tags: [properties]
+      summary: Add a new property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePropertyBody"
+      responses:
+        "201":
+          description: Created property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /properties/{propertyId}:
+    get:
+      operationId: getProperty
+      tags: [properties]
+      summary: Get a single property
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Property details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+    patch:
+      operationId: updateProperty
+      tags: [properties]
+      summary: Update a property
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePropertyBody"
+      responses:
+        "200":
+          description: Updated property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /properties/{propertyId}/summary:
+    get:
+      operationId: getPropertySummary
+      tags: [properties]
+      summary: Get a property health summary, asset breakdown, and upcoming tasks
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Property summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertySummary"
+
+  # ─── Assets ────────────────────────────────────────────────────────────────
+  /properties/{propertyId}/assets:
+    get:
+      operationId: listAssets
+      tags: [assets]
+      summary: List assets for a property
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+    post:
+      operationId: createAsset
+      tags: [assets]
+      summary: Add an asset to a property
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAssetBody"
+      responses:
+        "201":
+          description: Created asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+
+  /assets/{assetId}:
+    get:
+      operationId: getAsset
+      tags: [assets]
+      summary: Get full asset details
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Asset details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+    patch:
+      operationId: updateAsset
+      tags: [assets]
+      summary: Update an asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAssetBody"
+      responses:
+        "200":
+          description: Updated asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Asset"
+    delete:
+      operationId: deleteAsset
+      tags: [assets]
+      summary: Remove an asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  # ─── Service Records ────────────────────────────────────────────────────────
+  /assets/{assetId}/records:
+    get:
+      operationId: listServiceRecords
+      tags: [records]
+      summary: List service history for an asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Service records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ServiceRecord"
+    post:
+      operationId: createServiceRecord
+      tags: [records]
+      summary: Log a service event for an asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateServiceRecordBody"
+      responses:
+        "201":
+          description: Created service record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRecord"
+
+  /records/{recordId}:
+    get:
+      operationId: getServiceRecord
+      tags: [records]
+      summary: Get a single service record
+      parameters:
+        - name: recordId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Service record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceRecord"
+
+  # ─── Maintenance ────────────────────────────────────────────────────────────
+  /assets/{assetId}/maintenance:
+    get:
+      operationId: listMaintenanceTasks
+      tags: [maintenance]
+      summary: List maintenance tasks for an asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Maintenance tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaintenanceTask"
+    post:
+      operationId: createMaintenanceTask
+      tags: [maintenance]
+      summary: Add a maintenance task
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMaintenanceTaskBody"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceTask"
+
+  /maintenance/{taskId}:
+    patch:
+      operationId: updateMaintenanceTask
+      tags: [maintenance]
+      summary: Mark task complete or update schedule
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMaintenanceTaskBody"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceTask"
+
+  # ─── DIY Guide Library ──────────────────────────────────────────────────────
+  /guides:
+    get:
+      operationId: listGuides
+      tags: [guides]
+      summary: List DIY maintenance guides
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: difficulty
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Guide list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Guide"
+
+  /guides/{guideId}:
+    get:
+      operationId: getGuide
+      tags: [guides]
+      summary: Get a single DIY guide
+      parameters:
+        - name: guideId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Guide details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Guide"
+
+  # ─── Marketplace ────────────────────────────────────────────────────────────
+  /marketplace/jobs:
+    get:
+      operationId: listMarketplaceJobs
+      tags: [marketplace]
+      summary: List open service requests visible to pros
+      responses:
+        "200":
+          description: List of jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MarketplaceJob"
+    post:
+      operationId: createMarketplaceJob
+      tags: [marketplace]
+      summary: Post a service request to the marketplace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMarketplaceJobBody"
+      responses:
+        "201":
+          description: Created job
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketplaceJob"
+
+  # ─── Dashboard ──────────────────────────────────────────────────────────────
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Overall dashboard — upcoming tasks, recent service, asset health across all properties
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dashboard"
+
+  /dashboard/activity:
+    get:
+      operationId: getActivityFeed
+      tags: [dashboard]
+      summary: Recent activity feed across all properties and assets
+      responses:
+        "200":
+          description: Activity feed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    # ─── Property ──────────────────────────────────────────────────────────────
+    Property:
+      type: object
+      required: [id, name, address, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: Friendly name (e.g. "The Smith Family Home")
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zipCode:
+          type: string
+        yearBuilt:
+          type: integer
+        sqft:
+          type: integer
+        photoUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreatePropertyBody:
+      type: object
+      required: [name, address]
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zipCode:
+          type: string
+        yearBuilt:
+          type: integer
+        sqft:
+          type: integer
+        photoUrl:
+          type: string
+
+    UpdatePropertyBody:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        zipCode:
+          type: string
+        yearBuilt:
+          type: integer
+        sqft:
+          type: integer
+        photoUrl:
+          type: string
+
+    PropertySummary:
+      type: object
+      required: [propertyId, healthScore, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, assetsByCategory]
+      properties:
+        propertyId:
+          type: string
+        healthScore:
+          type: integer
+          description: 0–100 score based on verified assets and completed maintenance
+        totalAssets:
+          type: integer
+        verifiedAssets:
+          type: integer
+        overdueTaskCount:
+          type: integer
+        upcomingTasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceTask"
+        assetsByCategory:
+          type: array
+          items:
+            type: object
+            required: [category, count]
+            properties:
+              category:
+                type: string
+              count:
+                type: integer
+
+    # ─── Asset ─────────────────────────────────────────────────────────────────
+    Asset:
+      type: object
+      required: [id, propertyId, name, category, status, createdAt]
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        name:
+          type: string
+          description: Plain-language name (e.g. "Central AC Unit", "Water Heater")
+        category:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
+        brand:
+          type: string
+        model:
+          type: string
+        serialNumber:
+          type: string
+        installDate:
+          type: string
+          format: date
+        warrantyExpiry:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [verified, unverified, needs_attention]
+        notes:
+          type: string
+        photoUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateAssetBody:
+      type: object
+      required: [name, category]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
+        brand:
+          type: string
+        model:
+          type: string
+        serialNumber:
+          type: string
+        installDate:
+          type: string
+          format: date
+        warrantyExpiry:
+          type: string
+          format: date
+        notes:
+          type: string
+        photoUrl:
+          type: string
+
+    UpdateAssetBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
+        brand:
+          type: string
+        model:
+          type: string
+        serialNumber:
+          type: string
+        installDate:
+          type: string
+          format: date
+        warrantyExpiry:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [verified, unverified, needs_attention]
+        notes:
+          type: string
+        photoUrl:
+          type: string
+
+    # ─── Service Record ─────────────────────────────────────────────────────────
+    ServiceRecord:
+      type: object
+      required: [id, assetId, date, description, createdAt]
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        date:
+          type: string
+          format: date
+        technicianName:
+          type: string
+        companyName:
+          type: string
+        description:
+          type: string
+        cost:
+          type: number
+        nextServiceDate:
+          type: string
+          format: date
+        receiptUrl:
+          type: string
+        verified:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateServiceRecordBody:
+      type: object
+      required: [date, description]
+      properties:
+        date:
+          type: string
+          format: date
+        technicianName:
+          type: string
+        companyName:
+          type: string
+        description:
+          type: string
+        cost:
+          type: number
+        nextServiceDate:
+          type: string
+          format: date
+        receiptUrl:
+          type: string
+        verified:
+          type: boolean
+
+    # ─── Maintenance Task ───────────────────────────────────────────────────────
+    MaintenanceTask:
+      type: object
+      required: [id, assetId, title, intervalDays, nextDueDate, isDiy, createdAt]
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        intervalDays:
+          type: integer
+        nextDueDate:
+          type: string
+          format: date
+        completedAt:
+          type: string
+          format: date-time
+        isDiy:
+          type: boolean
+        estimatedCost:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateMaintenanceTaskBody:
+      type: object
+      required: [title, intervalDays, nextDueDate, isDiy]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        intervalDays:
+          type: integer
+        nextDueDate:
+          type: string
+          format: date
+        isDiy:
+          type: boolean
+        estimatedCost:
+          type: number
+
+    UpdateMaintenanceTaskBody:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        intervalDays:
+          type: integer
+        nextDueDate:
+          type: string
+          format: date
+        completedAt:
+          type: string
+          format: date-time
+        isDiy:
+          type: boolean
+        estimatedCost:
+          type: number
+
+    # ─── DIY Guide ──────────────────────────────────────────────────────────────
+    Guide:
+      type: object
+      required: [id, category, title, difficulty, estimatedMinutes, createdAt]
+      properties:
+        id:
+          type: string
+        category:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
+        title:
+          type: string
+        description:
+          type: string
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        estimatedMinutes:
+          type: integer
+        toolsNeeded:
+          type: array
+          items:
+            type: string
+        steps:
+          type: array
+          items:
+            type: object
+            required: [step, instruction]
+            properties:
+              step:
+                type: integer
+              instruction:
+                type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    # ─── Marketplace ────────────────────────────────────────────────────────────
+    MarketplaceJob:
+      type: object
+      required: [id, assetId, assetName, assetCategory, description, status, createdAt]
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        assetName:
+          type: string
+        assetCategory:
+          type: string
+        assetBrand:
+          type: string
+        assetModel:
+          type: string
+        assetSerialNumber:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [low, medium, high, emergency]
+        status:
+          type: string
+          enum: [open, claimed, completed]
+        city:
+          type: string
+        state:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateMarketplaceJobBody:
+      type: object
+      required: [assetId, description]
+      properties:
+        assetId:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [low, medium, high, emergency]
+
+    # ─── Dashboard ──────────────────────────────────────────────────────────────
+    Dashboard:
+      type: object
+      required: [totalProperties, totalAssets, verifiedAssets, overdueTaskCount, upcomingTasks, recentRecords]
+      properties:
+        totalProperties:
+          type: integer
+        totalAssets:
+          type: integer
+        verifiedAssets:
+          type: integer
+        unverifiedAssets:
+          type: integer
+        overdueTaskCount:
+          type: integer
+        dueSoonTaskCount:
+          type: integer
+        upcomingTasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceTask"
+        recentRecords:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceRecord"
+        assetHealthByCategory:
+          type: array
+          items:
+            type: object
+            required: [category, total, verified]
+            properties:
+              category:
+                type: string
+              total:
+                type: integer
+              verified:
+                type: integer
+
+    ActivityItem:
+      type: object
+      required: [id, type, title, description, createdAt]
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [service_record, maintenance_completed, asset_added, asset_verified]
+        title:
+          type: string
+        description:
+          type: string
+        propertyName:
+          type: string
+        assetName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
