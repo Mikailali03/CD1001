@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { maintenanceTasksTable } from "@workspace/db";
+import { maintenanceTasksTable, serviceRecordsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
 import {
   ListMaintenanceTasksParams,
   CreateMaintenanceTaskParams,
@@ -9,6 +10,13 @@ import {
   UpdateMaintenanceTaskParams,
   UpdateMaintenanceTaskBody,
 } from "@workspace/api-zod";
+
+const CompleteTaskParams = z.object({ taskId: z.string() });
+const CompleteTaskBody = z.object({
+  notes: z.string().optional(),
+  isDiy: z.boolean().optional(),
+  cost: z.number().optional(),
+});
 
 const router = Router();
 
@@ -49,6 +57,62 @@ router.patch("/maintenance/:taskId", async (req, res) => {
     .returning();
   if (!task) return res.status(404).json({ error: "Task not found" });
   res.json(task);
+});
+
+router.post("/maintenance/:taskId/complete", async (req, res) => {
+  const { taskId } = CompleteTaskParams.parse(req.params);
+  const body = CompleteTaskBody.parse(req.body);
+
+  const [existing] = await db
+    .select()
+    .from(maintenanceTasksTable)
+    .where(eq(maintenanceTasksTable.id, taskId));
+
+  if (!existing) return res.status(404).json({ error: "Task not found" });
+
+  // Mark the current task complete
+  const [completedTask] = await db
+    .update(maintenanceTasksTable)
+    .set({ completedAt: new Date() })
+    .where(eq(maintenanceTasksTable.id, taskId))
+    .returning();
+
+  // Schedule the next recurrence based on today + intervalDays
+  const nextDate = new Date();
+  nextDate.setDate(nextDate.getDate() + existing.intervalDays);
+  const nextDueDate = nextDate.toISOString().split("T")[0]!;
+
+  const [nextTask] = await db
+    .insert(maintenanceTasksTable)
+    .values({
+      assetId: existing.assetId,
+      title: existing.title,
+      description: existing.description,
+      intervalDays: existing.intervalDays,
+      nextDueDate,
+      isDiy: existing.isDiy,
+      estimatedCost: existing.estimatedCost,
+    })
+    .returning();
+
+  // Optionally write a service record
+  let serviceRecord = null;
+  if (body.notes) {
+    const today = new Date().toISOString().split("T")[0]!;
+    const [sr] = await db
+      .insert(serviceRecordsTable)
+      .values({
+        assetId: existing.assetId,
+        date: today,
+        description: body.notes,
+        technicianName: body.isDiy ? "Homeowner (DIY)" : undefined,
+        cost: body.cost != null ? String(body.cost) : undefined,
+      })
+      .returning();
+    serviceRecord = sr;
+  }
+
+  res.json({ completedTask, nextTask, serviceRecord });
 });
 
 export default router;

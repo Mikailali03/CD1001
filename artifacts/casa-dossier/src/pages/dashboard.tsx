@@ -355,6 +355,7 @@ export default function Dashboard() {
         overdueTaskCount={summary.overdueTaskCount ?? 0}
         overdueTasks={overdueTasksList}
         assetScores={assetScores}
+        propertyId={activePropertyId}
       />
     </div>
   );
