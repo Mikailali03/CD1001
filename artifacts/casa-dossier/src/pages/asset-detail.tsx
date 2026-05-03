@@ -697,7 +697,7 @@ export default function AssetDetail() {
         <Link href="/marketplace">
           <Button variant="outline" size="sm" className="gap-1.5">
             <Wrench className="h-3.5 w-3.5" />
-            Request Service
+            Request Service for This Asset
           </Button>
         </Link>
       </div>
