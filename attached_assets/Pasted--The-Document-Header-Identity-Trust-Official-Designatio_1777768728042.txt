@@ -1,0 +1,28 @@
+. The Document Header (Identity & Trust)
+Official Designation: Top-left corner clearly states "Official Property Dossier" in a small, wide-tracked monospace font.
+The Address: The primary street address is the largest text on the page, set in a heavy, black sans-serif font to ground the document.
+The "Verified" Seal: On the top-right, a thick-bordered "Verified" badge with a ShieldCheck icon. This is styled with a heavy offset shadow to mimic a physical rubber stamp, signaling that the data has been audited via the Casa Dossier protocol.
+2. Technical Specifications Strip
+Below the header is a four-column grid that acts as the "Quick Specs" for the building:
+Built: The year of original construction.
+Structure: Total square footage.
+Configuration: Bedroom and Bathroom count.
+Registry: The total count of audited service events (e.g., "42 Audited Events").
+Design Detail: Each stat is separated by a clean vertical line (border-l), making it feel like an architectural blueprint.
+3. Current Operational Inventory (Active Assets)
+This is the "meat" of the report. Every active system (HVAC, Water Heater, etc.) has its own dedicated block.
+System Header: Shows the Sub-category (e.g., Tankless Water Heater) in bold caps, with the Brand and Model beneath it.
+Technical Spec Badge: On the right of each asset header, a black badge shows the Manufacture Date and Serial Number.
+Chronological Service Table:
+A clean table lists the Date, the Service Item (e.g., "Annual Flush"), and the Performer (e.g., "Main Street Plumbing").
+Privacy Guard: Cost data is explicitly excluded. This allows the owner to prove the work was done without revealing what they paid, which is ideal for negotiations.
+Visual Logic: Each asset uses a break-inside-avoid CSS rule, ensuring that a system and its history table are never split across two different physical pages.
+4. Property Systems Archive (Decommissioned Assets)
+Following the active systems is the Archive. This is what sets Casa Dossier apart from a simple list of appliances.
+Visual Distinction: This section is slightly faded (opacity-70) to show it is historical data.
+The "Death Certificate": Every retired asset has a high-visibility badge: "DECOMMISSIONED [DATE]".
+The Narrative: This section proves a "Chain of Care." It shows the buyer, for example, that the previous AC unit was serviced regularly for 15 years before being replaced by the current one.
+5. Authentication Footer
+Generation Timestamp: A clear line stating exactly when the report was generated.
+Ecosystem Verification: Three icons (Wrench, ShieldCheck, FileText) represent the three pillars of the report: Technical Specification, Verified Logic, and Chain of Custody.
+Protocol Note: Mentions the "Casa Dossier Protocol," adding a layer of professional authority to the document.

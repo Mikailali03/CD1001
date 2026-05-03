@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Building2, ChevronDown, Check, Plus } from "lucide-react";
+import { Building2, ChevronDown, Check, Plus, FileText } from "lucide-react";
 import { Link } from "wouter";
 
 function PropertySwitcher() {
@@ -74,6 +74,19 @@ function PropertySwitcher() {
   );
 }
 
+function GenerateReportButton() {
+  const { activeProperty } = useProperty();
+  if (!activeProperty) return null;
+  return (
+    <Link href={`/properties/${activeProperty.id}/report`}>
+      <Button variant="outline" size="sm" className="gap-2 h-8 text-xs font-medium">
+        <FileText className="h-3.5 w-3.5" />
+        Generate Report
+      </Button>
+    </Link>
+  );
+}
+
 export function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
@@ -84,6 +97,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <SidebarTrigger />
             <div className="w-px h-5 bg-border" />
             <PropertySwitcher />
+            <div className="ml-auto">
+              <GenerateReportButton />
+            </div>
           </header>
           <div className="flex-1 overflow-auto">
             {children}

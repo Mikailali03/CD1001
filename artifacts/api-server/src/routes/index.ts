@@ -12,6 +12,7 @@ import lensRouter from "./lens";
 import capitalRouter from "./capital";
 import transferRouter from "./transfer";
 import ledgerRouter from "./ledger";
+import reportRouter from "./report";
 
 const router: IRouter = Router();
 
@@ -21,6 +22,7 @@ router.use(lensRouter);
 router.use(capitalRouter);
 router.use(transferRouter);
 router.use(ledgerRouter);
+router.use(reportRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);
 router.use(serviceRecordsRouter);

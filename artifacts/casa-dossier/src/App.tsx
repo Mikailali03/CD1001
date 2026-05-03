@@ -20,6 +20,7 @@ import CapitalOutlook from "@/pages/capital-outlook";
 import Settings from "@/pages/settings";
 import Login from "@/pages/login";
 import ClaimTransfer from "@/pages/claim";
+import PropertyReport from "@/pages/report";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ function Router() {
         <Route path="/settings" component={Settings} />
         <Route path="/login" component={Login} />
         <Route path="/claim/:token" component={ClaimTransfer} />
+        <Route path="/properties/:id/report" component={PropertyReport} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
