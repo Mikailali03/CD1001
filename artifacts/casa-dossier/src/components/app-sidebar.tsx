@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
@@ -31,24 +32,29 @@ const navigation = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { setOpen } = useSidebar();
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b px-6 py-5">
-        <div className="flex items-center gap-2.5">
-          <div className="bg-primary rounded-lg p-1.5">
+    <Sidebar
+      collapsible="icon"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <SidebarHeader className="border-b px-3 py-5 overflow-hidden">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="bg-primary rounded-lg p-1.5 shrink-0">
             <ShieldCheck className="h-5 w-5 text-primary-foreground" />
           </div>
-          <div>
-            <p className="font-bold text-base leading-none text-primary">Casa Dossier</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">Your Home, Documented.</p>
+          <div className="overflow-hidden group-data-[collapsible=icon]:hidden">
+            <p className="font-bold text-base leading-none text-primary whitespace-nowrap">Casa Dossier</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">Your Home, Documented.</p>
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="pt-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-4 mb-1">
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-4 mb-1 group-data-[collapsible=icon]:hidden">
             Homeowner Portal
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -84,6 +90,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               asChild
               isActive={location === "/settings"}
+              tooltip="Settings"
               className="h-10 px-4 rounded-lg"
             >
               <Link href="/settings" className="flex items-center gap-3">
