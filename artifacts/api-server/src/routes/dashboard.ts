@@ -6,24 +6,67 @@ import {
   maintenanceTasksTable,
   serviceRecordsTable,
 } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
 
 const router = Router();
 
-router.get("/dashboard", async (req, res) => {
-  const properties = await db.select().from(propertiesTable);
-  const assets = await db.select().from(assetsTable);
+const EMPTY_DASHBOARD = {
+  totalProperties: 0,
+  totalAssets: 0,
+  verifiedAssets: 0,
+  unverifiedAssets: 0,
+  overdueTaskCount: 0,
+  dueSoonTaskCount: 0,
+  homeHealthScore: 100,
+  homeHealthGrade: "A",
+  scoringBreakdown: { assetAgeScore: 100, overdueScore: 100, criticalAssets: [] },
+  upcomingTasks: [],
+  recentRecords: [],
+  assetHealthByCategory: [],
+};
+
+router.get("/dashboard", requireAuth(), async (req, res) => {
+  const properties = await db
+    .select()
+    .from(propertiesTable)
+    .where(eq(propertiesTable.userId, req.userId));
+
+  if (properties.length === 0) {
+    return res.json(EMPTY_DASHBOARD);
+  }
+
+  const propertyIds = properties.map((p) => p.id);
+
+  const assets = await db
+    .select()
+    .from(assetsTable)
+    .where(inArray(assetsTable.propertyId, propertyIds));
 
   const today = new Date().toISOString().split("T")[0]!;
   const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]!;
 
-  const tasks = await db.select().from(maintenanceTasksTable).orderBy(maintenanceTasksTable.nextDueDate);
-  const recentRecords = await db
-    .select()
-    .from(serviceRecordsTable)
-    .orderBy(desc(serviceRecordsTable.createdAt))
-    .limit(5);
+  const assetIds = assets.map((a) => a.id);
+
+  const tasks =
+    assetIds.length > 0
+      ? await db
+          .select()
+          .from(maintenanceTasksTable)
+          .where(inArray(maintenanceTasksTable.assetId, assetIds))
+          .orderBy(maintenanceTasksTable.nextDueDate)
+      : [];
+
+  const recentRecords =
+    assetIds.length > 0
+      ? await db
+          .select()
+          .from(serviceRecordsTable)
+          .where(inArray(serviceRecordsTable.assetId, assetIds))
+          .orderBy(desc(serviceRecordsTable.createdAt))
+          .limit(5)
+      : [];
 
   const totalAssets = assets.length;
   const verifiedAssets = assets.filter((a) => a.status === "verified").length;
@@ -34,9 +77,9 @@ router.get("/dashboard", async (req, res) => {
   ).length;
   const upcomingTasks = tasks.filter((t) => t.nextDueDate >= today && !t.completedAt).slice(0, 8);
 
-  // Health score calculation
   const assetScores = assets.map((a) => calcAssetScore(a));
-  const { score: homeHealthScore, grade: homeHealthGrade, assetAgeScore, overdueScore } = calcHealthScore(assetScores, overdueTaskCount);
+  const { score: homeHealthScore, grade: homeHealthGrade, assetAgeScore, overdueScore } =
+    calcHealthScore(assetScores, overdueTaskCount);
   const criticalAssets = assetScores.filter((s) => s.score < 40);
 
   const categoryMap: Record<string, { total: number; verified: number }> = {};
@@ -59,18 +102,25 @@ router.get("/dashboard", async (req, res) => {
     dueSoonTaskCount,
     homeHealthScore,
     homeHealthGrade,
-    scoringBreakdown: {
-      assetAgeScore,
-      overdueScore,
-      criticalAssets,
-    },
+    scoringBreakdown: { assetAgeScore, overdueScore, criticalAssets },
     upcomingTasks,
     recentRecords,
     assetHealthByCategory,
   });
 });
 
-router.get("/dashboard/activity", async (req, res) => {
+router.get("/dashboard/activity", requireAuth(), async (req, res) => {
+  const properties = await db
+    .select()
+    .from(propertiesTable)
+    .where(eq(propertiesTable.userId, req.userId));
+
+  if (properties.length === 0) {
+    return res.json([]);
+  }
+
+  const propertyIds = properties.map((p) => p.id);
+
   const recentRecords = await db
     .select({
       id: serviceRecordsTable.id,
@@ -83,6 +133,7 @@ router.get("/dashboard/activity", async (req, res) => {
     .from(serviceRecordsTable)
     .innerJoin(assetsTable, eq(serviceRecordsTable.assetId, assetsTable.id))
     .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
+    .where(inArray(propertiesTable.id, propertyIds))
     .orderBy(desc(serviceRecordsTable.createdAt))
     .limit(20);
 

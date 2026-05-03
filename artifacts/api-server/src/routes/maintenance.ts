@@ -10,6 +10,8 @@ import {
   UpdateMaintenanceTaskParams,
   UpdateMaintenanceTaskBody,
 } from "@workspace/api-zod";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedProperty, getOwnedAsset } from "../lib/access.js";
 
 const CompleteTaskParams = z.object({ taskId: z.string() });
 const CompleteTaskBody = z.object({
@@ -24,30 +26,32 @@ const CompleteTaskBody = z.object({
 
 const router = Router();
 
-// ── Property-level inbox: overdue + due in next 30 days ──────────────────────
 const InboxParams = z.object({ propertyId: z.string() });
 
-router.get("/properties/:propertyId/inbox", async (req, res) => {
+router.get("/properties/:propertyId/inbox", requireAuth(), async (req, res) => {
   const { propertyId } = InboxParams.parse(req.params);
+
+  const property = await getOwnedProperty(propertyId, req.userId);
+  if (!property) return res.status(404).json({ error: "Property not found" });
 
   const today = new Date();
   const cutoff = new Date(today);
   cutoff.setDate(cutoff.getDate() + 30);
 
-  const todayStr   = today.toISOString().split("T")[0]!;
-  const cutoffStr  = cutoff.toISOString().split("T")[0]!;
+  const todayStr  = today.toISOString().split("T")[0]!;
+  const cutoffStr = cutoff.toISOString().split("T")[0]!;
 
   const rows = await db
     .select({
-      id:           maintenanceTasksTable.id,
-      assetId:      maintenanceTasksTable.assetId,
-      title:        maintenanceTasksTable.title,
-      description:  maintenanceTasksTable.description,
-      intervalDays: maintenanceTasksTable.intervalDays,
-      nextDueDate:  maintenanceTasksTable.nextDueDate,
-      isDiy:        maintenanceTasksTable.isDiy,
+      id:            maintenanceTasksTable.id,
+      assetId:       maintenanceTasksTable.assetId,
+      title:         maintenanceTasksTable.title,
+      description:   maintenanceTasksTable.description,
+      intervalDays:  maintenanceTasksTable.intervalDays,
+      nextDueDate:   maintenanceTasksTable.nextDueDate,
+      isDiy:         maintenanceTasksTable.isDiy,
       estimatedCost: maintenanceTasksTable.estimatedCost,
-      assetName:    assetsTable.name,
+      assetName:     assetsTable.name,
       assetCategory: assetsTable.category,
     })
     .from(maintenanceTasksTable)
@@ -67,8 +71,12 @@ router.get("/properties/:propertyId/inbox", async (req, res) => {
   res.json({ overdue, upcoming, totalCount: rows.length });
 });
 
-router.get("/assets/:assetId/maintenance", async (req, res) => {
+router.get("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
   const { assetId } = ListMaintenanceTasksParams.parse(req.params);
+
+  const asset = await getOwnedAsset(assetId, req.userId);
+  if (!asset) return res.status(404).json({ error: "Asset not found" });
+
   const tasks = await db
     .select()
     .from(maintenanceTasksTable)
@@ -77,9 +85,13 @@ router.get("/assets/:assetId/maintenance", async (req, res) => {
   res.json(tasks);
 });
 
-router.post("/assets/:assetId/maintenance", async (req, res) => {
+router.post("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
   const { assetId } = CreateMaintenanceTaskParams.parse(req.params);
   const body = CreateMaintenanceTaskBody.parse(req.body);
+
+  const asset = await getOwnedAsset(assetId, req.userId);
+  if (!asset) return res.status(404).json({ error: "Asset not found" });
+
   const [task] = await db
     .insert(maintenanceTasksTable)
     .values({
@@ -91,9 +103,19 @@ router.post("/assets/:assetId/maintenance", async (req, res) => {
   res.status(201).json(task);
 });
 
-router.patch("/maintenance/:taskId", async (req, res) => {
+router.patch("/maintenance/:taskId", requireAuth(), async (req, res) => {
   const { taskId } = UpdateMaintenanceTaskParams.parse(req.params);
   const body = UpdateMaintenanceTaskBody.parse(req.body);
+
+  const [existing] = await db
+    .select()
+    .from(maintenanceTasksTable)
+    .where(eq(maintenanceTasksTable.id, taskId));
+  if (!existing) return res.status(404).json({ error: "Task not found" });
+
+  const asset = await getOwnedAsset(existing.assetId, req.userId);
+  if (!asset) return res.status(403).json({ error: "Forbidden" });
+
   const [task] = await db
     .update(maintenanceTasksTable)
     .set({
@@ -106,7 +128,7 @@ router.patch("/maintenance/:taskId", async (req, res) => {
   res.json(task);
 });
 
-router.post("/maintenance/:taskId/complete", async (req, res) => {
+router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => {
   const { taskId } = CompleteTaskParams.parse(req.params);
   const body = CompleteTaskBody.parse(req.body);
 
@@ -114,17 +136,17 @@ router.post("/maintenance/:taskId/complete", async (req, res) => {
     .select()
     .from(maintenanceTasksTable)
     .where(eq(maintenanceTasksTable.id, taskId));
-
   if (!existing) return res.status(404).json({ error: "Task not found" });
 
-  // Mark the current task complete
+  const asset = await getOwnedAsset(existing.assetId, req.userId);
+  if (!asset) return res.status(403).json({ error: "Forbidden" });
+
   const [completedTask] = await db
     .update(maintenanceTasksTable)
     .set({ completedAt: new Date() })
     .where(eq(maintenanceTasksTable.id, taskId))
     .returning();
 
-  // Schedule the next recurrence based on today + intervalDays
   const nextDate = new Date();
   nextDate.setDate(nextDate.getDate() + existing.intervalDays);
   const nextDueDate = nextDate.toISOString().split("T")[0]!;
@@ -142,8 +164,6 @@ router.post("/maintenance/:taskId/complete", async (req, res) => {
     })
     .returning();
 
-  // Always write a service record so the ledger captures today as the completion date.
-  // Prefer the client-supplied local date (avoids UTC off-by-one); fall back to UTC date.
   const today = body.completedDate ?? new Date().toISOString().split("T")[0]!;
   const effectiveCost =
     body.cost != null

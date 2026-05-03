@@ -3,6 +3,8 @@ import { db } from "@workspace/db";
 import { serviceRecordsTable, maintenanceTasksTable, assetsTable } from "@workspace/db";
 import { eq, and, gte, lte, isNull, inArray, desc } from "drizzle-orm";
 import { z } from "zod";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedProperty } from "../lib/access.js";
 
 const LedgerParams = z.object({ propertyId: z.string() });
 const RANGES = ["this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year", "all_time"] as const;
@@ -40,8 +42,12 @@ function getDateRange(range: string): { start: string | null; end: string | null
 
 const router = Router();
 
-router.get("/properties/:propertyId/ledger", async (req, res) => {
+router.get("/properties/:propertyId/ledger", requireAuth(), async (req, res) => {
   const { propertyId } = LedgerParams.parse(req.params);
+
+  const property = await getOwnedProperty(propertyId, req.userId);
+  if (!property) return res.status(404).json({ error: "Property not found" });
+
   const range = (RANGES as readonly string[]).includes(String(req.query["range"]))
     ? String(req.query["range"])
     : "this_year";
@@ -59,7 +65,6 @@ router.get("/properties/:propertyId/ledger", async (req, res) => {
   const assetIds = assets.map((a) => a.id);
   const assetMap = new Map(assets.map((a) => [a.id, a]));
 
-  // ── Actual spend: service records with a cost in the date range ──────────────
   const recConds: ReturnType<typeof eq>[] = [inArray(serviceRecordsTable.assetId, assetIds) as any];
   if (start) recConds.push(gte(serviceRecordsTable.date, start) as any);
   if (end)   recConds.push(lte(serviceRecordsTable.date, end) as any);
@@ -70,7 +75,6 @@ router.get("/properties/:propertyId/ledger", async (req, res) => {
     .where(and(...recConds))
     .orderBy(desc(serviceRecordsTable.date));
 
-  // ── Expected spend: pending tasks whose nextDueDate falls in range ────────────
   const taskConds: ReturnType<typeof eq>[] = [
     inArray(maintenanceTasksTable.assetId, assetIds) as any,
     isNull(maintenanceTasksTable.completedAt) as any,
@@ -83,7 +87,6 @@ router.get("/properties/:propertyId/ledger", async (req, res) => {
     .from(maintenanceTasksTable)
     .where(and(...taskConds));
 
-  // ── Aggregate per category ────────────────────────────────────────────────────
   const actualByCat: Record<string, number> = {};
   const expectedByCat: Record<string, number> = {};
 

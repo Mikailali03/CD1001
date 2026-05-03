@@ -4,16 +4,17 @@ import { db } from "@workspace/db";
 import { assetsTable, maintenanceTasksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedAsset } from "../lib/access.js";
 
 const router = Router();
 
-// ── AI Lens: spec-plate OCR ────────────────────────────────────────────────────
 const ScanBody = z.object({
   imageBase64: z.string().min(10),
   mimeType: z.string().default("image/jpeg"),
 });
 
-router.post("/assets/scan", async (req, res) => {
+router.post("/assets/scan", requireAuth(), async (req, res) => {
   const { imageBase64, mimeType } = ScanBody.parse(req.body);
 
   const completion = await openai.chat.completions.create({
@@ -65,13 +66,12 @@ For "suggestedName": a short plain-English name like "Carrier Central AC Unit" o
   }
 });
 
-// ── Autonomous Task Generation ─────────────────────────────────────────────────
 const GenerateTasksParams = z.object({ assetId: z.string() });
 
-router.post("/assets/:assetId/generate-tasks", async (req, res) => {
+router.post("/assets/:assetId/generate-tasks", requireAuth(), async (req, res) => {
   const { assetId } = GenerateTasksParams.parse(req.params);
 
-  const [asset] = await db.select().from(assetsTable).where(eq(assetsTable.id, assetId));
+  const asset = await getOwnedAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
   const ageYears = asset.installDate
@@ -153,7 +153,6 @@ Field rules:
       })
   );
 
-  // Mark asset as verified now that it has a full task schedule
   await db
     .update(assetsTable)
     .set({ status: "verified", updatedAt: new Date() })

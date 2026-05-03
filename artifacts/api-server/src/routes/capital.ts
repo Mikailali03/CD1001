@@ -3,10 +3,11 @@ import { z } from "zod";
 import { db } from "@workspace/db";
 import { assetsTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedProperty } from "../lib/access.js";
 
 const router = Router();
 
-// Expected lifespans by category (years)
 const BASE_LIFESPAN: Record<string, number> = {
   HVAC: 17,
   Plumbing: 12,
@@ -17,7 +18,6 @@ const BASE_LIFESPAN: Record<string, number> = {
   Other: 15,
 };
 
-// Name-keyword overrides for more specific estimates
 function getExpectedLifespan(category: string, name: string): number {
   const lower = name.toLowerCase();
   if (lower.includes("water heater")) return 12;
@@ -50,8 +50,11 @@ function getUrgency(yearsRemaining: number | null): Urgency {
 
 const CapitalOutlookParams = z.object({ propertyId: z.string() });
 
-router.get("/properties/:propertyId/capital-outlook", async (req, res) => {
+router.get("/properties/:propertyId/capital-outlook", requireAuth(), async (req, res) => {
   const { propertyId } = CapitalOutlookParams.parse(req.params);
+
+  const property = await getOwnedProperty(propertyId, req.userId);
+  if (!property) return res.status(404).json({ error: "Property not found" });
 
   const assets = await db
     .select()
@@ -88,10 +91,8 @@ router.get("/properties/:propertyId/capital-outlook", async (req, res) => {
     };
   });
 
-  // Total tracked replacement value
   const totalTrackedValue = enriched.reduce((sum, a) => sum + (a.replacementCost ?? 0), 0);
 
-  // Year-by-year timeline (next 20 years)
   const timelineMap = new Map<number, { projectedCost: number; assetNames: string[] }>();
   for (let y = currentYear; y <= currentYear + 20; y++) {
     timelineMap.set(y, { projectedCost: 0, assetNames: [] });
@@ -112,7 +113,6 @@ router.get("/properties/:propertyId/capital-outlook", async (req, res) => {
     .map(([year, v]) => ({ year, projectedCost: v.projectedCost, assetNames: v.assetNames }))
     .sort((a, b) => a.year - b.year);
 
-  // Summary
   const withDates = enriched.filter((a) => a.replacementYear != null && a.replacementCost != null);
   const upcoming = withDates
     .filter((a) => a.replacementYear! >= currentYear)

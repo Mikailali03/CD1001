@@ -3,13 +3,15 @@ import { db } from "@workspace/db";
 import { propertyTransfersTable, propertiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedProperty } from "../lib/access.js";
 
 const router = Router();
 
 const InitiateParams = z.object({ propertyId: z.string() });
 const InitiateBody = z.object({
   toEmail: z.string().email(),
-  fromEmail: z.string().email().optional().default("alex@example.com"),
+  fromEmail: z.string().email().optional(),
 });
 
 const CancelParams = z.object({ transferId: z.string() });
@@ -17,8 +19,12 @@ const ClaimParams = z.object({ token: z.string() });
 const ClaimBody = z.object({ newOwnerName: z.string().optional() });
 
 // GET /api/properties/:propertyId/transfer — active pending transfer
-router.get("/properties/:propertyId/transfer", async (req, res) => {
+router.get("/properties/:propertyId/transfer", requireAuth(), async (req, res) => {
   const { propertyId } = InitiateParams.parse(req.params);
+
+  const property = await getOwnedProperty(propertyId, req.userId);
+  if (!property) return res.status(404).json({ error: "Property not found" });
+
   const [transfer] = await db
     .select()
     .from(propertyTransfersTable)
@@ -34,22 +40,20 @@ router.get("/properties/:propertyId/transfer", async (req, res) => {
 });
 
 // POST /api/properties/:propertyId/transfer — initiate
-router.post("/properties/:propertyId/transfer", async (req, res) => {
+router.post("/properties/:propertyId/transfer", requireAuth(), async (req, res) => {
   const { propertyId } = InitiateParams.parse(req.params);
   const { toEmail, fromEmail } = InitiateBody.parse(req.body);
 
-  // Verify property exists
-  const [property] = await db
-    .select()
-    .from(propertiesTable)
-    .where(eq(propertiesTable.id, propertyId));
+  const property = await getOwnedProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
-  if (toEmail.toLowerCase() === fromEmail.toLowerCase()) {
+  const senderEmail = fromEmail ?? req.userId;
+
+  if (toEmail.toLowerCase() === senderEmail.toLowerCase()) {
     return res.status(400).json({ error: "You cannot transfer to yourself." });
   }
 
-  // Cancel any existing pending transfer before creating a new one
+  // Cancel any existing pending transfer
   await db
     .update(propertyTransfersTable)
     .set({ status: "cancelled", cancelledAt: new Date() })
@@ -60,7 +64,6 @@ router.post("/properties/:propertyId/transfer", async (req, res) => {
       )
     );
 
-  // Compute 30-day expiry
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 30);
 
@@ -68,8 +71,8 @@ router.post("/properties/:propertyId/transfer", async (req, res) => {
     .insert(propertyTransfersTable)
     .values({
       propertyId,
-      fromUserId: property.userId,
-      fromEmail,
+      fromUserId: req.userId,
+      fromEmail: senderEmail,
       toEmail,
       status: "pending",
       expiresAt,
@@ -79,9 +82,21 @@ router.post("/properties/:propertyId/transfer", async (req, res) => {
   res.status(201).json(transfer);
 });
 
-// DELETE /api/transfers/:transferId — cancel escrow
-router.delete("/transfers/:transferId", async (req, res) => {
+// DELETE /api/transfers/:transferId — cancel
+router.delete("/transfers/:transferId", requireAuth(), async (req, res) => {
   const { transferId } = CancelParams.parse(req.params);
+
+  const [existing] = await db
+    .select()
+    .from(propertyTransfersTable)
+    .where(eq(propertyTransfersTable.id, transferId));
+
+  if (!existing) return res.status(404).json({ error: "Transfer not found or already resolved" });
+
+  // Verify the requesting user owns the source property
+  const property = await getOwnedProperty(existing.propertyId, req.userId);
+  if (!property) return res.status(403).json({ error: "Forbidden" });
+
   const [transfer] = await db
     .update(propertyTransfersTable)
     .set({ status: "cancelled", cancelledAt: new Date() })
@@ -96,7 +111,7 @@ router.delete("/transfers/:transferId", async (req, res) => {
   res.json(transfer);
 });
 
-// GET /api/transfers/claim/:token — fetch transfer details for claim page
+// GET /api/transfers/claim/:token — fetch transfer details (public, for claim page)
 router.get("/transfers/claim/:token", async (req, res) => {
   const { token } = ClaimParams.parse(req.params);
   const [transfer] = await db
@@ -108,7 +123,6 @@ router.get("/transfers/claim/:token", async (req, res) => {
     return res.status(410).json({ error: "This transfer has already been completed or cancelled.", status: transfer.status });
   }
 
-  // Fetch property info to show on the claim page
   const [property] = await db
     .select()
     .from(propertiesTable)
@@ -117,10 +131,10 @@ router.get("/transfers/claim/:token", async (req, res) => {
   res.json({ transfer, property: property ?? null });
 });
 
-// POST /api/transfers/claim/:token — accept the transfer
-router.post("/transfers/claim/:token", async (req, res) => {
+// POST /api/transfers/claim/:token — accept (requires auth — the signed-in user becomes the new owner)
+router.post("/transfers/claim/:token", requireAuth(), async (req, res) => {
   const { token } = ClaimParams.parse(req.params);
-  const { newOwnerName } = ClaimBody.parse(req.body);
+  ClaimBody.parse(req.body);
 
   const [transfer] = await db
     .select()
@@ -132,8 +146,7 @@ router.post("/transfers/claim/:token", async (req, res) => {
     return res.status(410).json({ error: "This transfer has already been completed or cancelled.", status: transfer.status });
   }
 
-  // Perform ownership transfer — new userId = toEmail (as identifier)
-  const newUserId = transfer.toEmail;
+  const newUserId = req.userId;
 
   await db
     .update(propertiesTable)

@@ -4,13 +4,14 @@ import { db } from "@workspace/db";
 import { propertiesTable, assetsTable, maintenanceTasksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedProperty } from "../lib/access.js";
 
 const router = Router();
 
-// ── RentCast property lookup ──────────────────────────────────────────────────
 const LookupQuery = z.object({ address: z.string().min(5) });
 
-router.get("/properties/lookup", async (req, res) => {
+router.get("/properties/lookup", requireAuth(), async (req, res) => {
   const { address } = LookupQuery.parse(req.query);
 
   const apiKey = process.env.RENTCAST_API_KEY;
@@ -46,13 +47,12 @@ router.get("/properties/lookup", async (req, res) => {
   });
 });
 
-// ── AI Property Scout ─────────────────────────────────────────────────────────
 const ScoutParams = z.object({ propertyId: z.string() });
 
-router.post("/properties/:propertyId/scout", async (req, res) => {
+router.post("/properties/:propertyId/scout", requireAuth(), async (req, res) => {
   const { propertyId } = ScoutParams.parse(req.params);
 
-  const [property] = await db.select().from(propertiesTable).where(eq(propertiesTable.id, propertyId));
+  const property = await getOwnedProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const homeAge = property.yearBuilt ? new Date().getFullYear() - property.yearBuilt : null;
@@ -85,7 +85,6 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
 
   let tasks: any[];
   try {
-    // Strip any accidental markdown fences
     const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
     tasks = JSON.parse(cleaned);
   } catch {
@@ -93,7 +92,6 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
     return res.status(500).json({ error: "AI response could not be parsed", raw });
   }
 
-  // Ensure a "Home Stewardship" asset exists for this property
   let [stewardshipAsset] = await db
     .select()
     .from(assetsTable)
@@ -113,14 +111,13 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
       .returning();
   }
 
-  // Insert the AI-generated tasks
   const today = new Date();
   const insertedTasks = await Promise.all(
     tasks
       .filter((t) => t.title && typeof t.intervalDays === "number")
       .map((t) => {
         const due = new Date(today);
-        due.setDate(due.getDate() + Math.min(t.intervalDays, 90)); // first due soon
+        due.setDate(due.getDate() + Math.min(t.intervalDays, 90));
         const nextDueDate = due.toISOString().split("T")[0]!;
         return db
           .insert(maintenanceTasksTable)

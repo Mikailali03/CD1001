@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { propertiesTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import {
   CreatePropertyBody,
   UpdatePropertyBody,
@@ -11,41 +11,55 @@ import {
 } from "@workspace/api-zod";
 import { assetsTable, maintenanceTasksTable, serviceRecordsTable } from "@workspace/db";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
+import { requireAuth } from "../middlewares/requireAuth.js";
+import { getOwnedProperty } from "../lib/access.js";
 
 const router = Router();
 
-router.get("/properties", async (req, res) => {
-  const properties = await db.select().from(propertiesTable).orderBy(propertiesTable.createdAt);
+router.get("/properties", requireAuth(), async (req, res) => {
+  const properties = await db
+    .select()
+    .from(propertiesTable)
+    .where(eq(propertiesTable.userId, req.userId))
+    .orderBy(propertiesTable.createdAt);
   res.json(properties);
 });
 
-router.post("/properties", async (req, res) => {
+router.post("/properties", requireAuth(), async (req, res) => {
   const body = CreatePropertyBody.parse(req.body);
-  const [property] = await db.insert(propertiesTable).values({ ...body, userId: "demo-user" }).returning();
+  const [property] = await db
+    .insert(propertiesTable)
+    .values({ ...body, userId: req.userId })
+    .returning();
   res.status(201).json(property);
 });
 
-router.get("/properties/:propertyId", async (req, res) => {
+router.get("/properties/:propertyId", requireAuth(), async (req, res) => {
   const { propertyId } = GetPropertyParams.parse(req.params);
-  const [property] = await db.select().from(propertiesTable).where(eq(propertiesTable.id, propertyId));
+  const property = await getOwnedProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
   res.json(property);
 });
 
-router.patch("/properties/:propertyId", async (req, res) => {
+router.patch("/properties/:propertyId", requireAuth(), async (req, res) => {
   const { propertyId } = UpdatePropertyParams.parse(req.params);
   const body = UpdatePropertyBody.parse(req.body);
+  const existing = await getOwnedProperty(propertyId, req.userId);
+  if (!existing) return res.status(404).json({ error: "Property not found" });
   const [property] = await db
     .update(propertiesTable)
     .set({ ...body, updatedAt: new Date() })
-    .where(eq(propertiesTable.id, propertyId))
+    .where(and(eq(propertiesTable.id, propertyId), eq(propertiesTable.userId, req.userId)))
     .returning();
   if (!property) return res.status(404).json({ error: "Property not found" });
   res.json(property);
 });
 
-router.get("/properties/:propertyId/summary", async (req, res) => {
+router.get("/properties/:propertyId/summary", requireAuth(), async (req, res) => {
   const { propertyId } = GetPropertySummaryParams.parse(req.params);
+
+  const property = await getOwnedProperty(propertyId, req.userId);
+  if (!property) return res.status(404).json({ error: "Property not found" });
 
   const assets = await db.select().from(assetsTable).where(eq(assetsTable.propertyId, propertyId));
   const totalAssets = assets.length;
@@ -76,23 +90,10 @@ router.get("/properties/:propertyId/summary", async (req, res) => {
   }
   const assetsByCategory = Object.entries(categoryMap).map(([category, count]) => ({ category, count }));
 
-  // Health scoring
   const assetScores = assets.map((a) => calcAssetScore(a));
   const { score: healthScore, grade: healthGrade, assetAgeScore, overdueScore } = calcHealthScore(assetScores, overdueTaskCount);
   const criticalAssets = assetScores.filter((s) => s.score < 40);
 
-  // Recent service records for this property (through assets)
-  const assetIds = assets.map((a) => a.id);
-  const recentRecords = assetIds.length > 0
-    ? await db
-        .select()
-        .from(serviceRecordsTable)
-        .where(eq(serviceRecordsTable.assetId, assetIds[0]!)) // simplified — gets records for first asset; real impl would use inArray
-        .orderBy(desc(serviceRecordsTable.createdAt))
-        .limit(5)
-    : [];
-
-  // Better: get recent records across all assets for the property
   const allRecentRecords = await db
     .select({
       id: serviceRecordsTable.id,
