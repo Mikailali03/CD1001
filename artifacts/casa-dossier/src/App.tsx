@@ -6,10 +6,11 @@ import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/reac
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout";
-import { PropertyProvider } from "@/contexts/property-context";
+import { PropertyProvider, useProperty } from "@/contexts/property-context";
 
 // Pages
 import Landing from "@/pages/landing";
+import { Onboarding } from "@/pages/onboarding";
 import Dashboard from "@/pages/dashboard";
 import Properties from "@/pages/properties";
 import PropertyDetail from "@/pages/property-detail";
@@ -157,12 +158,20 @@ function AppRoutes() {
   );
 }
 
+function OnboardingGate({ children }: { children: React.ReactNode }) {
+  const { properties, isLoading } = useProperty();
+  if (!isLoading && properties.length === 0) return <Onboarding />;
+  return <>{children}</>;
+}
+
 function ProtectedApp() {
   return (
     <>
       <Show when="signed-in">
         <PropertyProvider>
-          <AppRoutes />
+          <OnboardingGate>
+            <AppRoutes />
+          </OnboardingGate>
         </PropertyProvider>
       </Show>
       <Show when="signed-out">
