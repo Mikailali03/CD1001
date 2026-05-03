@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useGetProperty,
   getGetPropertyQueryKey,
@@ -7,6 +7,7 @@ import {
   getGetPropertySummaryQueryKey,
   useListAssets,
   getListAssetsQueryKey,
+  useUpdateProperty,
 } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,9 +53,14 @@ const statusBadge = {
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [addAssetOpen, setAddAssetOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<(typeof assets)[0] | null>(null);
   const [retiredOpen, setRetiredOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const updateProperty = useUpdateProperty();
 
   const { data: property, isLoading: propertyLoading } = useGetProperty(id!, {
     query: { enabled: !!id, queryKey: getGetPropertyQueryKey(id!) },
@@ -106,6 +112,31 @@ export default function PropertyDetail() {
     toast({ title: "Asset added", description: "Maintenance plan generated and added to your dossier." });
   }
 
+  function startEditingName() {
+    setNameValue(property?.name ?? "");
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  }
+
+  function commitNameEdit() {
+    const trimmed = nameValue.trim();
+    if (!trimmed || !id || trimmed === property?.name) {
+      setEditingName(false);
+      return;
+    }
+    updateProperty.mutate(
+      { propertyId: id, data: { name: trimmed } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetPropertyQueryKey(id) });
+          toast({ title: "Home renamed", description: `Now called "${trimmed}".` });
+        },
+        onError: () => toast({ title: "Could not save name", variant: "destructive" }),
+        onSettled: () => setEditingName(false),
+      }
+    );
+  }
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <Link href="/properties" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground gap-1.5 mb-2">
@@ -115,7 +146,31 @@ export default function PropertyDetail() {
 
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">{property.name}</h1>
+          {editingName ? (
+            <input
+              ref={nameInputRef}
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
+              onBlur={commitNameEdit}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitNameEdit();
+                if (e.key === "Escape") setEditingName(false);
+              }}
+              className="text-3xl font-bold tracking-tight text-primary bg-transparent border-b-2 border-primary outline-none w-full max-w-lg"
+              autoFocus
+            />
+          ) : (
+            <div className="group flex items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight text-primary">{property.name}</h1>
+              <button
+                onClick={startEditingName}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                title="Rename home"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            </div>
+          )}
           <p className="text-muted-foreground flex items-center gap-1.5 mt-1 text-sm">
             <MapPin className="h-3.5 w-3.5" />
             {[property.address, property.city, property.state].filter(Boolean).join(", ")}
