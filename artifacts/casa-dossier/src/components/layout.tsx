@@ -1,6 +1,7 @@
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { useProperty } from "@/contexts/property-context";
+import { WelcomeModal } from "./welcome-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -141,6 +142,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
       </div>
+      <WelcomeModal />
     </SidebarProvider>
   );
 }
