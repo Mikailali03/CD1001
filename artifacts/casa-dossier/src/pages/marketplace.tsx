@@ -126,7 +126,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           <div className="space-y-2">
             <Label htmlFor="property-select">Property</Label>
             <Select value={propertyId} onValueChange={(v) => { setPropertyId(v); setAssetId(""); }}>
-              <SelectTrigger id="property-select" data-testid="select-property">
+              <SelectTrigger id="property-select" data-testid="select-property" className="h-auto min-h-10 whitespace-normal [&>span]:whitespace-normal [&>span]:break-words [&>span]:text-left">
                 <SelectValue placeholder="Choose a property..." />
               </SelectTrigger>
               <SelectContent>
@@ -140,7 +140,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           <div className="space-y-2">
             <Label htmlFor="asset-select">Which item needs service?</Label>
             <Select value={assetId} onValueChange={setAssetId} disabled={!propertyId}>
-              <SelectTrigger id="asset-select" data-testid="select-asset">
+              <SelectTrigger id="asset-select" data-testid="select-asset" className="h-auto min-h-10 whitespace-normal [&>span]:whitespace-normal [&>span]:break-words [&>span]:text-left">
                 <SelectValue placeholder={propertyId ? "Choose an asset..." : "Select a property first"} />
               </SelectTrigger>
               <SelectContent>
