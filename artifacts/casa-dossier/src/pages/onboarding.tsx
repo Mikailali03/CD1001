@@ -190,8 +190,8 @@ export function Onboarding() {
   }
 
   function handleFinish() {
-    queryClient.invalidateQueries({ queryKey: ["list-properties"] });
-    queryClient.invalidateQueries({
+    queryClient.refetchQueries({ queryKey: ["list-properties"] });
+    queryClient.refetchQueries({
       predicate: (q) =>
         q.queryKey.some((k) => k === "listProperties" || k === "properties"),
     });
