@@ -326,7 +326,7 @@ export function HealthScoreModal({
     const res = await fetch(`${BASE}/api/maintenance/${taskId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: notes.trim() || undefined, isDiy }),
+      body: JSON.stringify({ notes: notes.trim() || undefined, isDiy, completedDate: new Date().toLocaleDateString("en-CA") }),
     });
 
     if (!res.ok) {

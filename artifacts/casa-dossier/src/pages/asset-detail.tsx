@@ -195,6 +195,7 @@ function MarkCompleteForm({
           technicianName: technicianName.trim() || undefined,
           companyName: companyName.trim() || undefined,
           receiptUrl: receiptData || undefined,
+          completedDate: new Date().toLocaleDateString("en-CA"),
         }),
       });
       if (!res.ok) throw new Error("Failed");

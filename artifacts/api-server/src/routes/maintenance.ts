@@ -19,6 +19,7 @@ const CompleteTaskBody = z.object({
   technicianName: z.string().optional(),
   companyName: z.string().optional(),
   receiptUrl: z.string().optional(),
+  completedDate: z.string().optional(),
 });
 
 const router = Router();
@@ -142,8 +143,8 @@ router.post("/maintenance/:taskId/complete", async (req, res) => {
     .returning();
 
   // Always write a service record so the ledger captures today as the completion date.
-  // If the caller didn't supply an explicit cost, fall back to the task's estimatedCost.
-  const today = new Date().toISOString().split("T")[0]!;
+  // Prefer the client-supplied local date (avoids UTC off-by-one); fall back to UTC date.
+  const today = body.completedDate ?? new Date().toISOString().split("T")[0]!;
   const effectiveCost =
     body.cost != null
       ? body.cost
