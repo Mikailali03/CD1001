@@ -26,6 +26,8 @@ export const ListPropertiesResponseItem = zod.object({
   zipCode: zod.string().optional(),
   yearBuilt: zod.number().optional(),
   sqft: zod.number().optional(),
+  bedrooms: zod.number().optional(),
+  bathrooms: zod.number().optional(),
   photoUrl: zod.string().optional(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
@@ -43,6 +45,8 @@ export const CreatePropertyBody = zod.object({
   zipCode: zod.string().optional(),
   yearBuilt: zod.number().optional(),
   sqft: zod.number().optional(),
+  bedrooms: zod.number().optional(),
+  bathrooms: zod.number().optional(),
   photoUrl: zod.string().optional(),
 });
 
@@ -62,6 +66,8 @@ export const GetPropertyResponse = zod.object({
   zipCode: zod.string().optional(),
   yearBuilt: zod.number().optional(),
   sqft: zod.number().optional(),
+  bedrooms: zod.number().optional(),
+  bathrooms: zod.number().optional(),
   photoUrl: zod.string().optional(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
@@ -82,6 +88,8 @@ export const UpdatePropertyBody = zod.object({
   zipCode: zod.string().optional(),
   yearBuilt: zod.number().optional(),
   sqft: zod.number().optional(),
+  bedrooms: zod.number().optional(),
+  bathrooms: zod.number().optional(),
   photoUrl: zod.string().optional(),
 });
 
@@ -94,6 +102,8 @@ export const UpdatePropertyResponse = zod.object({
   zipCode: zod.string().optional(),
   yearBuilt: zod.number().optional(),
   sqft: zod.number().optional(),
+  bedrooms: zod.number().optional(),
+  bathrooms: zod.number().optional(),
   photoUrl: zod.string().optional(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),

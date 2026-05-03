@@ -175,6 +175,28 @@ export default function PropertyDetail() {
             <MapPin className="h-3.5 w-3.5" />
             {[property.address, property.city, property.state].filter(Boolean).join(", ")}
           </p>
+          {(property.bedrooms || property.bathrooms || property.sqft) && (
+            <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
+              {property.bedrooms && (
+                <span className="flex items-center gap-1">
+                  <BedDouble className="h-3.5 w-3.5" />
+                  {property.bedrooms} bd
+                </span>
+              )}
+              {property.bathrooms && (
+                <span className="flex items-center gap-1">
+                  <Bath className="h-3.5 w-3.5" />
+                  {property.bathrooms} ba
+                </span>
+              )}
+              {property.sqft && (
+                <span className="flex items-center gap-1">
+                  <Ruler className="h-3.5 w-3.5" />
+                  {property.sqft.toLocaleString()} sqft
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {id && (
           <Button className="shrink-0 gap-2" onClick={() => setAddAssetOpen(true)} data-testid="button-add-asset">
@@ -236,16 +258,16 @@ export default function PropertyDetail() {
                     <span>{property.sqft.toLocaleString()} sqft</span>
                   </div>
                 )}
-                {(property as any).bedrooms && (
+                {property.bedrooms && (
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <BedDouble className="h-3.5 w-3.5 shrink-0" />
-                    <span>{(property as any).bedrooms} bed</span>
+                    <span>{property.bedrooms} bed</span>
                   </div>
                 )}
-                {(property as any).bathrooms && (
+                {property.bathrooms && (
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Bath className="h-3.5 w-3.5 shrink-0" />
-                    <span>{(property as any).bathrooms} bath</span>
+                    <span>{property.bathrooms} bath</span>
                   </div>
                 )}
               </div>

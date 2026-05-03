@@ -128,9 +128,8 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
       setBedrooms(data.bedrooms != null ? String(data.bedrooms) : "");
       setBathrooms(data.bathrooms != null ? String(data.bathrooms) : "");
       setLotSize(data.lotSize != null ? String(data.lotSize) : "");
-      // Default property name
-      const cityPart = data.city ? ` (${data.city})` : "";
-      setName(`My Home${cityPart}`);
+      // Default property name to the address
+      setName(data.address);
 
       setStep("verify");
     } finally {

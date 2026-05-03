@@ -19,6 +19,8 @@ export interface Property {
   zipCode?: string;
   yearBuilt?: number;
   sqft?: number;
+  bedrooms?: number;
+  bathrooms?: number;
   photoUrl?: string;
   createdAt: string;
   updatedAt?: string;
@@ -32,6 +34,8 @@ export interface CreatePropertyBody {
   zipCode?: string;
   yearBuilt?: number;
   sqft?: number;
+  bedrooms?: number;
+  bathrooms?: number;
   photoUrl?: string;
 }
 
@@ -43,6 +47,8 @@ export interface UpdatePropertyBody {
   zipCode?: string;
   yearBuilt?: number;
   sqft?: number;
+  bedrooms?: number;
+  bathrooms?: number;
   photoUrl?: string;
 }
 

@@ -508,6 +508,10 @@ components:
           type: integer
         sqft:
           type: integer
+        bedrooms:
+          type: integer
+        bathrooms:
+          type: number
         photoUrl:
           type: string
         createdAt:
@@ -535,6 +539,10 @@ components:
           type: integer
         sqft:
           type: integer
+        bedrooms:
+          type: integer
+        bathrooms:
+          type: number
         photoUrl:
           type: string
 
@@ -555,6 +563,10 @@ components:
           type: integer
         sqft:
           type: integer
+        bedrooms:
+          type: integer
+        bathrooms:
+          type: number
         photoUrl:
           type: string
 
