@@ -154,7 +154,7 @@ function FeatureCarousel() {
               key={animKey}
               className={`bg-gradient-to-br ${f.accent}`}
               style={{
-                animation: `slideIn${direction === "right" ? "Right" : "Left"} 0.45s cubic-bezier(0.22,1,0.36,1) both`,
+                animation: "fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) both",
               }}
             >
               <div className="flex flex-col items-center text-center min-h-[320px] py-10 px-8 justify-center gap-6">
@@ -211,13 +211,9 @@ function FeatureCarousel() {
       </div>
 
       <style>{`
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(48px) scale(0.97); }
-          to   { opacity: 1; transform: translateX(0)   scale(1);    }
-        }
-        @keyframes slideInLeft {
-          from { opacity: 0; transform: translateX(-48px) scale(0.97); }
-          to   { opacity: 1; transform: translateX(0)    scale(1);    }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(10px) scale(0.99); }
+          to   { opacity: 1; transform: translateY(0)    scale(1);    }
         }
       `}</style>
     </section>
