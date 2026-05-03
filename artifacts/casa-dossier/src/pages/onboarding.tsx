@@ -159,13 +159,8 @@ export function Onboarding() {
 
       const property = await res.json();
 
-      await queryClient.invalidateQueries({ queryKey: ["list-properties"] });
-      await queryClient.invalidateQueries({
-        predicate: (q) =>
-          q.queryKey.some(
-            (k) => k === "listProperties" || k === "properties"
-          ),
-      });
+      await queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/properties"] });
 
       try {
         const scoutRes = await fetch(
@@ -190,11 +185,7 @@ export function Onboarding() {
   }
 
   function handleFinish() {
-    queryClient.refetchQueries({ queryKey: ["list-properties"] });
-    queryClient.refetchQueries({
-      predicate: (q) =>
-        q.queryKey.some((k) => k === "listProperties" || k === "properties"),
-    });
+    queryClient.refetchQueries({ queryKey: ["/api/properties"] });
   }
 
   return (
