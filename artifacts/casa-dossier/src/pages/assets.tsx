@@ -1,9 +1,11 @@
+import { useState, useEffect } from "react";
 import { useProperty } from "@/contexts/property-context";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AddAssetDialog } from "@/components/add-asset-dialog";
 import {
   ShieldCheck,
   ChevronRight,
@@ -181,6 +183,12 @@ function AssetsSkeleton() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function MyAssets() {
   const { activePropertyId, activeProperty, isLoading: propLoading } = useProperty();
+  const [addOpen, setAddOpen] = useState(false);
+  const search = useSearch();
+
+  useEffect(() => {
+    if (search.includes("add=1")) setAddOpen(true);
+  }, [search]);
 
   const { data: assets = [], isLoading: assetsLoading } = useQuery<Asset[]>({
     queryKey: ["assets", activePropertyId],
@@ -235,12 +243,10 @@ export default function MyAssets() {
           <h1 className="text-2xl font-bold tracking-tight">My Assets</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{activeProperty.name}</p>
         </div>
-        <Link href={`/properties/${activePropertyId}`}>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            Add Asset
-          </Button>
-        </Link>
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          Add Asset
+        </Button>
       </div>
 
       {/* ── Summary pills ── */}
@@ -274,12 +280,10 @@ export default function MyAssets() {
               Add your first asset to start tracking health scores and maintenance.
             </p>
           </div>
-          <Link href={`/properties/${activePropertyId}`}>
-            <Button size="sm" className="gap-1.5 mt-1">
-              <Plus className="h-3.5 w-3.5" />
-              Add Asset
-            </Button>
-          </Link>
+          <Button size="sm" className="gap-1.5 mt-1" onClick={() => setAddOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            Add Asset
+          </Button>
         </div>
       ) : (
         Object.entries(grouped).map(([category, items]) => {
@@ -306,6 +310,12 @@ export default function MyAssets() {
           );
         })
       )}
+
+      <AddAssetDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        propertyId={activePropertyId}
+      />
     </div>
   );
 }

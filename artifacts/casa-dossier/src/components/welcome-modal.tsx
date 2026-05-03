@@ -131,7 +131,7 @@ export function WelcomeModal() {
 
   function handleAddAsset() {
     dismiss();
-    setLocation("/assets");
+    setLocation("/assets?add=1");
   }
 
   const isLast = currentIdx === SLIDES.length - 1;
