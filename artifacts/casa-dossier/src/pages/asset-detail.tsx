@@ -688,11 +688,19 @@ export default function AssetDetail() {
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
 
-      {/* Back link */}
-      <Link href="/assets" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground gap-1.5">
-        <ArrowLeft className="h-4 w-4" />
-        My Assets
-      </Link>
+      {/* Back link + Request Service */}
+      <div className="flex items-center justify-between">
+        <Link href="/assets" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground gap-1.5">
+          <ArrowLeft className="h-4 w-4" />
+          My Assets
+        </Link>
+        <Link href="/marketplace">
+          <Button variant="outline" size="sm" className="gap-1.5">
+            <Wrench className="h-3.5 w-3.5" />
+            Request Service
+          </Button>
+        </Link>
+      </div>
 
       {/* Retired banner */}
       {(asset as any).retiredAt && (
@@ -929,16 +937,6 @@ export default function AssetDetail() {
             />
           </CardContent>
         </Card>
-      </div>
-
-      {/* Request service CTA */}
-      <div className="flex justify-end">
-        <Link href="/marketplace">
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Wrench className="h-3.5 w-3.5" />
-            Request Service for This Asset
-          </Button>
-        </Link>
       </div>
 
       <EditAssetSheet
