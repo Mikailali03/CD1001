@@ -1,5 +1,10 @@
-import { useState } from "react";
-import { useGetPropertySummary } from "@workspace/api-client-react";
+import { useState, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetPropertySummary,
+  useUpdateProperty,
+  getGetPropertyQueryKey,
+} from "@workspace/api-client-react";
 import { useProperty } from "@/contexts/property-context";
 import { HealthScoreModal } from "@/components/health-score-modal";
 import { MaintenanceInbox } from "@/components/maintenance-inbox";
@@ -8,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   FileText,
   AlertCircle,
@@ -21,6 +27,10 @@ import {
   Hammer,
   Receipt,
   DollarSign,
+  Pencil,
+  BedDouble,
+  Bath,
+  Ruler,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -161,6 +171,37 @@ export default function Dashboard() {
   const { activePropertyId, activeProperty, isLoading: propLoading } = useProperty();
   const [healthModalOpen, setHealthModalOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const updateProperty = useUpdateProperty();
+
+  function startEditingName() {
+    setNameValue(activeProperty?.name ?? "");
+    setEditingName(true);
+    setTimeout(() => nameInputRef.current?.select(), 0);
+  }
+
+  function commitNameEdit() {
+    const trimmed = nameValue.trim();
+    if (!trimmed || !activePropertyId || trimmed === activeProperty?.name) {
+      setEditingName(false);
+      return;
+    }
+    updateProperty.mutate(
+      { propertyId: activePropertyId, data: { name: trimmed } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetPropertyQueryKey(activePropertyId) });
+          toast({ title: "Home renamed", description: `Now called "${trimmed}".` });
+        },
+        onError: () => toast({ title: "Could not save name", variant: "destructive" }),
+        onSettled: () => setEditingName(false),
+      }
+    );
+  }
 
   const { data: summary, isLoading: summaryLoading } = useGetPropertySummary(
     activePropertyId ?? "",
@@ -185,10 +226,34 @@ export default function Dashboard() {
       {/* ── Property header + score widget ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{activeProperty.name}</h1>
+          <div className="flex items-center gap-2">
+            {editingName ? (
+              <input
+                ref={nameInputRef}
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onBlur={commitNameEdit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitNameEdit();
+                  if (e.key === "Escape") setEditingName(false);
+                }}
+                className="text-2xl font-bold tracking-tight bg-transparent border-b-2 border-primary outline-none w-full max-w-sm"
+                autoFocus
+              />
+            ) : (
+              <div className="group flex items-center gap-2">
+                <h1 className="text-2xl font-bold tracking-tight">{activeProperty.name}</h1>
+                <button
+                  onClick={startEditingName}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                  title="Rename home"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
             <Link href={`/properties/${activePropertyId}`}>
-              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground h-7 px-2">
+              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground h-7 px-2 shrink-0">
                 <span className="text-xs">View</span>
                 <ArrowRight className="h-3 w-3" />
               </Button>
@@ -199,6 +264,28 @@ export default function Dashboard() {
               <MapPin className="h-3.5 w-3.5" />
               {location}
             </p>
+          )}
+          {(activeProperty.bedrooms || activeProperty.bathrooms || activeProperty.sqft) && (
+            <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
+              {activeProperty.bedrooms && (
+                <span className="flex items-center gap-1">
+                  <BedDouble className="h-3.5 w-3.5" />
+                  {activeProperty.bedrooms} bd
+                </span>
+              )}
+              {activeProperty.bathrooms && (
+                <span className="flex items-center gap-1">
+                  <Bath className="h-3.5 w-3.5" />
+                  {activeProperty.bathrooms} ba
+                </span>
+              )}
+              {activeProperty.sqft && (
+                <span className="flex items-center gap-1">
+                  <Ruler className="h-3.5 w-3.5" />
+                  {activeProperty.sqft.toLocaleString()} sqft
+                </span>
+              )}
+            </div>
           )}
         </div>
         <HealthScoreWidget
