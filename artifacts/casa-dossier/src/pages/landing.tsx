@@ -154,7 +154,7 @@ function FeatureCarousel() {
               key={animKey}
               className={`bg-gradient-to-br ${f.accent}`}
               style={{
-                animation: "fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) both",
+                animation: "fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both",
               }}
             >
               <div className="flex flex-col items-center text-center min-h-[320px] py-10 px-8 justify-center gap-6">
