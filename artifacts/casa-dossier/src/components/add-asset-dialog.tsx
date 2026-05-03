@@ -291,7 +291,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
           model: model.trim() || undefined,
           serialNumber: serialNumber.trim() || undefined,
           installDate: installDate || undefined,
-          replacementCost: replacementCost ? replacementCost : undefined,
+          replacementCost: replacementCost ? parseFloat(replacementCost) : undefined,
         }),
       });
 

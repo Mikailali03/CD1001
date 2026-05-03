@@ -715,6 +715,8 @@ components:
           type: string
         photoUrl:
           type: string
+        replacementCost:
+          type: number
 
     UpdateAssetBody:
       type: object
@@ -747,6 +749,8 @@ components:
           type: string
           format: date-time
           nullable: true
+        replacementCost:
+          type: number
 
     # ─── Service Record ─────────────────────────────────────────────────────────
     ServiceRecord:

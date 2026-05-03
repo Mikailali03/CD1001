@@ -194,6 +194,7 @@ export interface CreateAssetBody {
   warrantyExpiry?: string;
   notes?: string;
   photoUrl?: string;
+  replacementCost?: number;
 }
 
 export type UpdateAssetBodyCategory =
@@ -230,6 +231,7 @@ export interface UpdateAssetBody {
   notes?: string;
   photoUrl?: string;
   retiredAt?: string | null;
+  replacementCost?: number;
 }
 
 export interface CreateServiceRecordBody {

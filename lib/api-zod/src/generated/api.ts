@@ -274,6 +274,7 @@ export const CreateAssetBody = zod.object({
   warrantyExpiry: zod.coerce.date().optional(),
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
+  replacementCost: zod.number().optional(),
 });
 
 /**
@@ -343,6 +344,7 @@ export const UpdateAssetBody = zod.object({
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
   retiredAt: zod.coerce.date().nullish(),
+  replacementCost: zod.number().optional(),
 });
 
 export const UpdateAssetResponse = zod.object({

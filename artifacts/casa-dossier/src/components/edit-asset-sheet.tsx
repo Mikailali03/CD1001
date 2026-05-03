@@ -151,7 +151,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
           serialNumber: serialNumber.trim() || null,
           installDate: installDate ? `${installDate}-01` : null,
           replacementCost: replacementCost
-            ? String(parseFloat(replacementCost))
+            ? parseFloat(replacementCost)
             : null,
           warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : null,
           notes: notes.trim() || null,
