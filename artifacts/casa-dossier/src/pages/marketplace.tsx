@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useListMarketplaceJobs,
   useCreateMarketplaceJob,
@@ -7,7 +7,7 @@ import {
   getListMarketplaceJobsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -42,12 +41,32 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 
-function PostJobDialog() {
-  const [open, setOpen] = useState(false);
-  const [propertyId, setPropertyId] = useState("");
-  const [assetId, setAssetId] = useState("");
+type PostJobDialogProps = {
+  initialOpen?: boolean;
+  initialPropertyId?: string;
+  initialAssetId?: string;
+  trigger?: React.ReactNode;
+};
+
+function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAssetId = "", trigger }: PostJobDialogProps) {
+  const [open, setOpen] = useState(initialOpen);
+  const [propertyId, setPropertyId] = useState(initialPropertyId);
+  const [assetId, setAssetId] = useState(initialAssetId);
   const [urgency, setUrgency] = useState("medium");
   const [description, setDescription] = useState("");
+
+  // If initial values arrive after mount (e.g. data race), sync them in
+  useEffect(() => {
+    if (initialOpen) setOpen(true);
+  }, [initialOpen]);
+
+  useEffect(() => {
+    if (initialPropertyId) setPropertyId(initialPropertyId);
+  }, [initialPropertyId]);
+
+  useEffect(() => {
+    if (initialAssetId) setAssetId(initialAssetId);
+  }, [initialAssetId]);
 
   const { data: properties } = useListProperties();
   const { data: assets } = useListAssets(propertyId, undefined, {
@@ -79,19 +98,27 @@ function PostJobDialog() {
     );
   }
 
+  // Find selected asset name for dialog subtitle
+  const selectedAsset = assets?.find((a) => a.id === assetId);
+  const selectedProperty = properties?.find((p) => p.id === propertyId);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2" data-testid="button-post-job">
+      {trigger ? (
+        <span onClick={() => setOpen(true)} className="cursor-pointer">{trigger}</span>
+      ) : (
+        <Button className="gap-2" data-testid="button-post-job" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" />
           Post a Request
         </Button>
-      </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Request a Service Pro</DialogTitle>
           <DialogDescription>
-            Tell us what needs attention. Pros will see the asset specs so they arrive prepared.
+            {selectedAsset
+              ? `Requesting service for ${selectedAsset.name}${selectedProperty ? ` at ${selectedProperty.name}` : ""}. Pros see the asset specs before they arrive.`
+              : "Tell us what needs attention. Pros will see the asset specs so they arrive prepared."}
           </DialogDescription>
         </DialogHeader>
 
@@ -186,6 +213,12 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
 export default function Marketplace() {
   const { data: jobs, isLoading } = useListMarketplaceJobs();
 
+  // Read pre-fill params from URL (e.g. ?propertyId=X&assetId=Y)
+  const params = new URLSearchParams(window.location.search);
+  const prePropertyId = params.get("propertyId") ?? "";
+  const preAssetId = params.get("assetId") ?? "";
+  const hasPreFill = !!preAssetId;
+
   if (isLoading) {
     return (
       <div className="p-6 space-y-6 max-w-3xl mx-auto">
@@ -211,7 +244,11 @@ export default function Marketplace() {
             Post a service request — pros see your asset specs before they arrive.
           </p>
         </div>
-        <PostJobDialog />
+        <PostJobDialog
+          initialOpen={hasPreFill}
+          initialPropertyId={prePropertyId}
+          initialAssetId={preAssetId}
+        />
       </div>
 
       {jobs && jobs.length > 0 ? (

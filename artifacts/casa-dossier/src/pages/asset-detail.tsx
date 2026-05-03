@@ -694,7 +694,7 @@ export default function AssetDetail() {
           <ArrowLeft className="h-4 w-4" />
           My Assets
         </Link>
-        <Link href="/marketplace">
+        <Link href={`/marketplace?propertyId=${asset.propertyId}&assetId=${asset.id}`}>
           <Button variant="outline" size="sm" className="gap-1.5">
             <Wrench className="h-3.5 w-3.5" />
             Request Service for This Asset
