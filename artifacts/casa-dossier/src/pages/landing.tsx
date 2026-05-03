@@ -86,20 +86,26 @@ function useFadeIn() {
 
 function FeatureCarousel() {
   const [current, setCurrent] = useState(0);
-  const [animating, setAnimating] = useState(false);
   const [direction, setDirection] = useState<"left" | "right">("right");
+  const [animKey, setAnimKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { ref, visible } = useFadeIn();
 
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setDirection("right");
+      setCurrent((c) => (c + 1) % features.length);
+      setAnimKey((k) => k + 1);
+    }, INTERVAL_MS);
+  }, []);
+
   const go = useCallback((next: number, dir: "left" | "right") => {
-    if (animating) return;
-    setAnimating(true);
     setDirection(dir);
-    setTimeout(() => {
-      setCurrent(next);
-      setAnimating(false);
-    }, 350);
-  }, [animating]);
+    setCurrent(next);
+    setAnimKey((k) => k + 1);
+    resetTimer();
+  }, [resetTimer]);
 
   const prev = useCallback(() => {
     go((current - 1 + features.length) % features.length, "left");
@@ -110,16 +116,14 @@ function FeatureCarousel() {
   }, [current, go]);
 
   const goTo = useCallback((i: number) => {
+    if (i === current) return;
     go(i, i > current ? "right" : "left");
   }, [current, go]);
 
   useEffect(() => {
-    timerRef.current = setInterval(() => {
-      setCurrent((c) => (c + 1) % features.length);
-      setDirection("right");
-    }, INTERVAL_MS);
+    resetTimer();
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, []);
+  }, [resetTimer]);
 
   const f = features[current]!;
 
@@ -141,90 +145,79 @@ function FeatureCarousel() {
           </p>
         </div>
 
-        {/* Carousel container */}
-        <div className="relative overflow-hidden rounded-2xl border bg-card shadow-xl">
-          {/* Progress bar */}
-          <div className="h-0.5 bg-border overflow-hidden">
+        {/* Narrowed carousel wrapper */}
+        <div className="max-w-2xl mx-auto">
+          {/* Carousel container */}
+          <div className="relative overflow-hidden rounded-2xl border bg-card shadow-xl">
+            {/* Slide — keyed so CSS animation fires fresh on each change */}
             <div
-              key={current}
-              className="h-full bg-primary"
+              key={animKey}
+              className={`bg-gradient-to-br ${f.accent}`}
               style={{
-                animation: `progress ${INTERVAL_MS}ms linear`,
+                animation: `slideIn${direction === "right" ? "Right" : "Left"} 0.45s cubic-bezier(0.22,1,0.36,1) both`,
               }}
-            />
-          </div>
-
-          {/* Slide */}
-          <div
-            className={`bg-gradient-to-br ${f.accent} transition-none`}
-            style={{
-              opacity: animating ? 0 : 1,
-              transform: animating
-                ? `translateX(${direction === "right" ? "-32px" : "32px"})`
-                : "translateX(0)",
-              transition: animating
-                ? "opacity 0.35s ease, transform 0.35s ease"
-                : "opacity 0.35s ease, transform 0.35s ease",
-            }}
-          >
-            <div className="grid md:grid-cols-2 gap-0 items-center min-h-[340px]">
-              {/* Icon panel */}
-              <div className="flex items-center justify-center py-14 px-10">
-                <div className={`${f.iconBg} rounded-3xl p-8 shadow-inner backdrop-blur-sm`}>
-                  <f.icon className={`h-20 w-20 ${f.iconColor}`} strokeWidth={1.25} />
+            >
+              <div className="flex flex-col items-center text-center min-h-[320px] py-10 px-8 justify-center gap-6">
+                {/* Icon */}
+                <div className={`${f.iconBg} rounded-2xl p-6 shadow-inner`}>
+                  <f.icon className={`h-14 w-14 ${f.iconColor}`} strokeWidth={1.25} />
                 </div>
-              </div>
 
-              {/* Text panel */}
-              <div className="py-10 px-8 md:pr-12 flex flex-col justify-center">
-                <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-                  {current + 1} of {features.length}
+                {/* Text */}
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                    {current + 1} / {features.length}
+                  </div>
+                  <h3 className="text-2xl font-bold mb-3 leading-tight">{f.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">{f.description}</p>
                 </div>
-                <h3 className="text-2xl md:text-3xl font-bold mb-4 leading-tight">{f.title}</h3>
-                <p className="text-muted-foreground text-base leading-relaxed">{f.description}</p>
               </div>
             </div>
+
+            {/* Nav arrows */}
+            <button
+              onClick={prev}
+              className="absolute left-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur border rounded-full p-2 shadow-sm hover:bg-background transition-colors"
+              aria-label="Previous"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              onClick={next}
+              className="absolute right-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur border rounded-full p-2 shadow-sm hover:bg-background transition-colors"
+              aria-label="Next"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* Nav arrows */}
-          <button
-            onClick={prev}
-            className="absolute left-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur border rounded-full p-2 shadow-sm hover:bg-background transition-colors"
-            aria-label="Previous"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            onClick={next}
-            className="absolute right-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur border rounded-full p-2 shadow-sm hover:bg-background transition-colors"
-            aria-label="Next"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Dot indicators */}
-        <div className="flex items-center justify-center gap-2 mt-6">
-          {features.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => goTo(i)}
-              aria-label={`Go to slide ${i + 1}`}
-              style={{
-                width: i === current ? "28px" : "8px",
-                opacity: i === current ? 1 : 0.35,
-                transition: "width 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease",
-              }}
-              className="h-2 rounded-full bg-primary"
-            />
-          ))}
+          {/* Dot indicators */}
+          <div className="flex items-center justify-center gap-2 mt-6">
+            {features.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                style={{
+                  width: i === current ? "28px" : "8px",
+                  opacity: i === current ? 1 : 0.35,
+                  transition: "width 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease",
+                }}
+                className="h-2 rounded-full bg-primary"
+              />
+            ))}
+          </div>
         </div>
       </div>
 
       <style>{`
-        @keyframes progress {
-          from { width: 0% }
-          to   { width: 100% }
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(48px) scale(0.97); }
+          to   { opacity: 1; transform: translateX(0)   scale(1);    }
+        }
+        @keyframes slideInLeft {
+          from { opacity: 0; transform: translateX(-48px) scale(0.97); }
+          to   { opacity: 1; transform: translateX(0)    scale(1);    }
         }
       `}</style>
     </section>
