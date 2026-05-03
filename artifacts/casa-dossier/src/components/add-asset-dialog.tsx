@@ -195,6 +195,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
   const [serialNumber, setSerialNumber] = useState("");
   const [installDate, setInstallDate] = useState("");
   const [replacementCost, setReplacementCost] = useState("");
+  const [warrantyExpiry, setWarrantyExpiry] = useState("");
 
   const [saveBusy, setSaveBusy] = useState(false);
   const [taskCount, setTaskCount] = useState<number | null>(null);
@@ -208,7 +209,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
     setScanResult(null);
     setScanError(null);
     setName(""); setCategory("HVAC"); setBrand(""); setModel("");
-    setSerialNumber(""); setInstallDate(""); setReplacementCost("");
+    setSerialNumber(""); setInstallDate(""); setReplacementCost(""); setWarrantyExpiry("");
     setSaveBusy(false);
     setTaskCount(null);
     setCreatedAssetId(null);
@@ -292,6 +293,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
           serialNumber: serialNumber.trim() || undefined,
           installDate: installDate || undefined,
           replacementCost: replacementCost ? parseFloat(replacementCost) : undefined,
+          warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : undefined,
         }),
       });
 
@@ -582,7 +584,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
                 <Input value={serialNumber} onChange={(e) => setSerialNumber(e.target.value)} placeholder="Found on the unit's label" className="font-mono text-sm" />
               </div>
 
-              {/* Install Date + Replacement Cost */}
+              {/* Install Date + Warranty Expiry */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
@@ -598,19 +600,32 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" />Est. Replacement Cost
-                    {scanResult?.estimatedReplacementCost && <span className="text-emerald-600 text-[10px]">✓ AI</span>}
+                    <Calendar className="h-3 w-3" />Warranty Expiry
                   </Label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                    <Input
-                      value={replacementCost}
-                      onChange={(e) => setReplacementCost(e.target.value)}
-                      placeholder="0"
-                      type="number"
-                      className="pl-7"
-                    />
-                  </div>
+                  <Input
+                    type="month"
+                    value={warrantyExpiry}
+                    onChange={(e) => setWarrantyExpiry(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Replacement Cost */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" />Est. Replacement Cost
+                  {scanResult?.estimatedReplacementCost && <span className="text-emerald-600 text-[10px]">✓ AI</span>}
+                </Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input
+                    value={replacementCost}
+                    onChange={(e) => setReplacementCost(e.target.value)}
+                    placeholder="0"
+                    type="number"
+                    className="pl-7"
+                  />
                 </div>
               </div>
             </div>
