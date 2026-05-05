@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import {
   ShieldCheck, Wrench, FileText, TrendingUp, Star, ArrowRight,
   CheckCircle2, Home, Package, ChevronLeft, ChevronRight,
+  Hash, Cpu, ClipboardList, Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -246,6 +247,118 @@ function BenefitsStrip() {
   );
 }
 
+const TECH_DETAILS = [
+  {
+    icon: Hash,
+    label: "Serial & Model Numbers",
+    detail: "The exact make, model, and serial number of every appliance — so techs order the right part before they knock.",
+  },
+  {
+    icon: ClipboardList,
+    label: "Full Service History",
+    detail: "Every past repair, inspection, and part replacement. No more explaining what happened two visits ago.",
+  },
+  {
+    icon: Cpu,
+    label: "Asset Specs on File",
+    detail: "Install date, warranty status, known issues, and notes — all visible to the pro when they accept the job.",
+  },
+];
+
+function TechQuoteSection() {
+  const { ref, visible } = useFadeIn();
+  return (
+    <section className="max-w-6xl mx-auto px-6 py-24">
+      <div
+        ref={ref}
+        className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center"
+        style={{
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(32px)",
+          transition: "opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)",
+        }}
+      >
+        {/* Photo + quote */}
+        <div className="relative">
+          <div className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-2xl">
+            <img
+              src="https://images.unsplash.com/photo-1621905251918-48416bd8575a?q=80&w=900&auto=format&fit=crop"
+              alt="HVAC technician servicing a home unit"
+              className="w-full h-full object-cover"
+            />
+            {/* Dark gradient overlay at bottom */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          </div>
+
+          {/* Quote card */}
+          <div className="absolute bottom-0 left-0 right-0 p-6">
+            <div className="bg-white/95 backdrop-blur rounded-xl p-5 shadow-xl border border-white/60">
+              <Quote className="h-6 w-6 text-primary/30 mb-2" />
+              <p className="text-foreground text-base font-medium leading-snug">
+                The technician came with the right part{" "}
+                <em className="text-primary font-semibold not-italic italic">the first time.</em>
+              </p>
+              <p className="text-muted-foreground text-sm mt-1.5">
+                He already knew it was a 2019 Carrier with the bad capacitor. Didn't even have to explain anything.
+              </p>
+              <div className="flex items-center gap-2.5 mt-3 pt-3 border-t">
+                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">M</div>
+                <div>
+                  <p className="text-xs font-semibold leading-none">Marcus T.</p>
+                  <p className="text-xs text-muted-foreground">Homeowner, Austin TX</p>
+                </div>
+                <div className="ml-auto flex gap-0.5">
+                  {[1,2,3,4,5].map(i => (
+                    <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: explanation */}
+        <div className="space-y-8">
+          <div>
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
+              <Wrench className="h-3 w-3" />
+              Pros Arrive Prepared
+            </div>
+            <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-4">
+              Your asset data travels<br />
+              <span className="text-primary">with every service request.</span>
+            </h2>
+            <p className="text-muted-foreground text-lg leading-relaxed">
+              When you post a job through Casa Dossier, pros see your home's full asset profile before they ever accept the request — so they show up with the right tools and the right parts.
+            </p>
+          </div>
+
+          <div className="space-y-5">
+            {TECH_DETAILS.map(({ icon: Icon, label, detail }) => (
+              <div key={label} className="flex gap-4 items-start">
+                <div className="shrink-0 h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Icon className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm mb-0.5">{label}</p>
+                  <p className="text-muted-foreground text-sm leading-relaxed">{detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Link href="/sign-up">
+            <Button className="gap-2 mt-2">
+              Start documenting your home
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function CtaSection() {
   const { ref, visible } = useFadeIn();
   return (
@@ -334,6 +447,7 @@ export default function Landing() {
 
       <BenefitsStrip />
       <FeatureCarousel />
+      <TechQuoteSection />
       <CtaSection />
 
       {/* Footer */}
