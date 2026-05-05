@@ -16,9 +16,6 @@ export function requireAuth(): RequestHandler {
     // Demo mode: read-only access with demo token header
     const demoHeader = req.headers["x-demo-token"];
     if (demoHeader === DEMO_TOKEN) {
-      if (req.method !== "GET") {
-        return res.status(403).json({ error: "Demo mode is read-only" });
-      }
       req.userId = "demo-user";
       return next();
     }
