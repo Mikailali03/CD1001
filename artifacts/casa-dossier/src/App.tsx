@@ -193,14 +193,13 @@ function ProtectedApp() {
 // ---------------------------------------------------------------------------
 
 function DemoBanner() {
-  const base = basePath;
   return (
     <div className="sticky top-0 z-50 flex items-center justify-between gap-3 bg-amber-400 px-4 py-2 text-amber-900">
       <div className="flex items-center gap-2 text-sm font-medium">
         <Eye className="h-4 w-4 shrink-0" />
         <span>Demo mode — you're exploring a sample home. No account needed.</span>
       </div>
-      <Link href={`${base}/sign-up`}>
+      <a href={`${basePath}/sign-up`}>
         <Button
           size="sm"
           className="h-7 gap-1.5 bg-amber-900 text-amber-50 hover:bg-amber-800 shrink-0 text-xs font-semibold"
@@ -208,7 +207,7 @@ function DemoBanner() {
           Create free account
           <ArrowRight className="h-3.5 w-3.5" />
         </Button>
-      </Link>
+      </a>
     </div>
   );
 }
