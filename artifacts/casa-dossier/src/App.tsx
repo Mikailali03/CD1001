@@ -229,6 +229,7 @@ function DemoAppRoutes() {
         <Route path="/guides/:id" component={GuideDetail} />
         <Route path="/capital-outlook" component={CapitalOutlook} />
         <Route path="/marketplace" component={Marketplace} />
+        <Route path="/properties/:id/report" component={PropertyReport} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

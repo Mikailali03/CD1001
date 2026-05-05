@@ -157,7 +157,7 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
       `}</style>
 
       <Dialog open={open} onOpenChange={(v) => { if (!v) dismiss(); }}>
-        <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+        <DialogContent className="max-w-md p-0 gap-0 overflow-hidden" hideCloseButton>
           <DialogTitle className="sr-only">Welcome to Casa Dossier — Quick Tour</DialogTitle>
           <DialogDescription className="sr-only">
             A quick tour of Casa Dossier's main features.
