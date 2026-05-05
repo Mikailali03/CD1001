@@ -124,13 +124,23 @@ function UserMenu() {
   );
 }
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export function AppLayout({
+  children,
+  topBanner,
+}: {
+  children: React.ReactNode;
+  topBanner?: React.ReactNode;
+}) {
   return (
     <SidebarProvider defaultOpen={false}>
       <div className="flex min-h-screen w-full bg-background text-foreground">
         <AppSidebar />
         <main className="flex-1 flex flex-col min-w-0">
-          <header className="sticky top-0 z-10 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          {topBanner}
+          <header
+            className="sticky z-10 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+            style={{ top: topBanner ? "40px" : "0px" }}
+          >
             <PropertySwitcher />
             <div className="ml-auto flex items-center gap-2">
               <GenerateReportButton />

@@ -7,6 +7,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout";
 import { PropertyProvider, useProperty } from "@/contexts/property-context";
+import { setExtraHeaders } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+import { ArrowRight, Eye } from "lucide-react";
 
 // Pages
 import Landing from "@/pages/landing";
@@ -34,6 +38,9 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
 
 // Only set in production (auto-injected when published), empty in dev
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL || undefined;
+
+const DEMO_TOKEN =
+  (import.meta.env.VITE_DEMO_TOKEN as string | undefined) || "casa-demo-preview-2025";
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -181,6 +188,72 @@ function ProtectedApp() {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Demo mode
+// ---------------------------------------------------------------------------
+
+function DemoBanner() {
+  const base = basePath;
+  return (
+    <div className="sticky top-0 z-50 flex items-center justify-between gap-3 bg-amber-400 px-4 py-2 text-amber-900">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <Eye className="h-4 w-4 shrink-0" />
+        <span>Demo mode — you're exploring a sample home. No account needed.</span>
+      </div>
+      <Link href={`${base}/sign-up`}>
+        <Button
+          size="sm"
+          className="h-7 gap-1.5 bg-amber-900 text-amber-50 hover:bg-amber-800 shrink-0 text-xs font-semibold"
+        >
+          Create free account
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Button>
+      </Link>
+    </div>
+  );
+}
+
+function DemoAppRoutes() {
+  return (
+    <AppLayout topBanner={<DemoBanner />}>
+      <Switch>
+        <Route path="/">
+          {() => <Redirect to="/dashboard" />}
+        </Route>
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/assets" component={MyAssets} />
+        <Route path="/properties" component={Properties} />
+        <Route path="/properties/:id" component={PropertyDetail} />
+        <Route path="/properties/:propertyId/assets/:assetId" component={AssetDetail} />
+        <Route path="/guides" component={Guides} />
+        <Route path="/guides/:id" component={GuideDetail} />
+        <Route path="/capital-outlook" component={CapitalOutlook} />
+        <Route component={NotFound} />
+      </Switch>
+    </AppLayout>
+  );
+}
+
+function DemoApp() {
+  // Set demo headers synchronously so PropertyProvider's first fetch includes them
+  setExtraHeaders({ "x-demo-token": DEMO_TOKEN });
+
+  useEffect(() => {
+    setExtraHeaders({ "x-demo-token": DEMO_TOKEN });
+    return () => setExtraHeaders({});
+  }, []);
+
+  return (
+    <WouterRouter base={`${basePath}/demo`}>
+      <PropertyProvider>
+        <DemoAppRoutes />
+      </PropertyProvider>
+    </WouterRouter>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
 function SignInPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4 py-12">
@@ -244,6 +317,8 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
+            {/* Demo route — public, no Clerk auth required */}
+            <Route path="/demo/*?" component={DemoApp} />
             <Route>
               {() => <ProtectedApp />}
             </Route>

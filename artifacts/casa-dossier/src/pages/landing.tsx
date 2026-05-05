@@ -322,13 +322,14 @@ export default function Landing() {
               <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
-          <Link href="/sign-in">
-            <Button size="lg" variant="outline" className="gap-2 px-8 h-12 text-base">
-              Log In to Your Account
+          <Link href="/demo">
+            <Button size="lg" variant="outline" className="gap-2 px-8 h-12 text-base font-medium">
+              <Star className="h-4 w-4 text-amber-500" />
+              See Demo
             </Button>
           </Link>
         </div>
-        <p className="text-xs text-muted-foreground mt-4">No credit card required</p>
+        <p className="text-xs text-muted-foreground mt-4">No credit card required · Demo needs no login</p>
       </section>
 
       <BenefitsStrip />
