@@ -127,9 +127,11 @@ function UserMenu() {
 export function AppLayout({
   children,
   topBanner,
+  forceWelcomeModal,
 }: {
   children: React.ReactNode;
   topBanner?: React.ReactNode;
+  forceWelcomeModal?: boolean;
 }) {
   return (
     <SidebarProvider defaultOpen={false}>
@@ -152,7 +154,7 @@ export function AppLayout({
           </div>
         </main>
       </div>
-      <WelcomeModal />
+      <WelcomeModal forceOpen={forceWelcomeModal} />
     </SidebarProvider>
   );
 }

@@ -215,7 +215,7 @@ function DemoBanner() {
 
 function DemoAppRoutes() {
   return (
-    <AppLayout topBanner={<DemoBanner />}>
+    <AppLayout topBanner={<DemoBanner />} forceWelcomeModal>
       <Switch>
         <Route path="/">
           {() => <Redirect to="/dashboard" />}
