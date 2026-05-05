@@ -234,13 +234,47 @@ function DemoAppRoutes() {
   );
 }
 
+// Wraps window.fetch to inject x-demo-token on same-origin /api/ calls only.
+function patchFetchForDemo(original: typeof fetch): typeof fetch {
+  return function demoFetch(input: RequestInfo | URL, init?: RequestInit) {
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : (input as Request).url;
+    const isApiCall =
+      url.startsWith("/api/") ||
+      (url.startsWith(window.location.origin) &&
+        new URL(url).pathname.startsWith("/api/"));
+    if (!isApiCall) return original(input, init);
+    const headers = new Headers((init?.headers as HeadersInit | undefined) ?? {});
+    headers.set("x-demo-token", DEMO_TOKEN);
+    return original(input, { ...init, headers });
+  };
+}
+
 function DemoApp() {
-  // Set demo headers synchronously so PropertyProvider's first fetch includes them
+  const originalFetchRef = useRef<typeof fetch | null>(null);
+
+  // Patch synchronously during render so child component fetches (triggered by
+  // effects that run before this component's own useEffect cleanup) already
+  // carry the demo token header.
+  if (originalFetchRef.current === null) {
+    originalFetchRef.current = window.fetch;
+    window.fetch = patchFetchForDemo(window.fetch);
+  }
   setExtraHeaders({ "x-demo-token": DEMO_TOKEN });
 
   useEffect(() => {
-    setExtraHeaders({ "x-demo-token": DEMO_TOKEN });
-    return () => setExtraHeaders({});
+    return () => {
+      // Restore original fetch and clear extra headers when leaving demo mode.
+      if (originalFetchRef.current) {
+        window.fetch = originalFetchRef.current;
+        originalFetchRef.current = null;
+      }
+      setExtraHeaders({});
+    };
   }, []);
 
   return (
