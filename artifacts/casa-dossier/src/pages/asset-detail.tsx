@@ -482,7 +482,7 @@ function AddServiceRecordForm({ assetId, gradeColor, onSuccess }: {
     if (!form.description.trim()) return;
     mutation.mutate({
       assetId,
-      createServiceRecordBody: {
+      data: {
         description: form.description.trim(),
         date: form.date,
         technicianName: form.technicianName.trim() || undefined,
