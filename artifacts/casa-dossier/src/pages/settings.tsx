@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { useProperty } from "@/contexts/property-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ type PendingTransfer = {
 function DeedTransferCard() {
   const { activePropertyId, activeProperty } = useProperty();
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const { toast } = useToast();
 
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -41,7 +43,7 @@ function DeedTransferCard() {
     queryKey: ["property-transfer", activePropertyId],
     queryFn: async () => {
       if (!activePropertyId) return null;
-      const res = await fetch(`${BASE}/api/properties/${activePropertyId}/transfer`);
+      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/transfer`);
       if (!res.ok) return null;
       return res.json();
     },
@@ -50,7 +52,7 @@ function DeedTransferCard() {
 
   const inititateMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch(`${BASE}/api/properties/${activePropertyId}/transfer`, {
+      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/transfer`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ toEmail: recipientEmail, fromEmail }),
@@ -75,7 +77,7 @@ function DeedTransferCard() {
 
   const cancelMutation = useMutation({
     mutationFn: async (transferId: string) => {
-      const res = await fetch(`${BASE}/api/transfers/${transferId}`, { method: "DELETE" });
+      const res = await authFetch(`${BASE}/api/transfers/${transferId}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Could not cancel transfer");
       return res.json();
     },

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useProperty } from "@/contexts/property-context";
 import { useQuery } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Link, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -190,10 +191,11 @@ export default function MyAssets() {
     if (search.includes("add=1")) setAddOpen(true);
   }, [search]);
 
+  const authFetch = useAuthFetch();
   const { data: assets = [], isLoading: assetsLoading } = useQuery<Asset[]>({
     queryKey: ["assets", activePropertyId],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/properties/${activePropertyId}/assets`);
+      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/assets`);
       if (!res.ok) throw new Error("Failed to fetch assets");
       return res.json();
     },

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -38,12 +39,13 @@ const SubscriptionContext = createContext<SubscriptionContextValue>({
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
 
   const { data: subscription, isLoading } = useQuery<SubscriptionData>({
     queryKey: ["subscription"],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/subscription`);
+      const res = await authFetch(`${BASE}/api/subscription`);
       if (!res.ok) throw new Error("Failed to load subscription");
       return res.json();
     },
@@ -55,18 +57,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   // Internal tier change (e.g. downgrade to Essential)
   const upgradeTo = useCallback(async (tier: SubscriptionTier) => {
-    const res = await fetch(`${BASE}/api/subscription/upgrade`, {
+    const res = await authFetch(`${BASE}/api/subscription/upgrade`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tier }),
     });
     if (!res.ok) throw new Error("Upgrade failed");
     queryClient.invalidateQueries({ queryKey: ["subscription"] });
-  }, [queryClient]);
+  }, [queryClient, authFetch]);
 
   // Stripe Checkout for paid tiers
   const startCheckout = useCallback(async (tier: "managed" | "concierge") => {
-    const res = await fetch(`${BASE}/api/stripe/checkout`, {
+    const res = await authFetch(`${BASE}/api/stripe/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ tier }),
@@ -77,29 +79,29 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
     const { url } = await res.json();
     window.location.href = url;
-  }, []);
+  }, [authFetch]);
 
   // Stripe billing portal (for existing subscribers)
   const openBillingPortal = useCallback(async () => {
-    const res = await fetch(`${BASE}/api/stripe/portal`, {
+    const res = await authFetch(`${BASE}/api/stripe/portal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
     });
     if (!res.ok) throw new Error("Portal session failed");
     const { url } = await res.json();
     window.location.href = url;
-  }, []);
+  }, [authFetch]);
 
   // Called after Stripe redirects back on success
   const syncAfterCheckout = useCallback(async (sessionId: string) => {
-    const res = await fetch(`${BASE}/api/stripe/sync`, {
+    const res = await authFetch(`${BASE}/api/stripe/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId }),
     });
     if (!res.ok) throw new Error("Sync failed");
     queryClient.invalidateQueries({ queryKey: ["subscription"] });
-  }, [queryClient]);
+  }, [queryClient, authFetch]);
 
   return (
     <SubscriptionContext.Provider value={{

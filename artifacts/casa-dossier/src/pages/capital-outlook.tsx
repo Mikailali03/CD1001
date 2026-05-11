@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { useProperty } from "@/contexts/property-context";
 import {
   BarChart,
@@ -140,13 +141,14 @@ function SummaryCard({ icon, label, value, sub, highlight }: {
 
 export default function CapitalOutlook() {
   const { activePropertyId } = useProperty();
+  const authFetch = useAuthFetch();
   const currentYear = new Date().getFullYear();
 
   const { data, isLoading, error } = useQuery<CapitalOutlookData>({
     queryKey: ["capital-outlook", activePropertyId],
     queryFn: async () => {
       if (!activePropertyId) throw new Error("No property selected");
-      const res = await fetch(`${BASE}/api/properties/${activePropertyId}/capital-outlook`);
+      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/capital-outlook`);
       if (!res.ok) throw new Error("Failed to load capital outlook");
       return res.json();
     },

@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   useGetProperty,
   getGetPropertyQueryKey,
@@ -73,11 +74,12 @@ export default function PropertyDetail() {
   });
 
   const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const authFetch = useAuthFetch();
   const { data: retiredAssets = [], refetch: refetchRetired } = useQuery<any[]>({
     queryKey: ["retired-assets", id],
     enabled: !!id,
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/properties/${id}/assets?includeRetired=true`);
+      const res = await authFetch(`${BASE}/api/properties/${id}/assets?includeRetired=true`);
       const all = await res.json();
       return all.filter((a: any) => !!a.retiredAt);
     },

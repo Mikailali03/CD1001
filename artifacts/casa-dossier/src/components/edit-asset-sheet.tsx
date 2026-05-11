@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   Sheet,
   SheetContent,
@@ -89,6 +90,7 @@ type Props = {
 
 export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [retireDialogOpen, setRetireDialogOpen] = useState(false);
@@ -140,7 +142,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     if (!asset || !name.trim()) return;
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/assets/${asset.id}`, {
+      const res = await authFetch(`${BASE}/api/assets/${asset.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -176,7 +178,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     if (!asset) return;
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/assets/${asset.id}`, {
+      const res = await authFetch(`${BASE}/api/assets/${asset.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ retiredAt: new Date().toISOString() }),
@@ -199,7 +201,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     if (!asset) return;
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/assets/${asset.id}`, {
+      const res = await authFetch(`${BASE}/api/assets/${asset.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ retiredAt: null }),

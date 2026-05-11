@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,7 @@ function StatBadge({ icon, label, value }: { icon: React.ReactNode; label: strin
 
 export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>("address");
@@ -109,7 +111,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     if (!addressInput.trim()) return;
     setLookupBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/properties/lookup?address=${encodeURIComponent(addressInput.trim())}`);
+      const res = await authFetch(`${BASE}/api/properties/lookup?address=${encodeURIComponent(addressInput.trim())}`);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({ title: "Address not found", description: err.error ?? "Try a more complete address.", variant: "destructive" });
@@ -145,7 +147,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
 
     try {
       // Create property
-      const res = await fetch(`${BASE}/api/properties`, {
+      const res = await authFetch(`${BASE}/api/properties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -177,7 +179,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
 
       // Trigger AI scout (can take 10-20s)
       try {
-        const scoutRes = await fetch(`${BASE}/api/properties/${property.id}/scout`, { method: "POST" });
+        const scoutRes = await authFetch(`${BASE}/api/properties/${property.id}/scout`, { method: "POST" });
         if (scoutRes.ok) {
           const scoutData = await scoutRes.json();
           setScoutResult({ taskCount: scoutData.taskCount });

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   useGetAsset,
   getGetAssetQueryKey,
@@ -198,6 +199,7 @@ function MaintenanceTaskModal({
   const fileRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
 
   function resetForm() {
     setNotes(""); setCost(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
@@ -227,7 +229,7 @@ function MaintenanceTaskModal({
   async function handleSubmit() {
     setBusy(true);
     try {
-      const res = await fetch(`${BASE}/api/maintenance/${task.id}/complete`, {
+      const res = await authFetch(`${BASE}/api/maintenance/${task.id}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

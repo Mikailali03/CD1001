@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useRoute, useLocation } from "wouter";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +40,7 @@ type ClaimData = {
 export default function ClaimTransfer() {
   const [, params] = useRoute("/claim/:token");
   const [, navigate] = useLocation();
+  const authFetch = useAuthFetch();
   const token = params?.token ?? "";
 
   const [data, setData] = useState<ClaimData | null>(null);
@@ -50,7 +52,7 @@ export default function ClaimTransfer() {
 
   useEffect(() => {
     if (!token) return;
-    fetch(`${BASE}/api/transfers/claim/${token}`)
+    authFetch(`${BASE}/api/transfers/claim/${token}`)
       .then(async (res) => {
         const body = await res.json();
         if (!res.ok) {
@@ -67,7 +69,7 @@ export default function ClaimTransfer() {
   async function handleClaim() {
     setClaiming(true);
     try {
-      const res = await fetch(`${BASE}/api/transfers/claim/${token}`, {
+      const res = await authFetch(`${BASE}/api/transfers/claim/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   Dialog,
   DialogContent,
@@ -312,6 +313,7 @@ export function HealthScoreModal({
 }: Props) {
   const gc = GRADE_COLORS[healthGrade] ?? GRADE_COLORS["C"]!;
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const { toast } = useToast();
 
   // Track locally-completed task IDs so UI updates immediately
@@ -323,7 +325,7 @@ export function HealthScoreModal({
 
   async function handleMarkDone(taskId: string, notes: string, isDiy: boolean) {
     const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-    const res = await fetch(`${BASE}/api/maintenance/${taskId}/complete`, {
+    const res = await authFetch(`${BASE}/api/maintenance/${taskId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes: notes.trim() || undefined, isDiy, completedDate: new Date().toLocaleDateString("en-CA") }),

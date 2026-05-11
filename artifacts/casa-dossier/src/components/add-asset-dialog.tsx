@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   Dialog,
   DialogContent,
@@ -178,6 +179,7 @@ function FileDropZone({
 
 export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Props) {
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const { toast } = useToast();
 
   const [step, setStep] = useState<Step>("method");
@@ -241,7 +243,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
     try {
       const { base64, mimeType } = await compressForScan(imageFile);
 
-      const res = await fetch(`${BASE}/api/assets/scan`, {
+      const res = await authFetch(`${BASE}/api/assets/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageBase64: base64, mimeType }),
@@ -282,7 +284,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
 
     try {
       // Create the asset
-      const res = await fetch(`${BASE}/api/properties/${propertyId}/assets`, {
+      const res = await authFetch(`${BASE}/api/properties/${propertyId}/assets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -311,7 +313,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
 
       // Trigger autonomous task generation
       try {
-        const taskRes = await fetch(`${BASE}/api/assets/${asset.id}/generate-tasks`, { method: "POST" });
+        const taskRes = await authFetch(`${BASE}/api/assets/${asset.id}/generate-tasks`, { method: "POST" });
         if (taskRes.ok) {
           const td = await taskRes.json();
           setTaskCount(td.taskCount);

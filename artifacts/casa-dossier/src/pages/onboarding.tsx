@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/react";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +69,7 @@ export function Onboarding() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const authFetch = useAuthFetch();
   const firstName = user?.firstName ?? "there";
 
   const [step, setStep] = useState<Step>("welcome");
@@ -95,7 +97,7 @@ export function Onboarding() {
     if (!addressInput.trim()) return;
     setLookupBusy(true);
     try {
-      const res = await fetch(
+      const res = await authFetch(
         `${BASE}/api/properties/lookup?address=${encodeURIComponent(addressInput.trim())}`
       );
       if (!res.ok) {
@@ -135,7 +137,7 @@ export function Onboarding() {
     setStep("scouting");
 
     try {
-      const res = await fetch(`${BASE}/api/properties`, {
+      const res = await authFetch(`${BASE}/api/properties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -163,7 +165,7 @@ export function Onboarding() {
       await queryClient.refetchQueries({ queryKey: ["/api/properties"] });
 
       try {
-        const scoutRes = await fetch(
+        const scoutRes = await authFetch(
           `${BASE}/api/properties/${property.id}/scout`,
           { method: "POST" }
         );

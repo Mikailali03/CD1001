@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -354,12 +355,13 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
 
 export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
   const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
   const { toast } = useToast();
 
   const { data, isLoading } = useQuery<InboxData>({
     queryKey: ["maintenance-inbox", propertyId],
     queryFn: async () => {
-      const res = await fetch(`${BASE}/api/properties/${propertyId}/inbox`);
+      const res = await authFetch(`${BASE}/api/properties/${propertyId}/inbox`);
       if (!res.ok) throw new Error("Failed to load inbox");
       return res.json();
     },
@@ -367,7 +369,7 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
   });
 
   async function markDone(taskId: string, payload: CompletePayload) {
-    const res = await fetch(`${BASE}/api/maintenance/${taskId}/complete`, {
+    const res = await authFetch(`${BASE}/api/maintenance/${taskId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...payload, completedDate: new Date().toLocaleDateString("en-CA") }),
