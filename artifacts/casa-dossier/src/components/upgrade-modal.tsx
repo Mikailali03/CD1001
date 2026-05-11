@@ -16,10 +16,10 @@ import {
   Shield,
   Crown,
   Loader2,
-  Building2,
-  Wrench,
   Star,
   Zap,
+  ExternalLink,
+  Settings,
 } from "lucide-react";
 
 type Plan = {
@@ -31,7 +31,7 @@ type Plan = {
   color: string;
   badge?: string;
   features: string[];
-  propertyLimit: string;
+  paid: boolean;
 };
 
 const PLANS: Plan[] = [
@@ -42,6 +42,7 @@ const PLANS: Plan[] = [
     priceNote: "forever",
     icon: <Shield className="h-5 w-5" />,
     color: "text-muted-foreground",
+    paid: false,
     features: [
       "1 property",
       "AI-generated maintenance plan",
@@ -50,7 +51,6 @@ const PLANS: Plan[] = [
       "DIY guides library",
       "Maintenance inbox",
     ],
-    propertyLimit: "1 property",
   },
   {
     id: "managed",
@@ -60,6 +60,7 @@ const PLANS: Plan[] = [
     icon: <Star className="h-5 w-5" />,
     color: "text-blue-600",
     badge: "Popular",
+    paid: true,
     features: [
       "Up to 5 properties",
       "Professional onboarding for each home",
@@ -69,7 +70,6 @@ const PLANS: Plan[] = [
       "1 free service credit / year",
       "Annual visual inspection of all systems",
     ],
-    propertyLimit: "Up to 5 properties",
   },
   {
     id: "concierge",
@@ -79,6 +79,7 @@ const PLANS: Plan[] = [
     icon: <Crown className="h-5 w-5" />,
     color: "text-amber-600",
     badge: "Best Value",
+    paid: true,
     features: [
       "Unlimited properties",
       "Professional onboarding for every home",
@@ -88,31 +89,57 @@ const PLANS: Plan[] = [
       "4 free service credits / year",
       "Dedicated home advisor",
     ],
-    propertyLimit: "Unlimited properties",
   },
 ];
 
+const TIER_ORDER: Record<SubscriptionTier, number> = { essential: 0, managed: 1, concierge: 2 };
+
 export function UpgradeModal() {
-  const { subscription, upgradeModalOpen, closeUpgradeModal, upgradeTo } = useSubscription();
+  const { subscription, upgradeModalOpen, closeUpgradeModal, upgradeTo, startCheckout, openBillingPortal } = useSubscription();
   const { toast } = useToast();
   const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const currentTier = subscription?.tier ?? "essential";
+  const hasStripeSubscription = Boolean(subscription?.stripeSubscriptionId);
 
-  async function handleUpgrade(tier: SubscriptionTier) {
-    if (tier === currentTier) return;
-    setLoadingTier(tier);
+  async function handleAction(plan: Plan) {
+    if (plan.id === currentTier) return;
+
+    setLoadingTier(plan.id);
     try {
-      await upgradeTo(tier);
+      if (plan.id === "essential") {
+        // Downgrade: use internal API (could also go through portal)
+        await upgradeTo("essential");
+        toast({ title: "Downgraded to Essential", description: "Your plan has been updated." });
+        closeUpgradeModal();
+      } else if (hasStripeSubscription) {
+        // Already has Stripe subscription — send to billing portal to switch plans
+        await openBillingPortal();
+      } else {
+        // New paid subscription — Stripe Checkout
+        await startCheckout(plan.id as "managed" | "concierge");
+        // startCheckout redirects, so this line is only reached on error
+      }
+    } catch (err: any) {
       toast({
-        title: `Upgraded to ${tier.charAt(0).toUpperCase() + tier.slice(1)}!`,
-        description: "Your plan has been updated.",
+        title: "Something went wrong",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
       });
-      closeUpgradeModal();
-    } catch {
-      toast({ title: "Upgrade failed", description: "Please try again.", variant: "destructive" });
     } finally {
       setLoadingTier(null);
+    }
+  }
+
+  async function handleManageBilling() {
+    setPortalLoading(true);
+    try {
+      await openBillingPortal();
+    } catch {
+      toast({ title: "Could not open billing portal", variant: "destructive" });
+    } finally {
+      setPortalLoading(false);
     }
   }
 
@@ -134,9 +161,19 @@ export function UpgradeModal() {
         <div className="grid gap-4 sm:grid-cols-3 mt-2">
           {PLANS.map((plan) => {
             const isCurrent = plan.id === currentTier;
-            const tierOrder = { essential: 0, managed: 1, concierge: 2 };
-            const isDowngrade = tierOrder[plan.id] < tierOrder[currentTier];
+            const isDowngrade = TIER_ORDER[plan.id] < TIER_ORDER[currentTier];
+            const isUpgrade = TIER_ORDER[plan.id] > TIER_ORDER[currentTier];
             const isLoading = loadingTier === plan.id;
+            const isPaidSwitch = hasStripeSubscription && !isCurrent && plan.paid;
+
+            function getButtonLabel() {
+              if (isCurrent) return <><Check className="h-3.5 w-3.5" />Active</>;
+              if (isLoading) return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
+              if (isPaidSwitch) return <><ExternalLink className="h-3.5 w-3.5" />Switch Plan</>;
+              if (isUpgrade && plan.paid) return <><Zap className="h-3.5 w-3.5" />Upgrade — ${plan.price.replace("$", "")}/mo</>;
+              if (isDowngrade) return "Downgrade";
+              return <><Zap className="h-3.5 w-3.5" />Upgrade</>;
+            }
 
             return (
               <div
@@ -149,7 +186,7 @@ export function UpgradeModal() {
                     : "border-border"
                 }`}
               >
-                {plan.badge && (
+                {plan.badge && !isCurrent && (
                   <Badge className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2 py-0.5 ${
                     plan.id === "managed" ? "bg-blue-600 text-white" : "bg-amber-500 text-white"
                   }`}>
@@ -191,31 +228,35 @@ export function UpgradeModal() {
                       : ""
                   }`}
                   disabled={isCurrent || isLoading}
-                  onClick={() => handleUpgrade(plan.id)}
+                  onClick={() => handleAction(plan)}
                 >
-                  {isLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : isCurrent ? (
-                    <>
-                      <Check className="h-3.5 w-3.5" />
-                      Active
-                    </>
-                  ) : isDowngrade ? (
-                    "Downgrade"
-                  ) : (
-                    <>
-                      <Zap className="h-3.5 w-3.5" />
-                      Upgrade
-                    </>
-                  )}
+                  {getButtonLabel()}
                 </Button>
               </div>
             );
           })}
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-4">
-          Changes take effect immediately. Cancel anytime.
+        {hasStripeSubscription && (
+          <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
+            <span>Manage billing, invoices, and payment methods</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              disabled={portalLoading}
+              onClick={handleManageBilling}
+            >
+              {portalLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Settings className="h-3.5 w-3.5" />}
+              Billing Portal
+            </Button>
+          </div>
+        )}
+
+        <p className="text-center text-xs text-muted-foreground mt-2">
+          {hasStripeSubscription
+            ? "Subscription changes take effect immediately."
+            : "Secure checkout powered by Stripe. Cancel anytime."}
         </p>
       </DialogContent>
     </Dialog>

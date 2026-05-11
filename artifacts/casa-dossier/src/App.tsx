@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
 import { shadcn } from "@clerk/themes";
-import { Switch, Route, useLocation, Router as WouterRouter, Redirect } from "wouter";
+import { Switch, Route, useLocation, Router as WouterRouter, Redirect, useSearch } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout";
 import { PropertyProvider, useProperty } from "@/contexts/property-context";
-import { SubscriptionProvider } from "@/contexts/subscription-context";
+import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
 import { setExtraHeaders } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -143,9 +143,30 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   );
 }
 
+function StripeSuccessSync() {
+  const search = useSearch();
+  const { syncAfterCheckout } = useSubscription();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const sessionId = params.get("session_id");
+    const stripeSuccess = params.get("stripe_success");
+    if (!stripeSuccess || !sessionId) return;
+
+    syncAfterCheckout(sessionId).catch(() => {}).finally(() => {
+      // Clean up URL params
+      setLocation("/dashboard", { replace: true });
+    });
+  }, [search, syncAfterCheckout, setLocation]);
+
+  return null;
+}
+
 function AppRoutes() {
   return (
     <AppLayout>
+      <StripeSuccessSync />
       <Switch>
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/assets" component={MyAssets} />

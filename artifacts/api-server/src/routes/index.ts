@@ -14,11 +14,13 @@ import transferRouter from "./transfer";
 import ledgerRouter from "./ledger";
 import reportRouter from "./report";
 import subscriptionRouter from "./subscription";
+import stripeCheckoutRouter from "./stripe-checkout";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(subscriptionRouter);
+router.use(stripeCheckoutRouter);
 router.use(scoutRouter);
 router.use(lensRouter);
 router.use(capitalRouter);
