@@ -71,7 +71,7 @@ function PropertySwitcher() {
         <DropdownMenuItem asChild>
           <Link href="/properties" className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
             <Plus className="h-3.5 w-3.5" />
-            Add another property
+            Manage My Properties
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
