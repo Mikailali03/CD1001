@@ -181,7 +181,7 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
             </div>
           </div>
 
-          <div className={`flex items-center gap-1.5 mt-1.5 text-xs font-medium ${isOverdue ? "text-destructive" : daysDiff <= 7 ? "text-amber-600" : "text-muted-foreground"}`}>
+          <div className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 mt-1.5 text-xs font-medium ${isOverdue ? "text-destructive" : daysDiff <= 7 ? "text-amber-600" : "text-muted-foreground"}`}>
             {isOverdue ? (
               <AlertCircle className="h-3 w-3 shrink-0" />
             ) : (
@@ -197,7 +197,7 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
                 : `Due in ${daysDiff} days · ${format(dueDate, "MMM d")}`}
             </span>
             {task.estimatedCost && (
-              <span className="text-muted-foreground font-normal ml-1">· est. ${Number(task.estimatedCost).toLocaleString()}</span>
+              <span className="text-muted-foreground font-normal">· est. ${Number(task.estimatedCost).toLocaleString()}</span>
             )}
           </div>
         </div>
@@ -410,13 +410,13 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
   return (
     <Card className={overdue.length > 0 ? "border-destructive/25" : ""}>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <CardTitle className="text-sm font-semibold">Maintenance Inbox</CardTitle>
               {total > 0 && (
                 <Badge
-                  className={`text-[10px] font-bold px-1.5 py-0.5 h-auto ${
+                  className={`text-[10px] font-bold px-1.5 py-0.5 h-auto shrink-0 ${
                     overdue.length > 0
                       ? "bg-destructive/15 text-destructive border-destructive/25"
                       : "bg-amber-100 text-amber-700 border-amber-200"
@@ -426,7 +426,7 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
                 </Badge>
               )}
             </div>
-            <CardDescription className="mt-0.5">
+            <CardDescription className="mt-0.5 text-wrap">
               {overdue.length > 0
                 ? `${overdue.length} overdue · ${upcoming.length} due in the next 30 days`
                 : upcoming.length > 0
@@ -435,7 +435,7 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
             </CardDescription>
           </div>
           {total > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+            <div className="hidden sm:flex items-center gap-1 text-xs text-muted-foreground shrink-0">
               <Wrench className="h-3.5 w-3.5" />
               Tap Done to complete
             </div>

@@ -355,26 +355,30 @@ export default function Dashboard() {
         <MaintenanceInbox propertyId={activePropertyId} />
 
         {/* Recent service activity */}
-        <Card>
+        <Card className="overflow-hidden">
           <CardHeader>
             <CardTitle className="text-sm font-semibold">Recent Service Activity</CardTitle>
             <CardDescription>Latest work done on this property</CardDescription>
           </CardHeader>
           <CardContent>
             {recentRecords.length > 0 ? (
-              <div className="space-y-5">
+              <div className="space-y-4">
                 {recentRecords.slice(0, 6).map((record: any) => (
-                  <div key={record.id} className="flex items-start gap-3">
+                  <div key={record.id} className="flex items-start gap-3 min-w-0">
                     <div className="mt-0.5 bg-secondary p-1.5 rounded-full shrink-0">
                       <FileText className="h-3.5 w-3.5 text-primary" />
                     </div>
-                    <div className="space-y-0.5 min-w-0">
-                      <p className="text-sm font-medium leading-tight line-clamp-2">{record.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {record.assetName && <span className="font-medium">{record.assetName} · </span>}
-                        {record.technicianName || record.companyName || "Service"}
-                        {" · "}{format(new Date(record.date), "MMM d, yyyy")}
-                      </p>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <p className="text-sm font-medium leading-snug line-clamp-2 break-words">{record.description}</p>
+                      <div className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
+                        {record.assetName && (
+                          <span className="font-medium shrink-0">{record.assetName}</span>
+                        )}
+                        {record.assetName && <span className="shrink-0">·</span>}
+                        <span className="shrink-0">{record.technicianName || record.companyName || "Service"}</span>
+                        <span className="shrink-0">·</span>
+                        <span className="shrink-0">{format(new Date(record.date), "MMM d, yyyy")}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
