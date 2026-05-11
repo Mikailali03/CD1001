@@ -152,7 +152,7 @@ export function AppLayout({
               <UserMenu />
             </div>
           </header>
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-x-hidden overflow-y-auto">
             {children}
           </div>
         </main>

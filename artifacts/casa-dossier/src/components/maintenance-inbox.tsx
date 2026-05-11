@@ -160,7 +160,7 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
       } ${expanded ? "shadow-sm" : ""}`}
     >
       {/* Main row */}
-      <div className="flex items-start gap-3 px-4 py-3">
+      <div className="flex items-start gap-2 sm:gap-3 px-3 sm:px-4 py-3">
         <span className="text-lg shrink-0 mt-0.5 select-none">
           {CATEGORY_ICONS[task.assetCategory] ?? "📦"}
         </span>
@@ -168,8 +168,8 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="font-semibold text-sm leading-tight truncate">{task.title}</p>
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{task.assetName}</p>
+              <p className="font-semibold text-sm leading-tight line-clamp-2">{task.title}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate leading-snug">{task.assetName}</p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               {task.isDiy && (
@@ -217,7 +217,7 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
 
       {/* Expanded completion form */}
       {expanded && (
-        <div className="border-t bg-muted/30 px-4 py-3.5 space-y-3 rounded-b-xl">
+        <div className="border-t bg-muted/30 px-3 sm:px-4 py-3.5 space-y-3 rounded-b-xl">
 
           {/* Notes */}
           <div className="space-y-1.5">
@@ -392,11 +392,11 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="px-4 sm:px-6 pb-3">
           <Skeleton className="h-5 w-40" />
           <Skeleton className="h-3 w-56 mt-1" />
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="px-4 sm:px-6 space-y-2">
           {[0, 1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
         </CardContent>
       </Card>
@@ -409,7 +409,7 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
 
   return (
     <Card className={overdue.length > 0 ? "border-destructive/25" : ""}>
-      <CardHeader className="pb-3">
+      <CardHeader className="px-4 sm:px-6 pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -443,7 +443,7 @@ export function MaintenanceInbox({ propertyId }: { propertyId: string }) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 pt-0">
+      <CardContent className="px-4 sm:px-6 space-y-3 pt-0">
         {total === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center gap-2">
             <div className="bg-emerald-100 p-3 rounded-full">
