@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Building2, MapPin, Plus, BedDouble, Bath, Maximize, Calendar, Lock } from "lucide-react";
 import { Link } from "wouter";
+import { HealthScoreBadge, PropertyHealthModal } from "@/components/property-health-modal";
 
 function useAddPropertyGate() {
   const { subscription, openUpgradeModal } = useSubscription();
@@ -31,6 +32,9 @@ export default function Properties() {
   const { data: properties, isLoading } = useListProperties();
   const [addOpen, setAddOpen] = useState(false);
   const { atLimit, tryOpen } = useAddPropertyGate();
+  const [healthModalId, setHealthModalId] = useState<string | null>(null);
+
+  const activeHealthProperty = properties?.find((p) => p.id === healthModalId) ?? null;
 
   if (isLoading) {
     return (
@@ -84,7 +88,17 @@ export default function Properties() {
                 )}
 
                 <CardHeader className="pb-2">
-                  <CardTitle className="line-clamp-1">{property.name}</CardTitle>
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="line-clamp-1">{property.name}</CardTitle>
+                    <HealthScoreBadge
+                      propertyId={property.id}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHealthModalId(property.id);
+                      }}
+                    />
+                  </div>
                   <CardDescription className="flex items-center gap-1.5 text-xs line-clamp-1">
                     <MapPin className="h-3 w-3 shrink-0" />
                     {[property.address, property.city, property.state].filter(Boolean).join(", ")}
@@ -168,6 +182,15 @@ export default function Properties() {
         open={addOpen}
         onOpenChange={setAddOpen}
       />
+
+      {activeHealthProperty && (
+        <PropertyHealthModal
+          propertyId={activeHealthProperty.id}
+          propertyName={activeHealthProperty.name}
+          open={healthModalId === activeHealthProperty.id}
+          onClose={() => setHealthModalId(null)}
+        />
+      )}
     </div>
   );
 }
