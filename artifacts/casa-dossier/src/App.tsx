@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ClerkProvider, SignIn, SignUp, Show, useClerk } from "@clerk/react";
+import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from "@clerk/react";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect, useSearch } from "wouter";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout";
 import { PropertyProvider, useProperty } from "@/contexts/property-context";
 import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
-import { setExtraHeaders } from "@workspace/api-client-react";
+import { setExtraHeaders, setAuthTokenGetter } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowRight, Eye } from "lucide-react";
@@ -97,6 +97,19 @@ const clerkAppearance = {
     main: "",
   },
 };
+
+function AuthTokenSetup() {
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    setAuthTokenGetter(getToken);
+    return () => {
+      setAuthTokenGetter(null);
+    };
+  }, [getToken]);
+
+  return null;
+}
 
 function ClerkQueryClientCacheInvalidator() {
   const { addListener } = useClerk();
@@ -374,6 +387,7 @@ function ClerkProviderWithRoutes() {
       routerReplace={(to) => setLocation(stripBase(to), { replace: true })}
     >
       <QueryClientProvider client={queryClient}>
+        <AuthTokenSetup />
         <ClerkQueryClientCacheInvalidator />
         <TooltipProvider>
           <Switch>
