@@ -105,7 +105,7 @@ export default function Properties() {
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="flex-1 pb-3">
+                <CardContent className="flex-1 pb-3 space-y-1.5">
                   <div className="flex flex-wrap gap-1.5">
                     {property.yearBuilt && (
                       <Badge variant="secondary" className="gap-1 font-normal text-xs">
@@ -119,6 +119,8 @@ export default function Properties() {
                         {property.sqft.toLocaleString()} sqft
                       </Badge>
                     )}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
                     {property.bedrooms && (
                       <Badge variant="secondary" className="gap-1 font-normal text-xs">
                         <BedDouble className="h-3 w-3" />
