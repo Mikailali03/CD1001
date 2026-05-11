@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useListProperties } from "@workspace/api-client-react";
 import { AddPropertyDialog } from "@/components/add-property-dialog";
 import { useSubscription } from "@/contexts/subscription-context";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,59 +87,59 @@ export default function Properties() {
                   </div>
                 )}
 
-                <CardHeader className="px-4 pt-4 pb-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="line-clamp-1">{property.name}</CardTitle>
-                    <HealthScoreBadge
-                      propertyId={property.id}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setHealthModalId(property.id);
-                      }}
-                    />
+                {/* Card body — ring sits beside the text column */}
+                <div className="flex items-center gap-3 px-4 pt-3 pb-3 flex-1">
+                  <div className="min-w-0 flex-1 space-y-1.5">
+                    <div>
+                      <p className="font-semibold text-base leading-tight line-clamp-1 text-foreground">{property.name}</p>
+                      <p className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        {[property.address, property.city, property.state].filter(Boolean).join(", ")}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {property.yearBuilt && (
+                        <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                          <Calendar className="h-3 w-3" />
+                          Built {property.yearBuilt}
+                        </Badge>
+                      )}
+                      {property.sqft && (
+                        <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                          <Maximize className="h-3 w-3" />
+                          {property.sqft.toLocaleString()} sqft
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {property.bedrooms && (
+                        <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                          <BedDouble className="h-3 w-3" />
+                          {property.bedrooms} bd
+                        </Badge>
+                      )}
+                      {property.bathrooms && (
+                        <Badge variant="secondary" className="gap-1 font-normal text-xs">
+                          <Bath className="h-3 w-3" />
+                          {property.bathrooms} ba
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <CardDescription className="flex items-center gap-1.5 text-xs line-clamp-1">
-                    <MapPin className="h-3 w-3 shrink-0" />
-                    {[property.address, property.city, property.state].filter(Boolean).join(", ")}
-                  </CardDescription>
-                </CardHeader>
+                  <HealthScoreBadge
+                    propertyId={property.id}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setHealthModalId(property.id);
+                    }}
+                  />
+                </div>
 
-                <CardContent className="flex-1 px-4 pb-3 pt-2 space-y-1">
-                  <div className="flex flex-wrap gap-1.5">
-                    {property.yearBuilt && (
-                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
-                        <Calendar className="h-3 w-3" />
-                        Built {property.yearBuilt}
-                      </Badge>
-                    )}
-                    {property.sqft && (
-                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
-                        <Maximize className="h-3 w-3" />
-                        {property.sqft.toLocaleString()} sqft
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {property.bedrooms && (
-                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
-                        <BedDouble className="h-3 w-3" />
-                        {property.bedrooms} bd
-                      </Badge>
-                    )}
-                    {property.bathrooms && (
-                      <Badge variant="secondary" className="gap-1 font-normal text-xs">
-                        <Bath className="h-3 w-3" />
-                        {property.bathrooms} ba
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-
-                <CardFooter className="pt-3 border-t text-sm text-muted-foreground flex justify-between">
+                <div className="px-4 py-3 border-t text-sm text-muted-foreground flex justify-between">
                   <span>View Details</span>
                   <span className="text-primary font-medium">&rarr;</span>
-                </CardFooter>
+                </div>
               </Card>
             </Link>
           ))}
