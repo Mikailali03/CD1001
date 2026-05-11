@@ -317,8 +317,8 @@ export function PropertyHealthModal({
 // Circular progress ring — used on the property card
 // ------------------------------------------------------------------
 
-const RING_RADIUS = 18;
-const RING_STROKE = 3.5;
+const RING_RADIUS = 36;
+const RING_STROKE = 7;
 const RING_SIZE = (RING_RADIUS + RING_STROKE) * 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
@@ -399,10 +399,10 @@ export function HealthScoreBadge({ propertyId, onClick }: HealthScoreBadgeProps)
         {/* Score label */}
         <text
           x={cx}
-          y={cy - 3}
+          y={cy - 6}
           textAnchor="middle"
           dominantBaseline="central"
-          fontSize="8.5"
+          fontSize="17"
           fontWeight="700"
           fill={color}
           style={{ fontFamily: "inherit" }}
@@ -412,10 +412,10 @@ export function HealthScoreBadge({ propertyId, onClick }: HealthScoreBadgeProps)
         {/* Grade label */}
         <text
           x={cx}
-          y={cy + 6}
+          y={cy + 12}
           textAnchor="middle"
           dominantBaseline="central"
-          fontSize="6"
+          fontSize="12"
           fontWeight="600"
           fill={color}
           opacity="0.75"
