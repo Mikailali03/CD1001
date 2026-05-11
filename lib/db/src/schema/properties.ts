@@ -16,6 +16,7 @@ export const propertiesTable = pgTable("properties", {
   lotSize: integer("lot_size"),
   photoUrl: text("photo_url"),
   userId: text("user_id").notNull().default("demo-user"),
+  ownerEmail: text("owner_email"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

@@ -13,6 +13,7 @@ import { assetsTable, maintenanceTasksTable, serviceRecordsTable } from "@worksp
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOwnedProperty } from "../lib/access.js";
+import { clerkClient } from "@clerk/express";
 
 const router = Router();
 
@@ -42,9 +43,22 @@ router.post("/properties", requireAuth(), async (req, res) => {
     return res.status(403).json({ error: "property_limit_reached", tier, limit });
   }
 
+  // Fetch owner email from Clerk (best-effort — doesn't block creation)
+  let ownerEmail: string | null = null;
+  if (req.userId !== "demo-user") {
+    try {
+      const clerkUser = await clerkClient.users.getUser(req.userId);
+      ownerEmail = clerkUser.emailAddresses.find(
+        (e) => e.id === clerkUser.primaryEmailAddressId
+      )?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress ?? null;
+    } catch {
+      // Non-fatal — property still gets created without email
+    }
+  }
+
   const [property] = await db
     .insert(propertiesTable)
-    .values({ ...body, userId: req.userId })
+    .values({ ...body, userId: req.userId, ownerEmail })
     .returning();
   res.status(201).json(property);
 });
