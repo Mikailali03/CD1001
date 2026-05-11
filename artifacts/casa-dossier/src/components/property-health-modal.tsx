@@ -1,4 +1,5 @@
 import { useGetPropertySummary, getGetPropertySummaryQueryKey } from "@workspace/api-client-react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +14,6 @@ import {
   CheckCircle2,
   ShieldAlert,
   Wrench,
-  Clock,
 } from "lucide-react";
 
 // ------------------------------------------------------------------
@@ -314,8 +314,21 @@ export function PropertyHealthModal({
 }
 
 // ------------------------------------------------------------------
-// Inline badge — used on the property card
+// Circular progress ring — used on the property card
 // ------------------------------------------------------------------
+
+const RING_RADIUS = 18;
+const RING_STROKE = 3.5;
+const RING_SIZE = (RING_RADIUS + RING_STROKE) * 2;
+const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+
+function scoreColor(score: number): string {
+  if (score >= 90) return "#10b981"; // emerald
+  if (score >= 75) return "#3b82f6"; // blue
+  if (score >= 60) return "#f59e0b"; // amber
+  if (score >= 45) return "#f97316"; // orange
+  return "#ef4444";                  // red
+}
 
 interface HealthScoreBadgeProps {
   propertyId: string;
@@ -324,29 +337,93 @@ interface HealthScoreBadgeProps {
 
 export function HealthScoreBadge({ propertyId, onClick }: HealthScoreBadgeProps) {
   const { data: summary, isLoading } = useGetPropertySummary(propertyId);
+  const [animatedScore, setAnimatedScore] = useState(0);
+
+  useEffect(() => {
+    if (summary?.healthScore == null) return;
+    // Defer one frame so the transition is visible even when data is cached
+    const raf = requestAnimationFrame(() => {
+      setTimeout(() => setAnimatedScore(summary.healthScore), 50);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [summary?.healthScore]);
 
   if (isLoading) {
-    return <Skeleton className="h-6 w-16 rounded-full" />;
+    return <Skeleton className="rounded-full shrink-0" style={{ width: RING_SIZE, height: RING_SIZE }} />;
   }
 
   if (!summary) return null;
 
   const { healthScore, healthGrade } = summary;
-
-  const bg =
-    healthScore >= 90 ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-emerald-200"
-    : healthScore >= 75 ? "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200"
-    : healthScore >= 60 ? "bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200"
-    : healthScore >= 45 ? "bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200"
-    : "bg-red-100 text-red-700 hover:bg-red-200 border-red-200";
+  const color = scoreColor(healthScore);
+  const cx = RING_SIZE / 2;
+  const cy = RING_SIZE / 2;
+  const filled = RING_CIRCUMFERENCE * (animatedScore / 100);
+  const offset = RING_CIRCUMFERENCE - filled;
 
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors cursor-pointer ${bg}`}
+      title={`Health score: ${healthScore}/100 (${healthGrade})`}
+      className="shrink-0 rounded-full cursor-pointer hover:opacity-80 transition-opacity focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <Clock className="h-3 w-3" />
-      {healthScore} · {healthGrade}
+      <svg
+        width={RING_SIZE}
+        height={RING_SIZE}
+        viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
+        aria-label={`Health score ${healthScore}`}
+      >
+        {/* Track */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={RING_RADIUS}
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth={RING_STROKE}
+        />
+        {/* Progress arc — starts at top (-90°) */}
+        <circle
+          cx={cx}
+          cy={cy}
+          r={RING_RADIUS}
+          fill="none"
+          stroke={color}
+          strokeWidth={RING_STROKE}
+          strokeDasharray={RING_CIRCUMFERENCE}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          transform={`rotate(-90 ${cx} ${cy})`}
+          style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)" }}
+        />
+        {/* Score label */}
+        <text
+          x={cx}
+          y={cy - 3}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="8.5"
+          fontWeight="700"
+          fill={color}
+          style={{ fontFamily: "inherit" }}
+        >
+          {healthScore}
+        </text>
+        {/* Grade label */}
+        <text
+          x={cx}
+          y={cy + 6}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="6"
+          fontWeight="600"
+          fill={color}
+          opacity="0.75"
+          style={{ fontFamily: "inherit" }}
+        >
+          {healthGrade}
+        </text>
+      </svg>
     </button>
   );
 }
