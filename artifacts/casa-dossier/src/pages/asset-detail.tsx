@@ -15,13 +15,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, ShieldAlert,
   Calendar, Wrench, CheckCircle2, Clock, Hammer,
   AlertCircle, FileText, DollarSign, Plus, X,
   Loader2, UserCheck, UserRound, ImagePlus, Receipt,
-  CheckCheck, Upload, Pencil, Archive,
+  CheckCheck, Upload, Pencil, Archive, RefreshCw,
 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { EditAssetSheet } from "@/components/edit-asset-sheet";
@@ -130,40 +131,81 @@ function LifeBar({ installDate, category }: { installDate: string | null; catego
   );
 }
 
-// ── Mark Complete Inline Form ─────────────────────────────────────────────────
-function MarkCompleteForm({
+// ── Step formatter ────────────────────────────────────────────────────────────
+function StepList({ description }: { description: string }) {
+  const lines = description.split("\n").map((l) => l.trim()).filter(Boolean);
+  const isNumbered = lines.length > 1 && lines.every((l) => /^\d+[.)]\s/.test(l));
+  const isBullet = lines.length > 1 && lines.every((l) => /^[-•*]\s/.test(l));
+
+  if (isNumbered) {
+    return (
+      <ol className="space-y-3">
+        {lines.map((line, i) => (
+          <li key={i} className="flex gap-3 text-sm leading-relaxed">
+            <span className="shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center mt-0.5">
+              {i + 1}
+            </span>
+            <span>{line.replace(/^\d+[.)]\s*/, "")}</span>
+          </li>
+        ))}
+      </ol>
+    );
+  }
+  if (isBullet) {
+    return (
+      <ul className="space-y-2.5">
+        {lines.map((line, i) => (
+          <li key={i} className="flex gap-2.5 text-sm leading-relaxed">
+            <span className="shrink-0 mt-2 h-1.5 w-1.5 rounded-full bg-primary/50" />
+            <span>{line.replace(/^[-•*]\s*/, "")}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{description}</p>
+  );
+}
+
+// ── Maintenance Task Detail + Completion Modal ────────────────────────────────
+function MaintenanceTaskModal({
   task,
   assetId,
-  onDismiss,
+  open,
+  onClose,
+  onComplete,
 }: {
   task: any;
   assetId: string;
-  onDismiss: () => void;
+  open: boolean;
+  onClose: () => void;
+  onComplete: () => void;
 }) {
   const today = new Date();
   const diff = differenceInCalendarDays(new Date(task.nextDueDate), today);
   const isOverdue = diff < 0;
   const isSoon = diff >= 0 && diff <= 14;
 
-  const [expanded, setExpanded] = useState(false);
-  const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
-
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(
-    task.estimatedCost ? String(Number(task.estimatedCost)) : ""
-  );
+  const [cost, setCost] = useState(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
   const [isDiy, setIsDiy] = useState<boolean>(task.isDiy ?? true);
-  const [technicianName, setTechnicianName] = useState(
-    task.isDiy !== false ? "Homeowner (DIY)" : ""
-  );
+  const [technicianName, setTechnicianName] = useState(task.isDiy !== false ? "Homeowner (DIY)" : "");
   const [companyName, setCompanyName] = useState("");
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [receiptData, setReceiptData] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  function resetForm() {
+    setNotes(""); setCost(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
+    setIsDiy(task.isDiy ?? true); setTechnicianName(task.isDiy !== false ? "Homeowner (DIY)" : "");
+    setCompanyName(""); setReceiptPreview(null); setReceiptData(null);
+  }
+
+  function handleClose() { resetForm(); onClose(); }
 
   function toggleDiy(diy: boolean) {
     setIsDiy(diy);
@@ -203,8 +245,8 @@ function MarkCompleteForm({
       queryClient.invalidateQueries({ queryKey: ["tasks", assetId] });
       queryClient.invalidateQueries({ queryKey: ["service-records", assetId] });
       queryClient.invalidateQueries({ predicate: (q) => q.queryKey.some((k) => typeof k === "string" && k.includes("inbox")) });
-      setDone(true);
-      setTimeout(onDismiss, 900);
+      resetForm();
+      onComplete();
     } catch {
       toast({ title: "Could not complete task", variant: "destructive" });
     } finally {
@@ -212,7 +254,189 @@ function MarkCompleteForm({
     }
   }
 
-  // ── Done flash state ──
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
+      <DialogContent hideCloseButton className="max-w-lg p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogTitle className="sr-only">{task.title}</DialogTitle>
+        <DialogDescription className="sr-only">Maintenance task details and completion form</DialogDescription>
+
+        {/* ── Modal header ── */}
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4 border-b shrink-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                isOverdue
+                  ? "bg-destructive/10 text-destructive"
+                  : isSoon
+                  ? "bg-amber-50 text-amber-700 border border-amber-200"
+                  : "bg-muted text-muted-foreground"
+              }`}>
+                {isOverdue ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+                {isOverdue
+                  ? `${Math.abs(diff)}d overdue`
+                  : diff === 0 ? "Due today"
+                  : diff === 1 ? "Due tomorrow"
+                  : `Due ${format(new Date(task.nextDueDate), "MMM d, yyyy")}`}
+              </span>
+              {task.isDiy && (
+                <Badge variant="secondary" className="text-[10px] gap-0.5 h-5">
+                  <Hammer className="h-2.5 w-2.5" /> DIY
+                </Badge>
+              )}
+              {task.estimatedCost && Number(task.estimatedCost) > 0 && (
+                <Badge variant="outline" className="text-[10px] gap-0.5 h-5">
+                  <DollarSign className="h-2.5 w-2.5" /> Est. ${Number(task.estimatedCost).toLocaleString()}
+                </Badge>
+              )}
+              {task.intervalDays && (
+                <Badge variant="outline" className="text-[10px] gap-0.5 h-5">
+                  <RefreshCw className="h-2.5 w-2.5" /> Every {task.intervalDays}d
+                </Badge>
+              )}
+            </div>
+            <h2 className="text-base font-bold leading-snug">{task.title}</h2>
+          </div>
+          <button
+            onClick={handleClose}
+            className="shrink-0 rounded-md p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors mt-0.5"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* ── Scrollable body ── */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+
+          {/* Task description / steps */}
+          {task.description && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">How to do it</p>
+              <StepList description={task.description} />
+            </div>
+          )}
+
+          {/* Divider */}
+          <div className="border-t" />
+
+          {/* Completion form */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+              Mark as Complete
+            </p>
+            <div className="space-y-3.5">
+
+              {/* Notes */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Notes (optional)</Label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder={`e.g. Completed ${task.title.toLowerCase()}. Everything looks good.`}
+                  className="resize-none h-16 text-sm"
+                />
+              </div>
+
+              {/* Cost + Receipt */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <DollarSign className="h-3 w-3" /> Actual Cost
+                  </Label>
+                  <Input type="number" min={0} step="0.01" placeholder="0.00" value={cost}
+                    onChange={(e) => setCost(e.target.value)} className="text-sm h-8" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold flex items-center gap-1">
+                    <Receipt className="h-3 w-3" /> Receipt
+                  </Label>
+                  <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+                  {receiptPreview ? (
+                    <div className="relative h-8">
+                      <img src={receiptPreview} alt="Receipt" className="h-8 w-full object-cover rounded-md border" />
+                      <button
+                        className="absolute -top-1.5 -right-1.5 bg-background border rounded-full p-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                        onClick={() => { setReceiptPreview(null); setReceiptData(null); if (fileRef.current) fileRef.current.value = ""; }}
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => fileRef.current?.click()}
+                      className="h-8 w-full rounded-md border border-dashed hover:bg-muted flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                      <Upload className="h-3 w-3" /> Upload
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* DIY / Pro toggle */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Who did the work?</Label>
+                <div className="flex gap-2">
+                  <button onClick={() => toggleDiy(true)}
+                    className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                    <Hammer className="h-3.5 w-3.5" /> I did it myself
+                  </button>
+                  <button onClick={() => toggleDiy(false)}
+                    className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${!isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                    <UserCheck className="h-3.5 w-3.5" /> Hired a pro
+                  </button>
+                </div>
+              </div>
+
+              {/* Pro fields */}
+              {!isDiy && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold flex items-center gap-1"><UserRound className="h-3 w-3" /> Technician</Label>
+                    <Input placeholder="Name" value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} className="text-sm h-8" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Company</Label>
+                    <Input placeholder="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="text-sm h-8" />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Sticky footer ── */}
+        <div className="border-t px-5 py-3.5 flex gap-2 shrink-0 bg-background">
+          <Button variant="outline" size="sm" className="flex-1 h-9 text-sm" onClick={handleClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button size="sm" className="flex-1 h-9 text-sm gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+            onClick={handleSubmit} disabled={busy}>
+            {busy
+              ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
+              : <><CheckCheck className="h-4 w-4" /> Mark Complete</>}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Mark Complete Form (row + modal trigger) ──────────────────────────────────
+function MarkCompleteForm({
+  task,
+  assetId,
+  onDismiss,
+}: {
+  task: any;
+  assetId: string;
+  onDismiss: () => void;
+}) {
+  const today = new Date();
+  const diff = differenceInCalendarDays(new Date(task.nextDueDate), today);
+  const isOverdue = diff < 0;
+  const isSoon = diff >= 0 && diff <= 14;
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [done, setDone] = useState(false);
+
   if (done) {
     return (
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3 flex items-center gap-2.5 animate-in fade-in">
@@ -222,10 +446,15 @@ function MarkCompleteForm({
     );
   }
 
-  // ── Collapsed task row ──
-  if (!expanded) {
-    return (
-      <div className={`rounded-xl border px-3.5 py-3 space-y-1.5 ${isOverdue ? "border-destructive/25 bg-destructive/3" : "border-border"}`}>
+  return (
+    <>
+      {/* Clickable task row */}
+      <button
+        onClick={() => setModalOpen(true)}
+        className={`w-full text-left rounded-xl border px-3.5 py-3 space-y-1.5 transition-colors hover:bg-muted/50 ${
+          isOverdue ? "border-destructive/25 bg-destructive/3 hover:bg-destructive/5" : "border-border"
+        }`}
+      >
         <div className="flex items-start justify-between gap-2">
           <p className="font-semibold text-sm leading-tight flex-1">{task.title}</p>
           <div className="flex gap-1 shrink-0 items-center">
@@ -239,13 +468,10 @@ function MarkCompleteForm({
                 <DollarSign className="h-2.5 w-2.5" />{Number(task.estimatedCost).toLocaleString()}
               </Badge>
             )}
-            <button
-              onClick={() => setExpanded(true)}
-              className="ml-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 border border-emerald-200 hover:border-emerald-400 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-2 h-6 transition-colors shrink-0"
-            >
+            <span className="ml-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg px-2 h-6 shrink-0">
               <CheckCircle2 className="h-3 w-3" />
               Mark Done
-            </button>
+            </span>
           </div>
         </div>
         {task.description && (
@@ -262,167 +488,20 @@ function MarkCompleteForm({
             <span className="text-muted-foreground font-normal">· every {task.intervalDays}d</span>
           )}
         </div>
-      </div>
-    );
-  }
+      </button>
 
-  // ── Expanded completion form ──
-  return (
-    <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50/40 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-emerald-100 bg-emerald-50">
-        <p className="text-sm font-bold flex items-center gap-1.5 text-emerald-800">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-          Complete: <span className="font-semibold text-emerald-700 truncate max-w-[200px]">{task.title}</span>
-        </p>
-        <button onClick={() => setExpanded(false)} className="text-emerald-600 hover:text-emerald-800 transition-colors">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="p-4 space-y-3.5">
-        {/* Notes */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-semibold">Notes (optional)</Label>
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={`e.g. Completed ${task.title.toLowerCase()}. Everything looks good.`}
-            className="resize-none h-16 text-sm bg-background"
-            autoFocus
-          />
-        </div>
-
-        {/* Cost + Receipt row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <DollarSign className="h-3 w-3" /> Actual Cost
-            </Label>
-            <Input
-              type="number"
-              min={0}
-              step="0.01"
-              placeholder="0.00"
-              value={cost}
-              onChange={(e) => setCost(e.target.value)}
-              className="text-sm h-8 bg-background"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-semibold flex items-center gap-1">
-              <Receipt className="h-3 w-3" /> Receipt
-            </Label>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleFile}
-            />
-            {receiptPreview ? (
-              <div className="relative h-8">
-                <img
-                  src={receiptPreview}
-                  alt="Receipt preview"
-                  className="h-8 w-full object-cover rounded-md border border-border"
-                />
-                <button
-                  className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                  onClick={() => { setReceiptPreview(null); setReceiptData(null); if (fileRef.current) fileRef.current.value = ""; }}
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="h-8 w-full rounded-md border border-dashed border-border bg-background hover:bg-muted flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Upload className="h-3 w-3" />
-                Upload image
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* DIY / Pro toggle */}
-        <div className="space-y-1.5">
-          <Label className="text-xs font-semibold">Who did the work?</Label>
-          <div className="flex gap-2">
-            <button
-              onClick={() => toggleDiy(true)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
-                isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
-              }`}
-            >
-              <Hammer className="h-3.5 w-3.5" />
-              I did it myself
-            </button>
-            <button
-              onClick={() => toggleDiy(false)}
-              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
-                !isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
-              }`}
-            >
-              <UserCheck className="h-3.5 w-3.5" />
-              Hired a pro
-            </button>
-          </div>
-        </div>
-
-        {/* Technician + Company (pro only) */}
-        {!isDiy && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold flex items-center gap-1">
-                <UserRound className="h-3 w-3" /> Technician
-              </Label>
-              <Input
-                placeholder="Name"
-                value={technicianName}
-                onChange={(e) => setTechnicianName(e.target.value)}
-                className="text-sm h-8 bg-background"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Company</Label>
-              <Input
-                placeholder="Company name"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="text-sm h-8 bg-background"
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex gap-2 pt-0.5">
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 h-8 text-xs"
-            onClick={() => setExpanded(false)}
-            disabled={busy}
-          >
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            className="flex-1 h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white border-0"
-            onClick={handleSubmit}
-            disabled={busy}
-          >
-            {busy ? (
-              <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…</>
-            ) : (
-              <><CheckCheck className="h-3.5 w-3.5" /> Mark Complete</>
-            )}
-          </Button>
-        </div>
-      </div>
-    </div>
+      <MaintenanceTaskModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        task={task}
+        assetId={assetId}
+        onComplete={() => {
+          setDone(true);
+          setModalOpen(false);
+          setTimeout(onDismiss, 900);
+        }}
+      />
+    </>
   );
 }
 
@@ -784,7 +863,7 @@ export default function AssetDetail() {
               )}
             </div>
             <div className="pt-2 max-w-xs">
-              <LifeBar installDate={asset.installDate} category={asset.category} />
+              <LifeBar installDate={asset.installDate ?? null} category={asset.category} />
             </div>
           </div>
         </div>
