@@ -87,7 +87,7 @@ export default function Properties() {
                   </div>
                 )}
 
-                <CardHeader className="pb-2">
+                <CardHeader className="px-4 pt-4 pb-1">
                   <div className="flex items-start justify-between gap-2">
                     <CardTitle className="line-clamp-1">{property.name}</CardTitle>
                     <HealthScoreBadge
@@ -105,7 +105,7 @@ export default function Properties() {
                   </CardDescription>
                 </CardHeader>
 
-                <CardContent className="flex-1 pb-3 space-y-1.5">
+                <CardContent className="flex-1 px-4 pb-3 pt-2 space-y-1">
                   <div className="flex flex-wrap gap-1.5">
                     {property.yearBuilt && (
                       <Badge variant="secondary" className="gap-1 font-normal text-xs">
