@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { propertiesTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { propertiesTable, subscriptionsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
+import { eq, and, desc, count } from "drizzle-orm";
 import {
   CreatePropertyBody,
   UpdatePropertyBody,
@@ -27,6 +27,21 @@ router.get("/properties", requireAuth(), async (req, res) => {
 
 router.post("/properties", requireAuth(), async (req, res) => {
   const body = CreatePropertyBody.parse(req.body);
+
+  // Enforce property limit based on subscription tier
+  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, req.userId)).limit(1);
+  const tier = sub?.tier ?? "essential";
+  const limit = TIER_PROPERTY_LIMITS[tier] ?? 1;
+
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(propertiesTable)
+    .where(eq(propertiesTable.userId, req.userId));
+
+  if ((total ?? 0) >= limit) {
+    return res.status(403).json({ error: "property_limit_reached", tier, limit });
+  }
+
   const [property] = await db
     .insert(propertiesTable)
     .values({ ...body, userId: req.userId })

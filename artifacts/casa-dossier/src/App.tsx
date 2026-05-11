@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout";
 import { PropertyProvider, useProperty } from "@/contexts/property-context";
+import { SubscriptionProvider } from "@/contexts/subscription-context";
 import { setExtraHeaders } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -176,9 +177,11 @@ function ProtectedApp() {
     <>
       <Show when="signed-in">
         <PropertyProvider>
-          <OnboardingGate>
-            <AppRoutes />
-          </OnboardingGate>
+          <SubscriptionProvider>
+            <OnboardingGate>
+              <AppRoutes />
+            </OnboardingGate>
+          </SubscriptionProvider>
         </PropertyProvider>
       </Show>
       <Show when="signed-out">
@@ -283,7 +286,9 @@ function DemoApp() {
   return (
     <WouterRouter base={`${basePath}/demo`}>
       <PropertyProvider>
-        <DemoAppRoutes />
+        <SubscriptionProvider>
+          <DemoAppRoutes />
+        </SubscriptionProvider>
       </PropertyProvider>
     </WouterRouter>
   );

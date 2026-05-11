@@ -13,10 +13,12 @@ import capitalRouter from "./capital";
 import transferRouter from "./transfer";
 import ledgerRouter from "./ledger";
 import reportRouter from "./report";
+import subscriptionRouter from "./subscription";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(subscriptionRouter);
 router.use(scoutRouter);
 router.use(lensRouter);
 router.use(capitalRouter);

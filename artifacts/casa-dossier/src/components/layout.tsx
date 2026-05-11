@@ -1,7 +1,9 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { useProperty } from "@/contexts/property-context";
+import { useSubscription } from "@/contexts/subscription-context";
 import { WelcomeModal } from "./welcome-modal";
+import { UpgradeModal } from "./upgrade-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Building2, ChevronDown, Check, Plus, FileText, LogOut, User } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Building2, ChevronDown, Check, Plus, FileText, LogOut, User, Zap, Shield, Star, Crown } from "lucide-react";
 import { Link } from "wouter";
 import { useClerk, useUser } from "@clerk/react";
 
@@ -35,7 +38,7 @@ function PropertySwitcher() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-2 h-8 max-w-[260px] bg-background text-sm font-medium"
+          className="gap-2 h-8 max-w-[180px] sm:max-w-[260px] bg-background text-sm font-medium"
         >
           <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate">{activeProperty?.name ?? "Select property"}</span>
@@ -86,6 +89,44 @@ function GenerateReportButton() {
         Generate Report
       </Button>
     </Link>
+  );
+}
+
+const TIER_CONFIG = {
+  essential: {
+    label: "Essential",
+    icon: <Shield className="h-3 w-3" />,
+    className: "bg-muted text-muted-foreground border-border hover:bg-muted/80",
+  },
+  managed: {
+    label: "Managed",
+    icon: <Star className="h-3 w-3" />,
+    className: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100/80 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
+  },
+  concierge: {
+    label: "Concierge",
+    icon: <Crown className="h-3 w-3" />,
+    className: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100/80 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
+  },
+};
+
+function SubscriptionBadge() {
+  const { subscription, openUpgradeModal } = useSubscription();
+  if (!subscription) return null;
+
+  const tier = subscription.tier;
+  const config = TIER_CONFIG[tier];
+
+  return (
+    <button
+      onClick={openUpgradeModal}
+      className={`hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors ${config.className}`}
+      title="Manage subscription"
+    >
+      {config.icon}
+      {config.label}
+      {tier === "essential" && <Zap className="h-2.5 w-2.5 ml-0.5" />}
+    </button>
   );
 }
 
@@ -148,6 +189,7 @@ export function AppLayout({
               <PropertySwitcher />
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <SubscriptionBadge />
               <GenerateReportButton />
               <UserMenu />
             </div>
@@ -158,6 +200,7 @@ export function AppLayout({
         </main>
       </div>
       <WelcomeModal forceOpen={forceWelcomeModal} />
+      <UpgradeModal />
     </SidebarProvider>
   );
 }
