@@ -235,7 +235,7 @@ export default function MyAssets() {
   const needsAttentionCount = assets.filter((a) => a.status === "needs_attention").length;
 
   return (
-    <div className="p-6 space-y-7 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="p-4 sm:p-6 space-y-5 sm:space-y-7 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">

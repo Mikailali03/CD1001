@@ -766,7 +766,7 @@ export default function AssetDetail() {
   );
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
 
       {/* Back link + Request Service */}
       <div className="flex items-center justify-between">
@@ -777,7 +777,8 @@ export default function AssetDetail() {
         <Link href={`/marketplace?propertyId=${asset.propertyId}&assetId=${asset.id}`}>
           <Button variant="outline" size="sm" className="gap-1.5">
             <Wrench className="h-3.5 w-3.5" />
-            Request Service for This Asset
+            <span className="hidden sm:inline">Request Service for This Asset</span>
+            <span className="sm:hidden">Request Service</span>
           </Button>
         </Link>
       </div>

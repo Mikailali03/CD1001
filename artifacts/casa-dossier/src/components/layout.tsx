@@ -1,4 +1,4 @@
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./app-sidebar";
 import { useProperty } from "@/contexts/property-context";
 import { WelcomeModal } from "./welcome-modal";
@@ -81,7 +81,7 @@ function GenerateReportButton() {
   if (!activeProperty) return null;
   return (
     <Link href={`/properties/${activeProperty.id}/report`}>
-      <Button variant="outline" size="sm" className="gap-2 h-8 text-xs font-medium">
+      <Button variant="outline" size="sm" className="gap-2 h-8 text-xs font-medium hidden sm:inline-flex">
         <FileText className="h-3.5 w-3.5" />
         Generate Report
       </Button>
@@ -140,11 +140,14 @@ export function AppLayout({
         <main className="flex-1 flex flex-col min-w-0">
           {topBanner}
           <header
-            className="sticky z-10 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+            className="sticky z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60"
             style={{ top: topBanner ? "40px" : "0px" }}
           >
-            <PropertySwitcher />
-            <div className="ml-auto flex items-center gap-2">
+            <SidebarTrigger className="h-8 w-8 shrink-0 md:hidden" />
+            <div className="flex-1 min-w-0">
+              <PropertySwitcher />
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <GenerateReportButton />
               <UserMenu />
             </div>

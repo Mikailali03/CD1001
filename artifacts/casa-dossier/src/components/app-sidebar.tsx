@@ -32,13 +32,17 @@ const navigation = [
 
 export function AppSidebar() {
   const [location] = useLocation();
-  const { setOpen } = useSidebar();
+  const { setOpen, setOpenMobile, isMobile } = useSidebar();
+
+  function handleNav() {
+    if (isMobile) setOpenMobile(false);
+  }
 
   return (
     <Sidebar
       collapsible="icon"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={() => !isMobile && setOpen(true)}
+      onMouseLeave={() => !isMobile && setOpen(false)}
     >
       <SidebarHeader className="border-b px-3 py-5 overflow-hidden">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -71,7 +75,7 @@ export function AppSidebar() {
                       tooltip={item.name}
                       className="h-10 px-4 rounded-lg"
                     >
-                      <Link href={item.href} className="flex items-center gap-3">
+                      <Link href={item.href} onClick={handleNav} className="flex items-center gap-3">
                         <item.icon className="h-4 w-4 shrink-0" />
                         <span className="font-medium">{item.name}</span>
                       </Link>
@@ -93,7 +97,7 @@ export function AppSidebar() {
               tooltip="Settings"
               className="h-10 px-4 rounded-lg"
             >
-              <Link href="/settings" className="flex items-center gap-3">
+              <Link href="/settings" onClick={handleNav} className="flex items-center gap-3">
                 <Settings className="h-4 w-4 shrink-0" />
                 <span className="font-medium">Settings</span>
               </Link>

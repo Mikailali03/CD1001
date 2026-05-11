@@ -148,7 +148,7 @@ function NoPropertyState() {
 
 function DashboardSkeleton() {
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <Skeleton className="h-7 w-56" />
@@ -221,7 +221,7 @@ export default function Dashboard() {
   const location = [activeProperty.city, activeProperty.state].filter(Boolean).join(", ");
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
 
       {/* ── Property header + score widget ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
