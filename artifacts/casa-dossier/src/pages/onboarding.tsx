@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUser, useClerk } from "@clerk/react";
+import { PendingInvitesModal } from "@/components/pending-invites-modal";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -194,6 +195,7 @@ export function Onboarding() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <PendingInvitesModal />
       {/* Minimal top bar */}
       <header className="border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
