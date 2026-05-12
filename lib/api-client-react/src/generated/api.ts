@@ -19,6 +19,7 @@ import type {
 import type {
   ActivityItem,
   Asset,
+  Collaborator,
   CreateAssetBody,
   CreateMaintenanceTaskBody,
   CreateMarketplaceJobBody,
@@ -27,6 +28,7 @@ import type {
   Dashboard,
   Guide,
   HealthStatus,
+  InviteCollaboratorBody,
   ListAssetsParams,
   ListGuidesParams,
   MaintenanceTask,
@@ -546,6 +548,273 @@ export function useGetPropertySummary<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List collaborators for a property (owner only, managed+ tier)
+ */
+export const getListCollaboratorsUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/collaborators`;
+};
+
+export const listCollaborators = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<Collaborator[]> => {
+  return customFetch<Collaborator[]>(getListCollaboratorsUrl(propertyId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListCollaboratorsQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/collaborators`] as const;
+};
+
+export const getListCollaboratorsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listCollaborators>>,
+  TError = ErrorType<void>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCollaborators>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListCollaboratorsQueryKey(propertyId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listCollaborators>>
+  > = ({ signal }) =>
+    listCollaborators(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listCollaborators>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListCollaboratorsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listCollaborators>>
+>;
+export type ListCollaboratorsQueryError = ErrorType<void>;
+
+/**
+ * @summary List collaborators for a property (owner only, managed+ tier)
+ */
+
+export function useListCollaborators<
+  TData = Awaited<ReturnType<typeof listCollaborators>>,
+  TError = ErrorType<void>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listCollaborators>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListCollaboratorsQueryOptions(propertyId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Invite a collaborator by email (owner only, managed+ tier)
+ */
+export const getInviteCollaboratorUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/collaborators`;
+};
+
+export const inviteCollaborator = async (
+  propertyId: string,
+  inviteCollaboratorBody: InviteCollaboratorBody,
+  options?: RequestInit,
+): Promise<Collaborator> => {
+  return customFetch<Collaborator>(getInviteCollaboratorUrl(propertyId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(inviteCollaboratorBody),
+  });
+};
+
+export const getInviteCollaboratorMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof inviteCollaborator>>,
+    TError,
+    { propertyId: string; data: BodyType<InviteCollaboratorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof inviteCollaborator>>,
+  TError,
+  { propertyId: string; data: BodyType<InviteCollaboratorBody> },
+  TContext
+> => {
+  const mutationKey = ["inviteCollaborator"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof inviteCollaborator>>,
+    { propertyId: string; data: BodyType<InviteCollaboratorBody> }
+  > = (props) => {
+    const { propertyId, data } = props ?? {};
+
+    return inviteCollaborator(propertyId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InviteCollaboratorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof inviteCollaborator>>
+>;
+export type InviteCollaboratorMutationBody = BodyType<InviteCollaboratorBody>;
+export type InviteCollaboratorMutationError = ErrorType<void>;
+
+/**
+ * @summary Invite a collaborator by email (owner only, managed+ tier)
+ */
+export const useInviteCollaborator = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof inviteCollaborator>>,
+    TError,
+    { propertyId: string; data: BodyType<InviteCollaboratorBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof inviteCollaborator>>,
+  TError,
+  { propertyId: string; data: BodyType<InviteCollaboratorBody> },
+  TContext
+> => {
+  return useMutation(getInviteCollaboratorMutationOptions(options));
+};
+
+/**
+ * @summary Remove a collaborator (owner only)
+ */
+export const getRemoveCollaboratorUrl = (
+  propertyId: string,
+  collaboratorId: string,
+) => {
+  return `/api/properties/${propertyId}/collaborators/${collaboratorId}`;
+};
+
+export const removeCollaborator = async (
+  propertyId: string,
+  collaboratorId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(
+    getRemoveCollaboratorUrl(propertyId, collaboratorId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getRemoveCollaboratorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeCollaborator>>,
+    TError,
+    { propertyId: string; collaboratorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof removeCollaborator>>,
+  TError,
+  { propertyId: string; collaboratorId: string },
+  TContext
+> => {
+  const mutationKey = ["removeCollaborator"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof removeCollaborator>>,
+    { propertyId: string; collaboratorId: string }
+  > = (props) => {
+    const { propertyId, collaboratorId } = props ?? {};
+
+    return removeCollaborator(propertyId, collaboratorId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RemoveCollaboratorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof removeCollaborator>>
+>;
+
+export type RemoveCollaboratorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove a collaborator (owner only)
+ */
+export const useRemoveCollaborator = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof removeCollaborator>>,
+    TError,
+    { propertyId: string; collaboratorId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof removeCollaborator>>,
+  TError,
+  { propertyId: string; collaboratorId: string },
+  TContext
+> => {
+  return useMutation(getRemoveCollaboratorMutationOptions(options));
+};
 
 /**
  * @summary List assets for a property

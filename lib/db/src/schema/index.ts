@@ -6,3 +6,4 @@ export * from "./guides";
 export * from "./marketplace_jobs";
 export * from "./property_transfers";
 export * from "./subscriptions";
+export * from "./collaborators";

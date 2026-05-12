@@ -207,6 +207,45 @@ export const GetPropertySummaryResponse = zod.object({
 });
 
 /**
+ * @summary List collaborators for a property (owner only, managed+ tier)
+ */
+export const ListCollaboratorsParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const ListCollaboratorsResponseItem = zod.object({
+  id: zod.string(),
+  propertyId: zod.string(),
+  invitedByUserId: zod.string(),
+  invitedEmail: zod.string(),
+  acceptedUserId: zod.string().nullish(),
+  status: zod.enum(["pending", "accepted"]),
+  createdAt: zod.coerce.date(),
+});
+export const ListCollaboratorsResponse = zod.array(
+  ListCollaboratorsResponseItem,
+);
+
+/**
+ * @summary Invite a collaborator by email (owner only, managed+ tier)
+ */
+export const InviteCollaboratorParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const InviteCollaboratorBody = zod.object({
+  email: zod.string().email(),
+});
+
+/**
+ * @summary Remove a collaborator (owner only)
+ */
+export const RemoveCollaboratorParams = zod.object({
+  propertyId: zod.coerce.string(),
+  collaboratorId: zod.coerce.string(),
+});
+
+/**
  * @summary List assets for a property
  */
 export const ListAssetsParams = zod.object({

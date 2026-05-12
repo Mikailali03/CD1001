@@ -15,6 +15,7 @@ import ledgerRouter from "./ledger";
 import reportRouter from "./report";
 import subscriptionRouter from "./subscription";
 import stripeCheckoutRouter from "./stripe-checkout";
+import collaboratorsRouter from "./collaborators";
 
 const router: IRouter = Router();
 
@@ -27,6 +28,7 @@ router.use(capitalRouter);
 router.use(transferRouter);
 router.use(ledgerRouter);
 router.use(reportRouter);
+router.use(collaboratorsRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);
 router.use(serviceRecordsRouter);

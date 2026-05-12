@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useUser } from "@clerk/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
@@ -17,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
+import { CollaboratorsPanel } from "@/components/collaborators-panel";
 import { EditAssetSheet } from "@/components/edit-asset-sheet";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -53,6 +55,7 @@ const statusBadge = {
 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
+  const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [addAssetOpen, setAddAssetOpen] = useState(false);
@@ -99,6 +102,7 @@ export default function PropertyDetail() {
 
   if (!property) return <div className="p-6 text-center text-muted-foreground">Property not found.</div>;
 
+  const isOwner = !!(user?.id && (property as any).userId === user.id);
   const healthScore = summary?.healthScore ?? 0;
   const healthColor = healthScore >= 80 ? "text-chart-1" : healthScore >= 50 ? "text-chart-3" : "text-destructive";
 
@@ -308,6 +312,11 @@ export default function PropertyDetail() {
                 ))}
               </CardContent>
             </Card>
+          )}
+
+          {/* Collaborators */}
+          {id && (
+            <CollaboratorsPanel propertyId={id} isOwner={isOwner} />
           )}
         </div>
 

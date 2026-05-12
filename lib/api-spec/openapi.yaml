@@ -133,6 +133,77 @@ paths:
               schema:
                 $ref: "#/components/schemas/PropertySummary"
 
+  # ─── Collaborators ──────────────────────────────────────────────────────────
+  /properties/{propertyId}/collaborators:
+    get:
+      operationId: listCollaborators
+      tags: [properties]
+      summary: List collaborators for a property (owner only, managed+ tier)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of collaborators
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Collaborator"
+        "403":
+          description: Forbidden — not the owner or insufficient tier
+    post:
+      operationId: inviteCollaborator
+      tags: [properties]
+      summary: Invite a collaborator by email (owner only, managed+ tier)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteCollaboratorBody"
+      responses:
+        "201":
+          description: Collaborator invite created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Collaborator"
+        "403":
+          description: Forbidden — not the owner or insufficient tier
+        "409":
+          description: Already invited
+
+  /properties/{propertyId}/collaborators/{collaboratorId}:
+    delete:
+      operationId: removeCollaborator
+      tags: [properties]
+      summary: Remove a collaborator (owner only)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: collaboratorId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
   # ─── Assets ────────────────────────────────────────────────────────────────
   /properties/{propertyId}/assets:
     get:
@@ -485,6 +556,37 @@ components:
       properties:
         status:
           type: string
+
+    # ─── Collaborators ──────────────────────────────────────────────────────────
+    Collaborator:
+      type: object
+      required: [id, propertyId, invitedByUserId, invitedEmail, status, createdAt]
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        invitedByUserId:
+          type: string
+        invitedEmail:
+          type: string
+        acceptedUserId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, accepted]
+        createdAt:
+          type: string
+          format: date-time
+
+    InviteCollaboratorBody:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
 
     # ─── Property ──────────────────────────────────────────────────────────────
     Property:

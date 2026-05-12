@@ -9,6 +9,28 @@ export interface HealthStatus {
   status: string;
 }
 
+export type CollaboratorStatus =
+  (typeof CollaboratorStatus)[keyof typeof CollaboratorStatus];
+
+export const CollaboratorStatus = {
+  pending: "pending",
+  accepted: "accepted",
+} as const;
+
+export interface Collaborator {
+  id: string;
+  propertyId: string;
+  invitedByUserId: string;
+  invitedEmail: string;
+  acceptedUserId?: string | null;
+  status: CollaboratorStatus;
+  createdAt: string;
+}
+
+export interface InviteCollaboratorBody {
+  email: string;
+}
+
 export interface Property {
   id: string;
   /** Friendly name (e.g. "The Smith Family Home") */
