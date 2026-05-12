@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { propertiesTable, subscriptionsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
+import { propertiesTable, subscriptionsTable, propertyCollaboratorsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
 import { eq, and, desc, count } from "drizzle-orm";
 import {
   CreatePropertyBody,
@@ -18,12 +18,30 @@ import { clerkClient } from "@clerk/express";
 const router = Router();
 
 router.get("/properties", requireAuth(), async (req, res) => {
-  const properties = await db
-    .select()
-    .from(propertiesTable)
-    .where(eq(propertiesTable.userId, req.userId))
-    .orderBy(propertiesTable.createdAt);
-  res.json(properties);
+  const [ownedProperties, collabRows] = await Promise.all([
+    db
+      .select()
+      .from(propertiesTable)
+      .where(eq(propertiesTable.userId, req.userId))
+      .orderBy(propertiesTable.createdAt),
+    db
+      .select({ property: propertiesTable })
+      .from(propertyCollaboratorsTable)
+      .innerJoin(propertiesTable, eq(propertyCollaboratorsTable.propertyId, propertiesTable.id))
+      .where(
+        and(
+          eq(propertyCollaboratorsTable.acceptedUserId, req.userId!),
+          eq(propertyCollaboratorsTable.status, "accepted"),
+        )
+      ),
+  ]);
+
+  const ownedIds = new Set(ownedProperties.map((p) => p.id));
+  const collabProperties = collabRows
+    .map((r) => r.property)
+    .filter((p) => !ownedIds.has(p.id));
+
+  res.json([...ownedProperties, ...collabProperties]);
 });
 
 router.post("/properties", requireAuth(), async (req, res) => {

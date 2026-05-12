@@ -101,12 +101,13 @@ export function PendingInvitesModal() {
     try {
       const res = await authFetch(`${BASE}/api/inbox/collaborators/${id}/accept`, { method: "POST" });
       if (!res.ok) throw new Error();
+      setOpen(false);
       setInbox((prev) => prev ? { ...prev, collaboratorInvites: prev.collaboratorInvites.filter((c) => c.id !== id) } : prev);
-      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      await queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      await queryClient.refetchQueries({ queryKey: ["/api/properties"] });
       toast({ title: "Invite accepted", description: `You now have access to "${propertyName}".` });
     } catch {
       toast({ title: "Could not accept invite", variant: "destructive" });
-    } finally {
       setPending((p) => ({ ...p, [id]: false }));
     }
   }
@@ -135,7 +136,7 @@ export function PendingInvitesModal() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden">
+      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden" hideCloseButton>
         <DialogTitle className="sr-only">Pending Property Invitations</DialogTitle>
         <DialogDescription className="sr-only">
           You have pending property deed transfers or collaboration invites.
