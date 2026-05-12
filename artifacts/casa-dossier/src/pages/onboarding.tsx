@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/react";
+import { useUser, useClerk } from "@clerk/react";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   ClipboardList,
   Hammer,
+  LogOut,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -66,6 +67,7 @@ function StatBadge({
 
 export function Onboarding() {
   const { user } = useUser();
+  const { signOut } = useClerk();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -193,11 +195,22 @@ export function Onboarding() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Minimal top bar */}
-      <header className="border-b px-6 py-4 flex items-center gap-2.5">
-        <div className="bg-primary rounded-lg p-1.5">
-          <ShieldCheck className="h-5 w-5 text-primary-foreground" />
+      <header className="border-b px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="bg-primary rounded-lg p-1.5">
+            <ShieldCheck className="h-5 w-5 text-primary-foreground" />
+          </div>
+          <span className="font-bold text-lg tracking-tight">Casa Dossier</span>
         </div>
-        <span className="font-bold text-lg tracking-tight">Casa Dossier</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1.5 text-muted-foreground hover:text-foreground"
+          onClick={() => signOut({ redirectUrl: `${BASE}/` })}
+        >
+          <LogOut className="h-4 w-4" />
+          Sign Out
+        </Button>
       </header>
 
       <div className="flex-1 flex items-center justify-center px-4 py-12">
