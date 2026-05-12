@@ -177,9 +177,9 @@ export function AppLayout({
 }) {
   return (
     <SidebarProvider defaultOpen={false}>
-      <div className="flex min-h-screen w-full bg-background text-foreground">
+      <div className="flex h-dvh w-full bg-background text-foreground">
         <AppSidebar />
-        <main className="flex-1 flex flex-col min-w-0">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {topBanner}
           <header
             className="sticky z-10 flex h-14 items-center gap-2 border-b bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/60"
