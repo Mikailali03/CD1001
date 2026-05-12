@@ -16,6 +16,7 @@ import reportRouter from "./report";
 import subscriptionRouter from "./subscription";
 import stripeCheckoutRouter from "./stripe-checkout";
 import collaboratorsRouter from "./collaborators";
+import inboxRouter from "./inbox";
 
 const router: IRouter = Router();
 
@@ -28,6 +29,7 @@ router.use(capitalRouter);
 router.use(transferRouter);
 router.use(ledgerRouter);
 router.use(reportRouter);
+router.use(inboxRouter);
 router.use(collaboratorsRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);

@@ -4,6 +4,7 @@ import { useProperty } from "@/contexts/property-context";
 import { useSubscription } from "@/contexts/subscription-context";
 import { WelcomeModal } from "./welcome-modal";
 import { UpgradeModal } from "./upgrade-modal";
+import { PendingInvitesModal } from "./pending-invites-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -200,6 +201,7 @@ export function AppLayout({
         </main>
       </div>
       <WelcomeModal forceOpen={forceWelcomeModal} />
+      <PendingInvitesModal />
       <UpgradeModal />
     </SidebarProvider>
   );

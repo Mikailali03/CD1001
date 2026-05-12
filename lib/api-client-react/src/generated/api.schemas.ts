@@ -9,6 +9,53 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface Property {
+  id: string;
+  /** Friendly name (e.g. "The Smith Family Home") */
+  name: string;
+  address: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  yearBuilt?: number;
+  sqft?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  photoUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface InboxTransferItem {
+  id: string;
+  propertyId: string;
+  fromUserId: string;
+  fromEmail: string;
+  toEmail: string;
+  toUserId?: string | null;
+  status: string;
+  token: string;
+  createdAt: string;
+  expiresAt?: string | null;
+  property: Property;
+}
+
+export interface InboxCollaboratorItem {
+  id: string;
+  propertyId: string;
+  invitedByUserId: string;
+  invitedEmail: string;
+  acceptedUserId?: string | null;
+  status: string;
+  createdAt: string;
+  property: Property;
+}
+
+export interface Inbox {
+  transfers: InboxTransferItem[];
+  collaboratorInvites: InboxCollaboratorItem[];
+}
+
 export type CollaboratorStatus =
   (typeof CollaboratorStatus)[keyof typeof CollaboratorStatus];
 
@@ -29,23 +76,6 @@ export interface Collaborator {
 
 export interface InviteCollaboratorBody {
   email: string;
-}
-
-export interface Property {
-  id: string;
-  /** Friendly name (e.g. "The Smith Family Home") */
-  name: string;
-  address: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  yearBuilt?: number;
-  sqft?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  photoUrl?: string;
-  createdAt: string;
-  updatedAt?: string;
 }
 
 export interface CreatePropertyBody {

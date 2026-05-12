@@ -658,6 +658,108 @@ export const CreateMarketplaceJobBody = zod.object({
 });
 
 /**
+ * @summary Pending deed transfers and collaborator invites addressed to the current user
+ */
+export const GetInboxResponse = zod.object({
+  transfers: zod.array(
+    zod.object({
+      id: zod.string(),
+      propertyId: zod.string(),
+      fromUserId: zod.string(),
+      fromEmail: zod.string(),
+      toEmail: zod.string(),
+      toUserId: zod.string().nullish(),
+      status: zod.string(),
+      token: zod.string(),
+      createdAt: zod.coerce.date(),
+      expiresAt: zod.coerce.date().nullish(),
+      property: zod.object({
+        id: zod.string(),
+        name: zod
+          .string()
+          .describe('Friendly name (e.g. \"The Smith Family Home\")'),
+        address: zod.string(),
+        city: zod.string().optional(),
+        state: zod.string().optional(),
+        zipCode: zod.string().optional(),
+        yearBuilt: zod.number().optional(),
+        sqft: zod.number().optional(),
+        bedrooms: zod.number().optional(),
+        bathrooms: zod.number().optional(),
+        photoUrl: zod.string().optional(),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date().optional(),
+      }),
+    }),
+  ),
+  collaboratorInvites: zod.array(
+    zod.object({
+      id: zod.string(),
+      propertyId: zod.string(),
+      invitedByUserId: zod.string(),
+      invitedEmail: zod.string(),
+      acceptedUserId: zod.string().nullish(),
+      status: zod.string(),
+      createdAt: zod.coerce.date(),
+      property: zod.object({
+        id: zod.string(),
+        name: zod
+          .string()
+          .describe('Friendly name (e.g. \"The Smith Family Home\")'),
+        address: zod.string(),
+        city: zod.string().optional(),
+        state: zod.string().optional(),
+        zipCode: zod.string().optional(),
+        yearBuilt: zod.number().optional(),
+        sqft: zod.number().optional(),
+        bedrooms: zod.number().optional(),
+        bathrooms: zod.number().optional(),
+        photoUrl: zod.string().optional(),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date().optional(),
+      }),
+    }),
+  ),
+});
+
+/**
+ * @summary Accept a pending deed transfer
+ */
+export const ClaimInboxTransferParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const ClaimInboxTransferResponse = zod.object({
+  id: zod.string(),
+  name: zod.string().describe('Friendly name (e.g. \"The Smith Family Home\")'),
+  address: zod.string(),
+  city: zod.string().optional(),
+  state: zod.string().optional(),
+  zipCode: zod.string().optional(),
+  yearBuilt: zod.number().optional(),
+  sqft: zod.number().optional(),
+  bedrooms: zod.number().optional(),
+  bathrooms: zod.number().optional(),
+  photoUrl: zod.string().optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary Accept a pending collaborator invite
+ */
+export const AcceptInboxCollaboratorParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
+ * @summary Decline a pending collaborator invite
+ */
+export const DeclineInboxCollaboratorParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
  * @summary Overall dashboard — upcoming tasks, recent service, asset health across all properties
  */
 export const GetDashboardResponse = zod.object({

@@ -28,6 +28,7 @@ import type {
   Dashboard,
   Guide,
   HealthStatus,
+  Inbox,
   InviteCollaboratorBody,
   ListAssetsParams,
   ListGuidesParams,
@@ -2139,6 +2140,323 @@ export const useCreateMarketplaceJob = <
   TContext
 > => {
   return useMutation(getCreateMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary Pending deed transfers and collaborator invites addressed to the current user
+ */
+export const getGetInboxUrl = () => {
+  return `/api/inbox`;
+};
+
+export const getInbox = async (options?: RequestInit): Promise<Inbox> => {
+  return customFetch<Inbox>(getGetInboxUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetInboxQueryKey = () => {
+  return [`/api/inbox`] as const;
+};
+
+export const getGetInboxQueryOptions = <
+  TData = Awaited<ReturnType<typeof getInbox>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getInbox>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetInboxQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getInbox>>> = ({
+    signal,
+  }) => getInbox({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getInbox>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetInboxQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getInbox>>
+>;
+export type GetInboxQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Pending deed transfers and collaborator invites addressed to the current user
+ */
+
+export function useGetInbox<
+  TData = Awaited<ReturnType<typeof getInbox>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getInbox>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetInboxQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept a pending deed transfer
+ */
+export const getClaimInboxTransferUrl = (id: string) => {
+  return `/api/inbox/transfers/${id}/claim`;
+};
+
+export const claimInboxTransfer = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Property> => {
+  return customFetch<Property>(getClaimInboxTransferUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getClaimInboxTransferMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof claimInboxTransfer>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof claimInboxTransfer>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["claimInboxTransfer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof claimInboxTransfer>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return claimInboxTransfer(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClaimInboxTransferMutationResult = NonNullable<
+  Awaited<ReturnType<typeof claimInboxTransfer>>
+>;
+
+export type ClaimInboxTransferMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Accept a pending deed transfer
+ */
+export const useClaimInboxTransfer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof claimInboxTransfer>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof claimInboxTransfer>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getClaimInboxTransferMutationOptions(options));
+};
+
+/**
+ * @summary Accept a pending collaborator invite
+ */
+export const getAcceptInboxCollaboratorUrl = (id: string) => {
+  return `/api/inbox/collaborators/${id}/accept`;
+};
+
+export const acceptInboxCollaborator = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAcceptInboxCollaboratorUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAcceptInboxCollaboratorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInboxCollaborator>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptInboxCollaborator>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["acceptInboxCollaborator"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptInboxCollaborator>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return acceptInboxCollaborator(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptInboxCollaboratorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptInboxCollaborator>>
+>;
+
+export type AcceptInboxCollaboratorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Accept a pending collaborator invite
+ */
+export const useAcceptInboxCollaborator = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptInboxCollaborator>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptInboxCollaborator>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAcceptInboxCollaboratorMutationOptions(options));
+};
+
+/**
+ * @summary Decline a pending collaborator invite
+ */
+export const getDeclineInboxCollaboratorUrl = (id: string) => {
+  return `/api/inbox/collaborators/${id}`;
+};
+
+export const declineInboxCollaborator = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeclineInboxCollaboratorUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeclineInboxCollaboratorMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof declineInboxCollaborator>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof declineInboxCollaborator>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["declineInboxCollaborator"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof declineInboxCollaborator>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return declineInboxCollaborator(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeclineInboxCollaboratorMutationResult = NonNullable<
+  Awaited<ReturnType<typeof declineInboxCollaborator>>
+>;
+
+export type DeclineInboxCollaboratorMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Decline a pending collaborator invite
+ */
+export const useDeclineInboxCollaborator = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof declineInboxCollaborator>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof declineInboxCollaborator>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeclineInboxCollaboratorMutationOptions(options));
 };
 
 /**

@@ -519,6 +519,69 @@ paths:
               schema:
                 $ref: "#/components/schemas/MarketplaceJob"
 
+  # ─── Inbox ──────────────────────────────────────────────────────────────────
+  /inbox:
+    get:
+      operationId: getInbox
+      tags: [properties]
+      summary: Pending deed transfers and collaborator invites addressed to the current user
+      responses:
+        "200":
+          description: Inbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inbox"
+
+  /inbox/transfers/{id}/claim:
+    post:
+      operationId: claimInboxTransfer
+      tags: [properties]
+      summary: Accept a pending deed transfer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Property"
+
+  /inbox/collaborators/{id}/accept:
+    post:
+      operationId: acceptInboxCollaborator
+      tags: [properties]
+      summary: Accept a pending collaborator invite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Accepted
+
+  /inbox/collaborators/{id}:
+    delete:
+      operationId: declineInboxCollaborator
+      tags: [properties]
+      summary: Decline a pending collaborator invite
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Declined
+
   # ─── Dashboard ──────────────────────────────────────────────────────────────
   /dashboard:
     get:
@@ -556,6 +619,74 @@ components:
       properties:
         status:
           type: string
+
+    # ─── Inbox ─────────────────────────────────────────────────────────────────
+    InboxTransferItem:
+      type: object
+      required: [id, propertyId, fromUserId, fromEmail, toEmail, status, token, createdAt, property]
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        fromUserId:
+          type: string
+        fromEmail:
+          type: string
+        toEmail:
+          type: string
+        toUserId:
+          type: string
+          nullable: true
+        status:
+          type: string
+        token:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        property:
+          $ref: "#/components/schemas/Property"
+
+    InboxCollaboratorItem:
+      type: object
+      required: [id, propertyId, invitedByUserId, invitedEmail, status, createdAt, property]
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        invitedByUserId:
+          type: string
+        invitedEmail:
+          type: string
+        acceptedUserId:
+          type: string
+          nullable: true
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        property:
+          $ref: "#/components/schemas/Property"
+
+    Inbox:
+      type: object
+      required: [transfers, collaboratorInvites]
+      properties:
+        transfers:
+          type: array
+          items:
+            $ref: "#/components/schemas/InboxTransferItem"
+        collaboratorInvites:
+          type: array
+          items:
+            $ref: "#/components/schemas/InboxCollaboratorItem"
 
     # ─── Collaborators ──────────────────────────────────────────────────────────
     Collaborator:
