@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { serviceRecordsTable, assetsTable, propertiesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { serviceRecordsTable, assetsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   CreateServiceRecordBody,
   CreateServiceRecordParams,
@@ -9,14 +9,14 @@ import {
   GetServiceRecordParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedAsset } from "../lib/access.js";
+import { getAccessibleAsset } from "../lib/access.js";
 
 const router = Router();
 
 router.get("/assets/:assetId/records", requireAuth(), async (req, res) => {
   const { assetId } = ListServiceRecordsParams.parse(req.params);
 
-  const asset = await getOwnedAsset(assetId, req.userId);
+  const asset = await getAccessibleAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
   const records = await db
@@ -31,7 +31,7 @@ router.post("/assets/:assetId/records", requireAuth(), async (req, res) => {
   const { assetId } = CreateServiceRecordParams.parse(req.params);
   const body = CreateServiceRecordBody.parse(req.body);
 
-  const asset = await getOwnedAsset(assetId, req.userId);
+  const asset = await getAccessibleAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
   const [record] = await db
@@ -45,15 +45,17 @@ router.get("/records/:recordId", requireAuth(), async (req, res) => {
   const { recordId } = GetServiceRecordParams.parse(req.params);
 
   const rows = await db
-    .select({ record: serviceRecordsTable })
+    .select({ record: serviceRecordsTable, assetId: serviceRecordsTable.assetId })
     .from(serviceRecordsTable)
-    .innerJoin(assetsTable, eq(serviceRecordsTable.assetId, assetsTable.id))
-    .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
-    .where(and(eq(serviceRecordsTable.id, recordId), eq(propertiesTable.userId, req.userId)));
+    .where(eq(serviceRecordsTable.id, recordId));
 
-  const record = rows[0]?.record;
-  if (!record) return res.status(404).json({ error: "Record not found" });
-  res.json(record);
+  const row = rows[0];
+  if (!row) return res.status(404).json({ error: "Record not found" });
+
+  const accessibleAsset = await getAccessibleAsset(row.assetId, req.userId);
+  if (!accessibleAsset) return res.status(404).json({ error: "Record not found" });
+
+  res.json(row.record);
 });
 
 export default router;

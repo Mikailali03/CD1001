@@ -64,6 +64,25 @@ export async function getAccessibleProperty(propertyId: string, userId: string) 
   return null;
 }
 
+export async function getAccessibleProperties(userId: string) {
+  const [ownedProperties, collabRows] = await Promise.all([
+    db.select().from(propertiesTable).where(eq(propertiesTable.userId, userId)).orderBy(propertiesTable.createdAt),
+    db
+      .select({ property: propertiesTable })
+      .from(propertyCollaboratorsTable)
+      .innerJoin(propertiesTable, eq(propertyCollaboratorsTable.propertyId, propertiesTable.id))
+      .where(
+        and(
+          eq(propertyCollaboratorsTable.acceptedUserId, userId),
+          eq(propertyCollaboratorsTable.status, "accepted"),
+        )
+      ),
+  ]);
+  const ownedIds = new Set(ownedProperties.map((p) => p.id));
+  const collabProperties = collabRows.map((r) => r.property).filter((p) => !ownedIds.has(p.id));
+  return [...ownedProperties, ...collabProperties];
+}
+
 export async function getOwnedAsset(assetId: string, userId: string) {
   const rows = await db
     .select({ asset: assetsTable })

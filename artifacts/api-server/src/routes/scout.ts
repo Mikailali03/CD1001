@@ -5,7 +5,7 @@ import { propertiesTable, assetsTable, maintenanceTasksTable } from "@workspace/
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty } from "../lib/access.js";
+import { getAccessibleProperty } from "../lib/access.js";
 
 const router = Router();
 
@@ -52,7 +52,7 @@ const ScoutParams = z.object({ propertyId: z.string() });
 router.post("/properties/:propertyId/scout", requireAuth(), async (req, res) => {
   const { propertyId } = ScoutParams.parse(req.params);
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const homeAge = property.yearBuilt ? new Date().getFullYear() - property.yearBuilt : null;

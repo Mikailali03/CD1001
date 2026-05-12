@@ -4,7 +4,7 @@ import { serviceRecordsTable, maintenanceTasksTable, assetsTable } from "@worksp
 import { eq, and, gte, lte, isNull, inArray, desc } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty } from "../lib/access.js";
+import { getAccessibleProperty } from "../lib/access.js";
 
 const LedgerParams = z.object({ propertyId: z.string() });
 const RANGES = ["this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year", "all_time"] as const;
@@ -45,7 +45,7 @@ const router = Router();
 router.get("/properties/:propertyId/ledger", requireAuth(), async (req, res) => {
   const { propertyId } = LedgerParams.parse(req.params);
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const range = (RANGES as readonly string[]).includes(String(req.query["range"]))

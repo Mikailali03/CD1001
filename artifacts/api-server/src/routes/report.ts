@@ -3,14 +3,14 @@ import { db } from "@workspace/db";
 import { assetsTable, serviceRecordsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty } from "../lib/access.js";
+import { getAccessibleProperty } from "../lib/access.js";
 
 const router = Router();
 
 router.get("/properties/:propertyId/report", requireAuth(), async (req, res) => {
   const { propertyId } = req.params;
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const allAssets = await db

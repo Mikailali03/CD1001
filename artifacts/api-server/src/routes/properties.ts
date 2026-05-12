@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { propertiesTable, subscriptionsTable, propertyCollaboratorsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
+import { propertiesTable, subscriptionsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
 import { eq, and, desc, count } from "drizzle-orm";
 import {
   CreatePropertyBody,
@@ -12,36 +12,15 @@ import {
 import { assetsTable, maintenanceTasksTable, serviceRecordsTable } from "@workspace/db";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty } from "../lib/access.js";
+import { getAccessibleProperty, getOwnedProperty, getAccessibleProperties } from "../lib/access.js";
+// getOwnedProperty is still used for PATCH (owner-only edit)
 import { clerkClient } from "@clerk/express";
 
 const router = Router();
 
 router.get("/properties", requireAuth(), async (req, res) => {
-  const [ownedProperties, collabRows] = await Promise.all([
-    db
-      .select()
-      .from(propertiesTable)
-      .where(eq(propertiesTable.userId, req.userId))
-      .orderBy(propertiesTable.createdAt),
-    db
-      .select({ property: propertiesTable })
-      .from(propertyCollaboratorsTable)
-      .innerJoin(propertiesTable, eq(propertyCollaboratorsTable.propertyId, propertiesTable.id))
-      .where(
-        and(
-          eq(propertyCollaboratorsTable.acceptedUserId, req.userId!),
-          eq(propertyCollaboratorsTable.status, "accepted"),
-        )
-      ),
-  ]);
-
-  const ownedIds = new Set(ownedProperties.map((p) => p.id));
-  const collabProperties = collabRows
-    .map((r) => r.property)
-    .filter((p) => !ownedIds.has(p.id));
-
-  res.json([...ownedProperties, ...collabProperties]);
+  const properties = await getAccessibleProperties(req.userId!);
+  res.json(properties);
 });
 
 router.post("/properties", requireAuth(), async (req, res) => {
@@ -83,7 +62,7 @@ router.post("/properties", requireAuth(), async (req, res) => {
 
 router.get("/properties/:propertyId", requireAuth(), async (req, res) => {
   const { propertyId } = GetPropertyParams.parse(req.params);
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
   res.json(property);
 });
@@ -105,7 +84,7 @@ router.patch("/properties/:propertyId", requireAuth(), async (req, res) => {
 router.get("/properties/:propertyId/summary", requireAuth(), async (req, res) => {
   const { propertyId } = GetPropertySummaryParams.parse(req.params);
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const assets = await db.select().from(assetsTable).where(eq(assetsTable.propertyId, propertyId));

@@ -1,14 +1,15 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import {
-  propertiesTable,
   assetsTable,
   maintenanceTasksTable,
   serviceRecordsTable,
+  propertiesTable,
 } from "@workspace/db";
-import { eq, desc, inArray } from "drizzle-orm";
+import { desc, inArray } from "drizzle-orm";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
+import { getAccessibleProperties } from "../lib/access.js";
 
 const router = Router();
 
@@ -28,10 +29,7 @@ const EMPTY_DASHBOARD = {
 };
 
 router.get("/dashboard", requireAuth(), async (req, res) => {
-  const properties = await db
-    .select()
-    .from(propertiesTable)
-    .where(eq(propertiesTable.userId, req.userId));
+  const properties = await getAccessibleProperties(req.userId!);
 
   if (properties.length === 0) {
     return res.json(EMPTY_DASHBOARD);
@@ -110,10 +108,7 @@ router.get("/dashboard", requireAuth(), async (req, res) => {
 });
 
 router.get("/dashboard/activity", requireAuth(), async (req, res) => {
-  const properties = await db
-    .select()
-    .from(propertiesTable)
-    .where(eq(propertiesTable.userId, req.userId));
+  const properties = await getAccessibleProperties(req.userId!);
 
   if (properties.length === 0) {
     return res.json([]);

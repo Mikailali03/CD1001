@@ -13,7 +13,7 @@ import {
   ListAssetsQueryParams,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty, getOwnedAsset } from "../lib/access.js";
+import { getAccessibleProperty, getAccessibleAsset } from "../lib/access.js";
 
 const router = Router();
 
@@ -22,7 +22,7 @@ router.get("/properties/:propertyId/assets", requireAuth(), async (req, res) => 
   const query = ListAssetsQueryParams.parse(req.query);
   const includeRetired = req.query.includeRetired === "true";
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const conditions = [eq(assetsTable.propertyId, propertyId)];
@@ -46,7 +46,7 @@ router.post("/properties/:propertyId/assets", requireAuth(), async (req, res) =>
   const { propertyId } = CreateAssetParams.parse(req.params);
   const body = CreateAssetBody.parse(req.body);
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const [asset] = await db.insert(assetsTable).values({ ...body, propertyId }).returning();
@@ -55,7 +55,7 @@ router.post("/properties/:propertyId/assets", requireAuth(), async (req, res) =>
 
 router.get("/assets/:assetId", requireAuth(), async (req, res) => {
   const { assetId } = GetAssetParams.parse(req.params);
-  const asset = await getOwnedAsset(assetId, req.userId);
+  const asset = await getAccessibleAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
   res.json(asset);
 });
@@ -64,7 +64,7 @@ router.patch("/assets/:assetId", requireAuth(), async (req, res) => {
   const { assetId } = UpdateAssetParams.parse(req.params);
   const body = UpdateAssetBody.parse(req.body);
 
-  const existing = await getOwnedAsset(assetId, req.userId);
+  const existing = await getAccessibleAsset(assetId, req.userId);
   if (!existing) return res.status(404).json({ error: "Asset not found" });
 
   const setValues: Record<string, unknown> = { ...body, updatedAt: new Date() };
@@ -83,7 +83,7 @@ router.patch("/assets/:assetId", requireAuth(), async (req, res) => {
 
 router.delete("/assets/:assetId", requireAuth(), async (req, res) => {
   const { assetId } = DeleteAssetParams.parse(req.params);
-  const existing = await getOwnedAsset(assetId, req.userId);
+  const existing = await getAccessibleAsset(assetId, req.userId);
   if (!existing) return res.status(404).json({ error: "Asset not found" });
   await db.delete(assetsTable).where(eq(assetsTable.id, assetId));
   res.status(204).send();

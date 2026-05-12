@@ -11,7 +11,7 @@ import {
   UpdateMaintenanceTaskBody,
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty, getOwnedAsset } from "../lib/access.js";
+import { getAccessibleProperty, getAccessibleAsset } from "../lib/access.js";
 
 const CompleteTaskParams = z.object({ taskId: z.string() });
 const CompleteTaskBody = z.object({
@@ -31,7 +31,7 @@ const InboxParams = z.object({ propertyId: z.string() });
 router.get("/properties/:propertyId/inbox", requireAuth(), async (req, res) => {
   const { propertyId } = InboxParams.parse(req.params);
 
-  const property = await getOwnedProperty(propertyId, req.userId);
+  const property = await getAccessibleProperty(propertyId, req.userId);
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const today = new Date();
@@ -74,7 +74,7 @@ router.get("/properties/:propertyId/inbox", requireAuth(), async (req, res) => {
 router.get("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
   const { assetId } = ListMaintenanceTasksParams.parse(req.params);
 
-  const asset = await getOwnedAsset(assetId, req.userId);
+  const asset = await getAccessibleAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
   const tasks = await db
@@ -89,7 +89,7 @@ router.post("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
   const { assetId } = CreateMaintenanceTaskParams.parse(req.params);
   const body = CreateMaintenanceTaskBody.parse(req.body);
 
-  const asset = await getOwnedAsset(assetId, req.userId);
+  const asset = await getAccessibleAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
   const [task] = await db
@@ -113,7 +113,7 @@ router.patch("/maintenance/:taskId", requireAuth(), async (req, res) => {
     .where(eq(maintenanceTasksTable.id, taskId));
   if (!existing) return res.status(404).json({ error: "Task not found" });
 
-  const asset = await getOwnedAsset(existing.assetId, req.userId);
+  const asset = await getAccessibleAsset(existing.assetId, req.userId);
   if (!asset) return res.status(403).json({ error: "Forbidden" });
 
   const [task] = await db
@@ -138,7 +138,7 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     .where(eq(maintenanceTasksTable.id, taskId));
   if (!existing) return res.status(404).json({ error: "Task not found" });
 
-  const asset = await getOwnedAsset(existing.assetId, req.userId);
+  const asset = await getAccessibleAsset(existing.assetId, req.userId);
   if (!asset) return res.status(403).json({ error: "Forbidden" });
 
   const [completedTask] = await db
