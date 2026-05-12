@@ -205,14 +205,14 @@ function TaskRow({ task, isOverdue, onDone }: TaskRowProps) {
 
         <button
           onClick={() => setExpanded((v) => !v)}
-          className={`shrink-0 flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors ${
+          className={`shrink-0 flex items-center gap-1 text-xs font-semibold px-2 sm:px-2.5 py-1.5 rounded-lg transition-colors ${
             expanded
               ? "bg-muted text-muted-foreground"
               : "bg-primary/10 text-primary hover:bg-primary/20"
           }`}
         >
           {expanded ? <X className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-          {expanded ? "Cancel" : "Done"}
+          <span className="hidden sm:inline">{expanded ? "Cancel" : "Done"}</span>
         </button>
       </div>
 
