@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
@@ -9,11 +9,11 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertCircle,
@@ -27,6 +27,11 @@ import {
   Check,
   Loader2,
   RefreshCw,
+  DollarSign,
+  Receipt,
+  Upload,
+  UserRound,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { getSpecsForCategory } from "@/lib/maintenance-specs";
@@ -48,6 +53,17 @@ type OverdueTask = {
   isDiy?: boolean;
   assetId?: string;
   assetName?: string;
+  estimatedCost?: string | null;
+};
+
+type CompletePayload = {
+  notes?: string;
+  isDiy: boolean;
+  cost?: number;
+  technicianName?: string;
+  companyName?: string;
+  receiptUrl?: string;
+  completedDate: string;
 };
 
 type Props = {
@@ -69,24 +85,82 @@ const GRADE_COLORS: Record<string, { bg: string; text: string; border: string }>
   F: { bg: "bg-red-50",     text: "text-red-700",     border: "border-red-200"     },
 };
 
-// ── Mark-Done inline form ─────────────────────────────────────────────────────
+async function compressImage(file: File, maxPx = 1024, quality = 0.78): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target!.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Full mark-done inline form ────────────────────────────────────────────────
 function MarkDoneForm({
   task,
   onDone,
   onCancel,
 }: {
   task: OverdueTask;
-  onDone: (taskId: string, notes: string, isDiy: boolean) => Promise<void>;
+  onDone: (taskId: string, payload: CompletePayload) => Promise<void>;
   onCancel: () => void;
 }) {
   const [notes, setNotes] = useState("");
-  const [isDiy, setIsDiy] = useState(task.isDiy ?? true);
+  const [cost, setCost] = useState(
+    task.estimatedCost ? String(Number(task.estimatedCost)) : ""
+  );
+  const [isDiy, setIsDiy] = useState<boolean>(task.isDiy ?? true);
+  const [technicianName, setTechnicianName] = useState(
+    (task.isDiy !== false) ? "Homeowner (DIY)" : ""
+  );
+  const [companyName, setCompanyName] = useState("");
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptData, setReceiptData] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+
+  function toggleDiy(diy: boolean) {
+    setIsDiy(diy);
+    setTechnicianName(diy ? "Homeowner (DIY)" : "");
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await compressImage(file);
+      setReceiptData(compressed);
+      setReceiptPreview(compressed);
+    } catch {
+      toast({ title: "Could not read image", variant: "destructive" });
+    }
+  }
 
   async function submit() {
     setBusy(true);
     try {
-      await onDone(task.id, notes, isDiy);
+      await onDone(task.id, {
+        notes: notes.trim() || undefined,
+        isDiy,
+        cost: cost ? parseFloat(cost) : undefined,
+        technicianName: technicianName.trim() || undefined,
+        companyName: companyName.trim() || undefined,
+        receiptUrl: receiptData || undefined,
+        completedDate: new Date().toLocaleDateString("en-CA"),
+      });
     } finally {
       setBusy(false);
     }
@@ -94,36 +168,135 @@ function MarkDoneForm({
 
   return (
     <div className="mt-2 space-y-3 rounded-lg bg-muted/50 border p-3 animate-in slide-in-from-top-2 duration-200">
-      <div className="space-y-1">
-        <Label className="text-xs font-medium">Notes (optional)</Label>
+      {/* Notes */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold">Notes (optional)</Label>
         <Textarea
-          placeholder="e.g. Replaced with Filtrete 1500 filter, cleaned the area…"
+          placeholder={`e.g. Completed ${task.title.toLowerCase()}. Everything looks good.`}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="text-sm min-h-[60px] resize-none"
+          className="text-sm min-h-[56px] resize-none bg-background"
           autoFocus
         />
       </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Switch
-            id={`diy-${task.id}`}
-            checked={isDiy}
-            onCheckedChange={setIsDiy}
-          />
-          <Label htmlFor={`diy-${task.id}`} className="text-xs cursor-pointer">
-            I did this myself (DIY)
+
+      {/* Cost + Receipt */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold flex items-center gap-1">
+            <DollarSign className="h-3 w-3" /> Actual Cost
           </Label>
+          <Input
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="0.00"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            className="text-sm h-8 bg-background"
+          />
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 text-xs">
-            Cancel
-          </Button>
-          <Button size="sm" onClick={submit} disabled={busy} className="h-7 gap-1 text-xs">
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-            {busy ? "Saving…" : "Mark Done"}
-          </Button>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold flex items-center gap-1">
+            <Receipt className="h-3 w-3" /> Receipt
+          </Label>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFile}
+          />
+          {receiptPreview ? (
+            <div className="relative h-8">
+              <img
+                src={receiptPreview}
+                alt="Receipt preview"
+                className="h-8 w-full object-cover rounded-md border border-border"
+              />
+              <button
+                className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 text-muted-foreground hover:text-destructive transition-colors"
+                onClick={() => {
+                  setReceiptPreview(null);
+                  setReceiptData(null);
+                  if (fileRef.current) fileRef.current.value = "";
+                }}
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="h-8 w-full rounded-md border border-dashed border-border bg-background hover:bg-muted flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Upload className="h-3 w-3" />
+              Upload image
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* DIY / Pro toggle */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-semibold">Who did the work?</Label>
+        <div className="flex gap-2">
+          <button
+            onClick={() => toggleDiy(true)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
+              isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
+            }`}
+          >
+            <Hammer className="h-3.5 w-3.5" />
+            I did it myself
+          </button>
+          <button
+            onClick={() => toggleDiy(false)}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
+              !isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
+            }`}
+          >
+            <UserCheck className="h-3.5 w-3.5" />
+            Hired a pro
+          </button>
+        </div>
+      </div>
+
+      {/* Technician + Company (pro only) */}
+      {!isDiy && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold flex items-center gap-1">
+              <UserRound className="h-3 w-3" /> Technician
+            </Label>
+            <Input
+              placeholder="Name"
+              value={technicianName}
+              onChange={(e) => setTechnicianName(e.target.value)}
+              className="text-sm h-8 bg-background"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Company</Label>
+            <Input
+              placeholder="Company name"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              className="text-sm h-8 bg-background"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-end gap-2 pt-0.5">
+        <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 text-xs">
+          Cancel
+        </Button>
+        <Button size="sm" onClick={submit} disabled={busy} className="h-7 gap-1.5 text-xs">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          {busy ? "Saving…" : "Mark Complete"}
+        </Button>
       </div>
     </div>
   );
@@ -137,7 +310,7 @@ function TaskItem({
 }: {
   task: OverdueTask;
   done: boolean;
-  onMarkDone: (taskId: string, notes: string, isDiy: boolean) => Promise<void>;
+  onMarkDone: (taskId: string, payload: CompletePayload) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const daysOverdue = Math.floor(
@@ -316,19 +489,18 @@ export function HealthScoreModal({
   const authFetch = useAuthFetch();
   const { toast } = useToast();
 
-  // Track locally-completed task IDs so UI updates immediately
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
 
   const remainingOverdue = overdueTaskCount - completedIds.size;
   const pointGain = Math.min(overdueTaskCount * 15, 100);
   const potentialScore = Math.min(healthScore + pointGain, 100);
 
-  async function handleMarkDone(taskId: string, notes: string, isDiy: boolean) {
+  async function handleMarkDone(taskId: string, payload: CompletePayload) {
     const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
     const res = await authFetch(`${BASE}/api/maintenance/${taskId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: notes.trim() || undefined, isDiy, completedDate: new Date().toLocaleDateString("en-CA") }),
+      body: JSON.stringify(payload),
     });
 
     if (!res.ok) {
@@ -340,25 +512,25 @@ export function HealthScoreModal({
       return;
     }
 
-    // Optimistic: mark done locally immediately
     setCompletedIds((prev) => new Set([...prev, taskId]));
 
-    // Refetch property summary so score ring updates
-    await queryClient.invalidateQueries({
-      queryKey: ["property-summary", propertyId],
-    });
-    // Also invalidate the default generated key pattern
+    await queryClient.invalidateQueries({ queryKey: ["property-summary", propertyId] });
     await queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes(propertyId) });
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey.some(
+          (k) => typeof k === "string" && (k.includes("inbox") || k.includes("ledger"))
+        ),
+    });
 
     toast({
-      title: "Task marked done! 🎉",
-      description: notes.trim()
+      title: "Task marked complete! 🎉",
+      description: payload.notes?.trim()
         ? "Notes saved and next recurrence scheduled."
         : "Next recurrence has been scheduled.",
     });
   }
 
-  // Manufacturer-spec recommendations per asset (lowest-score first, DIY first)
   const recommendedByAsset = assetScores
     .slice()
     .sort((a, b) => a.score - b.score)
@@ -385,7 +557,6 @@ export function HealthScoreModal({
             </div>
           </div>
 
-          {/* Score jump banner */}
           {overdueTaskCount > 0 && completedIds.size < overdueTaskCount && (
             <div className="mt-3 flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
               <TrendingUp className="h-4 w-4 text-primary shrink-0" />
@@ -474,7 +645,7 @@ export function HealthScoreModal({
         {/* ── Footer ── */}
         <div className="border-t px-6 py-4 flex items-center justify-between gap-3 bg-muted/30">
           <p className="text-xs text-muted-foreground leading-snug">
-            Completing DIY tasks builds your home's documented history.
+            Completing tasks builds your home's documented history.
           </p>
           <Button size="sm" onClick={() => onOpenChange(false)} variant="outline">
             Close
