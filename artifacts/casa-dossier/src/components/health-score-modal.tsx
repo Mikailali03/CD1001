@@ -32,10 +32,13 @@ import {
   Upload,
   UserRound,
   X,
+  Calendar,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import { getSpecsForCategory } from "@/lib/maintenance-specs";
 import type { MaintenanceSpec } from "@/lib/maintenance-specs";
+
+const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 type AssetScore = {
   assetId: string;
@@ -107,24 +110,24 @@ async function compressImage(file: File, maxPx = 1024, quality = 0.78): Promise<
   });
 }
 
-// ── Full mark-done inline form ────────────────────────────────────────────────
-function MarkDoneForm({
-  task,
+// ── Shared completion form ────────────────────────────────────────────────────
+function CompletionForm({
+  isDiyDefault,
+  estimatedCost,
+  titleHint,
   onDone,
   onCancel,
 }: {
-  task: OverdueTask;
-  onDone: (taskId: string, payload: CompletePayload) => Promise<void>;
+  isDiyDefault: boolean;
+  estimatedCost?: string | null;
+  titleHint: string;
+  onDone: (payload: CompletePayload) => Promise<void>;
   onCancel: () => void;
 }) {
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(
-    task.estimatedCost ? String(Number(task.estimatedCost)) : ""
-  );
-  const [isDiy, setIsDiy] = useState<boolean>(task.isDiy ?? true);
-  const [technicianName, setTechnicianName] = useState(
-    (task.isDiy !== false) ? "Homeowner (DIY)" : ""
-  );
+  const [cost, setCost] = useState(estimatedCost ? String(Number(estimatedCost)) : "");
+  const [isDiy, setIsDiy] = useState<boolean>(isDiyDefault);
+  const [technicianName, setTechnicianName] = useState(isDiyDefault ? "Homeowner (DIY)" : "");
   const [companyName, setCompanyName] = useState("");
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [receiptData, setReceiptData] = useState<string | null>(null);
@@ -152,7 +155,7 @@ function MarkDoneForm({
   async function submit() {
     setBusy(true);
     try {
-      await onDone(task.id, {
+      await onDone({
         notes: notes.trim() || undefined,
         isDiy,
         cost: cost ? parseFloat(cost) : undefined,
@@ -172,7 +175,7 @@ function MarkDoneForm({
       <div className="space-y-1.5">
         <Label className="text-xs font-semibold">Notes (optional)</Label>
         <Textarea
-          placeholder={`e.g. Completed ${task.title.toLowerCase()}. Everything looks good.`}
+          placeholder={`e.g. Completed ${titleHint.toLowerCase()}. Everything looks good.`}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           className="text-sm min-h-[56px] resize-none bg-background"
@@ -200,27 +203,13 @@ function MarkDoneForm({
           <Label className="text-xs font-semibold flex items-center gap-1">
             <Receipt className="h-3 w-3" /> Receipt
           </Label>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFile}
-          />
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           {receiptPreview ? (
             <div className="relative h-8">
-              <img
-                src={receiptPreview}
-                alt="Receipt preview"
-                className="h-8 w-full object-cover rounded-md border border-border"
-              />
+              <img src={receiptPreview} alt="Receipt" className="h-8 w-full object-cover rounded-md border" />
               <button
                 className="absolute -top-1.5 -right-1.5 bg-background border border-border rounded-full p-0.5 text-muted-foreground hover:text-destructive transition-colors"
-                onClick={() => {
-                  setReceiptPreview(null);
-                  setReceiptData(null);
-                  if (fileRef.current) fileRef.current.value = "";
-                }}
+                onClick={() => { setReceiptPreview(null); setReceiptData(null); if (fileRef.current) fileRef.current.value = ""; }}
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -230,8 +219,7 @@ function MarkDoneForm({
               onClick={() => fileRef.current?.click()}
               className="h-8 w-full rounded-md border border-dashed border-border bg-background hover:bg-muted flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              <Upload className="h-3 w-3" />
-              Upload image
+              <Upload className="h-3 w-3" /> Upload image
             </button>
           )}
         </div>
@@ -243,56 +231,38 @@ function MarkDoneForm({
         <div className="flex gap-2">
           <button
             onClick={() => toggleDiy(true)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
-              isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
-            }`}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
           >
-            <Hammer className="h-3.5 w-3.5" />
-            I did it myself
+            <Hammer className="h-3.5 w-3.5" /> I did it myself
           </button>
           <button
             onClick={() => toggleDiy(false)}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${
-              !isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"
-            }`}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${!isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
           >
-            <UserCheck className="h-3.5 w-3.5" />
-            Hired a pro
+            <UserCheck className="h-3.5 w-3.5" /> Hired a pro
           </button>
         </div>
       </div>
 
-      {/* Technician + Company (pro only) */}
+      {/* Pro fields */}
       {!isDiy && (
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold flex items-center gap-1">
               <UserRound className="h-3 w-3" /> Technician
             </Label>
-            <Input
-              placeholder="Name"
-              value={technicianName}
-              onChange={(e) => setTechnicianName(e.target.value)}
-              className="text-sm h-8 bg-background"
-            />
+            <Input placeholder="Name" value={technicianName} onChange={(e) => setTechnicianName(e.target.value)} className="text-sm h-8 bg-background" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold">Company</Label>
-            <Input
-              placeholder="Company name"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              className="text-sm h-8 bg-background"
-            />
+            <Input placeholder="Company name" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="text-sm h-8 bg-background" />
           </div>
         </div>
       )}
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-2 pt-0.5">
-        <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 text-xs">
-          Cancel
-        </Button>
+        <Button variant="ghost" size="sm" onClick={onCancel} className="h-7 text-xs">Cancel</Button>
         <Button size="sm" onClick={submit} disabled={busy} className="h-7 gap-1.5 text-xs">
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
           {busy ? "Saving…" : "Mark Complete"}
@@ -313,9 +283,7 @@ function TaskItem({
   onMarkDone: (taskId: string, payload: CompletePayload) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const daysOverdue = Math.floor(
-    (Date.now() - new Date(task.nextDueDate).getTime()) / 86_400_000
-  );
+  const daysOverdue = Math.floor((Date.now() - new Date(task.nextDueDate).getTime()) / 86_400_000);
 
   if (done) {
     return (
@@ -345,8 +313,7 @@ function TaskItem({
         <div className="flex items-center gap-1.5 shrink-0">
           {task.isDiy && (
             <Badge variant="secondary" className="text-[10px] font-bold gap-0.5 px-1.5">
-              <Hammer className="h-2.5 w-2.5" />
-              DIY
+              <Hammer className="h-2.5 w-2.5" /> DIY
             </Badge>
           )}
           <Button
@@ -355,17 +322,17 @@ function TaskItem({
             className="h-7 gap-1 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
             onClick={() => setExpanded(!expanded)}
           >
-            <Check className="h-3 w-3" />
-            Done
+            <Check className="h-3 w-3" /> Done
           </Button>
         </div>
       </div>
-
       {expanded && (
         <div className="px-3 pb-3">
-          <MarkDoneForm
-            task={task}
-            onDone={onMarkDone}
+          <CompletionForm
+            isDiyDefault={task.isDiy ?? true}
+            estimatedCost={task.estimatedCost}
+            titleHint={task.title}
+            onDone={(payload) => onMarkDone(task.id, payload)}
             onCancel={() => setExpanded(false)}
           />
         </div>
@@ -375,8 +342,25 @@ function TaskItem({
 }
 
 // ── Manufacturer spec row ─────────────────────────────────────────────────────
-function SpecItem({ spec, assetName }: { spec: MaintenanceSpec; assetName: string }) {
+function SpecItem({
+  spec,
+  assetId,
+  assetName,
+  done,
+  onMarkDone,
+}: {
+  spec: MaintenanceSpec;
+  assetId: string;
+  assetName: string;
+  done: boolean;
+  onMarkDone: (assetId: string, spec: MaintenanceSpec, payload: CompletePayload) => Promise<void>;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const [stepsOpen, setStepsOpen] = useState(false);
+
+  // Next due = today (untracked recommendation — suggest starting now)
+  const nextDueDate = new Date();
+  const nextDueDateAfterCompletion = addDays(new Date(), spec.intervalDays);
 
   const intervalLabel =
     spec.intervalDays < 60
@@ -391,82 +375,120 @@ function SpecItem({ spec, assetName }: { spec: MaintenanceSpec; assetName: strin
     low: "bg-slate-100 text-slate-600",
   };
 
+  if (done) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5">
+        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-emerald-800 line-through opacity-70 truncate">{spec.title}</p>
+          <p className="text-xs text-emerald-600 mt-0.5">
+            Next due: {format(nextDueDateAfterCompletion, "MMM d, yyyy")} · Now tracked
+          </p>
+        </div>
+        <span className="text-[10px] text-emerald-600 font-semibold shrink-0">Done ✓</span>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-lg border bg-card p-3 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2 min-w-0">
-          {spec.isDiy ? (
-            <Hammer className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-          ) : (
-            <UserCheck className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-medium leading-snug">{spec.title}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {assetName} · {intervalLabel}
-              {spec.estimatedMinutes && ` · ~${spec.estimatedMinutes} min`}
-            </p>
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="p-3 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start gap-2 min-w-0">
+            {spec.isDiy ? (
+              <Hammer className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            ) : (
+              <UserCheck className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-medium leading-snug">{spec.title}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {assetName} · {intervalLabel}
+                {spec.estimatedMinutes && ` · ~${spec.estimatedMinutes} min`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${priorityColors[spec.priority]}`}>
+              {spec.priority}
+            </span>
+            {spec.isDiy ? (
+              <Badge variant="secondary" className="text-[10px] font-bold gap-0.5 px-1.5">
+                <Hammer className="h-2.5 w-2.5" /> DIY
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px] font-medium gap-0.5 px-1.5">
+                <UserCheck className="h-2.5 w-2.5" /> Pro
+              </Badge>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span
-            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${priorityColors[spec.priority]}`}
-          >
-            {spec.priority}
+
+        {/* Next due date */}
+        <div className="flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2 py-1">
+          <Calendar className="h-3 w-3 shrink-0" />
+          <span>
+            <span className="font-semibold">Recommended now</span>
+            {" · next due "}
+            <span className="font-semibold">{format(nextDueDateAfterCompletion, "MMM d, yyyy")}</span>
+            {" after completion"}
           </span>
-          {spec.isDiy ? (
-            <Badge variant="secondary" className="text-[10px] font-bold gap-0.5 px-1.5">
-              <Hammer className="h-2.5 w-2.5" />
-              DIY
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-[10px] font-medium gap-0.5 px-1.5">
-              <UserCheck className="h-2.5 w-2.5" />
-              Pro
-            </Badge>
-          )}
         </div>
-      </div>
 
-      <p className="text-xs text-muted-foreground leading-relaxed">{spec.description}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed">{spec.description}</p>
 
-      {spec.steps && spec.steps.length > 0 && (
-        <div>
-          <button
+        <div className="flex items-center gap-2">
+          {spec.steps && spec.steps.length > 0 && (
+            <button
+              onClick={() => setStepsOpen(!stepsOpen)}
+              className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              {stepsOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              {stepsOpen ? "Hide steps" : `Show ${spec.steps.length} steps`}
+            </button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 ml-auto"
             onClick={() => setExpanded(!expanded)}
-            className="flex items-center gap-1 text-xs font-medium text-primary hover:underline"
           >
-            {expanded ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
-            {expanded ? "Hide steps" : `Show ${spec.steps.length} steps`}
-          </button>
-          {expanded && (
-            <ol className="mt-2 space-y-1.5 pl-4 list-decimal marker:text-muted-foreground">
+            <Check className="h-3 w-3" /> Done
+          </Button>
+        </div>
+
+        {stepsOpen && spec.steps && (
+          <div>
+            <ol className="mt-1 space-y-1.5 pl-4 list-decimal marker:text-muted-foreground">
               {spec.steps.map((step, i) => (
-                <li key={i} className="text-xs text-foreground/80 leading-snug pl-0.5">
-                  {step}
-                </li>
+                <li key={i} className="text-xs text-foreground/80 leading-snug pl-0.5">{step}</li>
               ))}
             </ol>
-          )}
-          {expanded && spec.toolsNeeded && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <span className="text-[10px] text-muted-foreground font-medium">Tools:</span>
-              {spec.toolsNeeded.map((t) => (
-                <span key={t} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-          {expanded && spec.safetyNotes && (
-            <div className="mt-2 rounded bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-800 leading-snug">
-              ⚠️ {spec.safetyNotes}
-            </div>
-          )}
+            {spec.toolsNeeded && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <span className="text-[10px] text-muted-foreground font-medium">Tools:</span>
+                {spec.toolsNeeded.map((t) => (
+                  <span key={t} className="text-[10px] bg-secondary px-1.5 py-0.5 rounded font-medium">{t}</span>
+                ))}
+              </div>
+            )}
+            {spec.safetyNotes && (
+              <div className="mt-2 rounded bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-800 leading-snug">
+                ⚠️ {spec.safetyNotes}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="px-3 pb-3">
+          <CompletionForm
+            isDiyDefault={spec.isDiy}
+            titleHint={spec.title}
+            onDone={(payload) => onMarkDone(assetId, spec, payload)}
+            onCancel={() => setExpanded(false)}
+          />
         </div>
       )}
     </div>
@@ -490,13 +512,25 @@ export function HealthScoreModal({
   const { toast } = useToast();
 
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  // Key = `${assetId}:${spec.title}` for spec completions
+  const [completedSpecKeys, setCompletedSpecKeys] = useState<Set<string>>(new Set());
 
   const remainingOverdue = overdueTaskCount - completedIds.size;
   const pointGain = Math.min(overdueTaskCount * 15, 100);
   const potentialScore = Math.min(healthScore + pointGain, 100);
 
+  function invalidateAll() {
+    queryClient.invalidateQueries({ queryKey: ["property-summary", propertyId] });
+    queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes(propertyId) });
+    queryClient.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey.some(
+          (k) => typeof k === "string" && (k.includes("inbox") || k.includes("ledger") || k.includes("summary"))
+        ),
+    });
+  }
+
   async function handleMarkDone(taskId: string, payload: CompletePayload) {
-    const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
     const res = await authFetch(`${BASE}/api/maintenance/${taskId}/complete`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -504,30 +538,58 @@ export function HealthScoreModal({
     });
 
     if (!res.ok) {
-      toast({
-        title: "Something went wrong",
-        description: "Could not mark task as done. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Something went wrong", description: "Could not mark task as done. Please try again.", variant: "destructive" });
       return;
     }
 
     setCompletedIds((prev) => new Set([...prev, taskId]));
-
-    await queryClient.invalidateQueries({ queryKey: ["property-summary", propertyId] });
-    await queryClient.invalidateQueries({ predicate: (q) => q.queryKey.includes(propertyId) });
-    queryClient.invalidateQueries({
-      predicate: (q) =>
-        q.queryKey.some(
-          (k) => typeof k === "string" && (k.includes("inbox") || k.includes("ledger"))
-        ),
-    });
+    invalidateAll();
 
     toast({
       title: "Task marked complete! 🎉",
-      description: payload.notes?.trim()
-        ? "Notes saved and next recurrence scheduled."
-        : "Next recurrence has been scheduled.",
+      description: payload.notes?.trim() ? "Notes saved and next recurrence scheduled." : "Next recurrence has been scheduled.",
+    });
+  }
+
+  async function handleMarkSpecDone(assetId: string, spec: MaintenanceSpec, payload: CompletePayload) {
+    // Step 1: create the task for this asset
+    const createRes = await authFetch(`${BASE}/api/assets/${assetId}/maintenance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: spec.title,
+        description: spec.description,
+        intervalDays: spec.intervalDays,
+        isDiy: spec.isDiy,
+        nextDueDate: new Date().toLocaleDateString("en-CA"),
+      }),
+    });
+
+    if (!createRes.ok) {
+      toast({ title: "Something went wrong", description: "Could not create task. Please try again.", variant: "destructive" });
+      return;
+    }
+
+    const task = await createRes.json();
+
+    // Step 2: immediately complete it
+    const completeRes = await authFetch(`${BASE}/api/maintenance/${task.id}/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!completeRes.ok) {
+      toast({ title: "Something went wrong", description: "Task created but could not be marked complete.", variant: "destructive" });
+      return;
+    }
+
+    setCompletedSpecKeys((prev) => new Set([...prev, `${assetId}:${spec.title}`]));
+    invalidateAll();
+
+    toast({
+      title: "Task logged and scheduled! 🎉",
+      description: `${spec.title} is now tracked. Next due in ${spec.intervalDays} days.`,
     });
   }
 
@@ -549,9 +611,7 @@ export function HealthScoreModal({
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-lg font-bold">Your Home Improvement Plan</DialogTitle>
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-bold ${gc.bg} ${gc.text} ${gc.border}`}
-            >
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-bold ${gc.bg} ${gc.text} ${gc.border}`}>
               <TrendingUp className="h-3.5 w-3.5" />
               Grade {healthGrade} · {healthScore}/100
             </div>
@@ -569,9 +629,7 @@ export function HealthScoreModal({
           {completedIds.size > 0 && completedIds.size >= overdueTaskCount && (
             <div className="mt-3 flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
               <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-              <p className="text-sm text-emerald-800 font-medium">
-                All overdue tasks complete — great work! Your score is updating.
-              </p>
+              <p className="text-sm text-emerald-800 font-medium">All overdue tasks complete — great work! Your score is updating.</p>
               <RefreshCw className="h-3.5 w-3.5 text-emerald-600 animate-spin shrink-0" />
             </div>
           )}
@@ -592,12 +650,7 @@ export function HealthScoreModal({
                 </div>
                 <div className="space-y-2">
                   {overdueTasks.map((t) => (
-                    <TaskItem
-                      key={t.id}
-                      task={t}
-                      done={completedIds.has(t.id)}
-                      onMarkDone={handleMarkDone}
-                    />
+                    <TaskItem key={t.id} task={t} done={completedIds.has(t.id)} onMarkDone={handleMarkDone} />
                   ))}
                 </div>
               </section>
@@ -611,19 +664,20 @@ export function HealthScoreModal({
                 <div className="flex items-center gap-2 mb-3">
                   <Hammer className="h-4 w-4 text-primary" />
                   <h3 className="text-sm font-semibold">Recommended by Manufacturers</h3>
-                  <Badge variant="secondary" className="text-[10px] font-bold ml-auto">
-                    DIY First
-                  </Badge>
+                  <Badge variant="secondary" className="text-[10px] font-bold ml-auto">DIY First</Badge>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                  These tasks come from manufacturer maintenance specs for your tracked assets. Most take under an hour and require no special skills.
+                  These tasks come from manufacturer maintenance specs for your tracked assets. Completing them adds a service record and starts the recurring schedule.
                 </p>
                 <div className="space-y-2">
                   {recommendedByAsset.map(({ spec, asset }, i) => (
                     <SpecItem
                       key={`${asset.assetId}-${i}`}
                       spec={spec}
+                      assetId={asset.assetId}
                       assetName={asset.assetName}
+                      done={completedSpecKeys.has(`${asset.assetId}:${spec.title}`)}
+                      onMarkDone={handleMarkSpecDone}
                     />
                   ))}
                 </div>
@@ -647,9 +701,7 @@ export function HealthScoreModal({
           <p className="text-xs text-muted-foreground leading-snug">
             Completing tasks builds your home's documented history.
           </p>
-          <Button size="sm" onClick={() => onOpenChange(false)} variant="outline">
-            Close
-          </Button>
+          <Button size="sm" onClick={() => onOpenChange(false)} variant="outline">Close</Button>
         </div>
       </DialogContent>
     </Dialog>
