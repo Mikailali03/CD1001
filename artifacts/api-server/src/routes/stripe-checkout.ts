@@ -98,15 +98,19 @@ router.post("/stripe/checkout", requireAuth(), async (req, res) => {
 
   let customerId = sub.stripeCustomerId ?? undefined;
 
-  if (!customerId) {
+  async function createFreshCustomer() {
     const customer = await stripe.customers.create({
       metadata: { userId: req.userId },
     });
-    customerId = customer.id;
     await db
       .update(subscriptionsTable)
-      .set({ stripeCustomerId: customerId, updatedAt: new Date() })
+      .set({ stripeCustomerId: customer.id, updatedAt: new Date() })
       .where(eq(subscriptionsTable.userId, req.userId));
+    return customer.id;
+  }
+
+  if (!customerId) {
+    customerId = await createFreshCustomer();
   }
 
   const host = process.env.REPLIT_DOMAINS?.split(",")[0];
@@ -115,15 +119,29 @@ router.post("/stripe/checkout", requireAuth(), async (req, res) => {
     ? `https://${host}${basePath}`
     : `http://localhost:${process.env.PORT}${basePath}`;
 
-  const session = await stripe.checkout.sessions.create({
+  const sessionParams = {
     customer: customerId,
-    payment_method_types: ["card"],
+    payment_method_types: ["card"] as const,
     line_items: [{ price: priceId, quantity: 1 }],
-    mode: "subscription",
+    mode: "subscription" as const,
     success_url: `${appUrl}/dashboard?stripe_success=1&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/settings`,
     metadata: { userId: req.userId, tier },
-  });
+  };
+
+  let session;
+  try {
+    session = await stripe.checkout.sessions.create(sessionParams);
+  } catch (err: any) {
+    // Stale customer ID (e.g. from a previous sandbox key) — create a fresh one and retry
+    if (err?.code === "resource_missing" && err?.param === "customer") {
+      logger.warn({ oldCustomerId: customerId }, "Stale Stripe customer ID detected, creating fresh customer");
+      customerId = await createFreshCustomer();
+      session = await stripe.checkout.sessions.create({ ...sessionParams, customer: customerId });
+    } else {
+      throw err;
+    }
+  }
 
   res.json({ url: session.url });
 });
