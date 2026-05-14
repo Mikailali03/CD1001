@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
@@ -26,6 +26,9 @@ import {
   ArrowRight,
   ChevronLeft,
   Wand2,
+  ImagePlus,
+  Camera,
+  X,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -44,7 +47,7 @@ type LookupResult = {
   longitude: number | null;
 };
 
-type Step = "address" | "verify" | "scouting" | "done";
+type Step = "address" | "verify" | "photo" | "scouting" | "done";
 
 type Props = {
   open: boolean;
@@ -69,13 +72,13 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   const queryClient = useQueryClient();
   const authFetch = useAuthFetch();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>("address");
   const [addressInput, setAddressInput] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
   const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
 
-  // Editable fields in verify step
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -90,9 +93,13 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   const [saveBusy, setSaveBusy] = useState(false);
   const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(null);
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
-  // Stored from lookup — not shown in UI, passed silently on save
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+
+  // Photo step state
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
 
   function reset() {
     setStep("address");
@@ -106,6 +113,9 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     setCreatedPropertyId(null);
     setLatitude(null);
     setLongitude(null);
+    setPhotoPreview(null);
+    setPhotoUploading(false);
+    setPendingPhotoUrl(null);
   }
 
   function handleClose(v: boolean) {
@@ -113,7 +123,6 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     onOpenChange(v);
   }
 
-  // ── Step 1: address lookup ──
   async function handleLookup() {
     if (!addressInput.trim()) return;
     setLookupBusy(true);
@@ -126,8 +135,6 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
       }
       const data: LookupResult = await res.json();
       setLookupResult(data);
-
-      // Pre-fill editable fields
       setAddress(data.address);
       setCity(data.city ?? "");
       setState(data.state ?? "");
@@ -139,23 +146,44 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
       setLotSize(data.lotSize != null ? String(data.lotSize) : "");
       setLatitude(data.latitude ?? null);
       setLongitude(data.longitude ?? null);
-      // Default property name to the address
       setName(data.address);
-
       setStep("verify");
     } finally {
       setLookupBusy(false);
     }
   }
 
-  // ── Step 2: save property + trigger scout ──
-  async function handleSave() {
+  async function handlePhotoFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoPreview(URL.createObjectURL(file));
+    setPhotoUploading(true);
+    try {
+      const urlRes = await authFetch(`${BASE}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+      await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+      setPendingPhotoUrl(`${BASE}/api/storage${objectPath}`);
+    } catch {
+      toast({ title: "Photo upload failed", variant: "destructive" });
+      setPhotoPreview(null);
+      setPendingPhotoUrl(null);
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  async function handleSave(photoUrl?: string | null) {
     if (!name.trim() || !address.trim()) return;
     setSaveBusy(true);
     setStep("scouting");
 
     try {
-      // Create property
       const res = await authFetch(`${BASE}/api/properties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,6 +200,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
           lotSize: lotSize ? parseInt(lotSize) : null,
           latitude: latitude ?? undefined,
           longitude: longitude ?? undefined,
+          ...(photoUrl != null ? { photoUrl } : {}),
         }),
       });
 
@@ -184,11 +213,9 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
       const property = await res.json();
       setCreatedPropertyId(property.id);
 
-      // Invalidate properties list immediately
       await queryClient.invalidateQueries({ queryKey: ["list-properties"] });
       await queryClient.invalidateQueries({ predicate: (q) => q.queryKey.some((k) => k === "listProperties" || k === "properties") });
 
-      // Trigger AI scout (can take 10-20s)
       try {
         const scoutRes = await authFetch(`${BASE}/api/properties/${property.id}/scout`, { method: "POST" });
         if (scoutRes.ok) {
@@ -196,7 +223,6 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
           setScoutResult({ taskCount: scoutData.taskCount });
         }
       } catch {
-        // Scout failure is non-fatal
         setScoutResult({ taskCount: 0 });
       }
 
@@ -289,7 +315,6 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
             </DialogHeader>
 
             <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
-              {/* Quick-glance stat chips */}
               {lookupResult && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <StatBadge icon={<Calendar className="h-3.5 w-3.5" />} label="Year Built" value={lookupResult.yearBuilt} />
@@ -299,7 +324,6 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
                 </div>
               )}
 
-              {/* Editable form */}
               <div className="space-y-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-medium text-muted-foreground">Property Name</Label>
@@ -345,21 +369,111 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
                 <ChevronLeft className="h-3.5 w-3.5" />
                 Back
               </Button>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  AI Scout will run after saving
+              <Button onClick={() => setStep("photo")} disabled={!name.trim() || !address.trim()} className="gap-1.5">
+                Next: Add Photo
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </>
+        )}
+
+        {/* ── Step 3: Photo ── */}
+        {step === "photo" && (
+          <>
+            <DialogHeader className="px-6 pt-6 pb-4 border-b">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-100 p-2.5 rounded-xl">
+                  <Camera className="h-5 w-5 text-blue-600" />
                 </div>
-                <Button onClick={handleSave} disabled={!name.trim() || !address.trim()} className="gap-1.5">
+                <div>
+                  <DialogTitle className="text-lg">Add a Photo</DialogTitle>
+                  <p className="text-sm text-muted-foreground mt-0.5">Optional — you can always add one later.</p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="px-6 py-6 space-y-4">
+              <div className="relative group">
+                {photoPreview ? (
+                  <div className="relative h-52 w-full rounded-xl overflow-hidden border border-border">
+                    <img src={photoPreview} alt="Property" className="h-full w-full object-cover" />
+                    {photoUploading && (
+                      <div className="absolute inset-0 bg-background/70 flex flex-col items-center justify-center gap-2">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">Uploading…</span>
+                      </div>
+                    )}
+                    {!photoUploading && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="bg-white/90 hover:bg-white text-foreground rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+                        >
+                          <Camera className="h-3.5 w-3.5" />
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPhotoPreview(null); setPendingPhotoUrl(null); }}
+                          className="bg-white/90 hover:bg-white text-destructive rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-40 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/40 hover:bg-primary/5 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:text-primary transition-all cursor-pointer"
+                  >
+                    <ImagePlus className="h-8 w-8" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium">Upload a photo of your home</p>
+                      <p className="text-xs opacity-70 mt-0.5">JPG, PNG, WebP accepted</p>
+                    </div>
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoFileChange}
+                />
+              </div>
+
+              <p className="text-xs text-muted-foreground text-center">
+                A photo helps you quickly identify this property in your dossier.
+              </p>
+            </div>
+
+            <div className="border-t px-6 py-4 flex items-center justify-between gap-3 bg-muted/20">
+              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setStep("verify")}>
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Back
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => handleSave(null)} disabled={saveBusy}>
+                  Skip
+                </Button>
+                <Button
+                  onClick={() => handleSave(pendingPhotoUrl)}
+                  disabled={saveBusy || photoUploading}
+                  className="gap-1.5"
+                >
+                  {saveBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   Save & Generate Plan
-                  <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
           </>
         )}
 
-        {/* ── Step 3: AI Scouting ── */}
+        {/* ── Step 4: AI Scouting ── */}
         {step === "scouting" && (
           <div className="px-6 py-12 flex flex-col items-center text-center gap-5">
             <div className="relative">
@@ -387,7 +501,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
           </div>
         )}
 
-        {/* ── Step 4: Done ── */}
+        {/* ── Step 5: Done ── */}
         {step === "done" && (
           <>
             <div className="px-6 py-10 flex flex-col items-center text-center gap-5">

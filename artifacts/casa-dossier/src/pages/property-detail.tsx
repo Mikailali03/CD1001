@@ -5,6 +5,7 @@ import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
   useGetProperty,
   getGetPropertyQueryKey,
+  getListPropertiesQueryKey,
   useGetPropertySummary,
   getGetPropertySummaryQueryKey,
   useListAssets,
@@ -21,6 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { CollaboratorsPanel } from "@/components/collaborators-panel";
 import { EditAssetSheet } from "@/components/edit-asset-sheet";
+import { EditPropertySheet } from "@/components/edit-property-sheet";
 import { useToast } from "@/hooks/use-toast";
 import {
   Building2,
@@ -62,6 +64,7 @@ export default function PropertyDetail() {
   const [addAssetOpen, setAddAssetOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [retiredOpen, setRetiredOpen] = useState(false);
+  const [editPropertyOpen, setEditPropertyOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -205,12 +208,18 @@ export default function PropertyDetail() {
             </div>
           )}
         </div>
-        {id && (
-          <Button className="shrink-0 gap-2" onClick={() => setAddAssetOpen(true)} data-testid="button-add-asset">
-            <Plus className="h-4 w-4" />
-            Add Asset
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditPropertyOpen(true)}>
+            <Pencil className="h-3.5 w-3.5" />
+            Edit Property
           </Button>
-        )}
+          {id && (
+            <Button className="gap-2" onClick={() => setAddAssetOpen(true)} data-testid="button-add-asset">
+              <Plus className="h-4 w-4" />
+              Add Asset
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -469,6 +478,16 @@ export default function PropertyDetail() {
         open={!!editAsset}
         onOpenChange={(open) => { if (!open) setEditAsset(null); }}
         onSaved={() => { refetchAssets(); refetchRetired(); refetchSummary(); }}
+      />
+
+      <EditPropertySheet
+        property={property as any}
+        open={editPropertyOpen}
+        onOpenChange={setEditPropertyOpen}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: getGetPropertyQueryKey(id!) });
+          queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+        }}
       />
     </div>
   );
