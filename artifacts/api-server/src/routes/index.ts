@@ -7,6 +7,7 @@ import maintenanceRouter from "./maintenance";
 import guidesRouter from "./guides";
 import marketplaceRouter from "./marketplace";
 import dashboardRouter from "./dashboard";
+import userProfileRouter from "./user-profile";
 import scoutRouter from "./scout";
 import lensRouter from "./lens";
 import capitalRouter from "./capital";
@@ -38,5 +39,6 @@ router.use(maintenanceRouter);
 router.use(guidesRouter);
 router.use(marketplaceRouter);
 router.use(dashboardRouter);
+router.use(userProfileRouter);
 
 export default router;

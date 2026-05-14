@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { useProperty } from "@/contexts/property-context";
@@ -9,9 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useGetUserProfile, useUpsertUserProfile, getGetUserProfileQueryKey } from "@workspace/api-client-react";
 import {
   Bell, Shield, User, ArrowRightLeft, Clock, X, Copy,
   CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Home,
+  HardHat, ExternalLink, Wrench,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -275,6 +277,153 @@ function DeedTransferCard() {
   );
 }
 
+function TechnicianProfileCard() {
+  const { data: profile, isLoading } = useGetUserProfile({ query: { queryKey: getGetUserProfileQueryKey(), retry: false } });
+  const upsert = useUpsertUserProfile();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [displayName, setDisplayName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [editing, setEditing] = useState(false);
+
+  const isTech = (profile as any)?.role === "technician";
+
+  useEffect(() => {
+    if (profile) {
+      setDisplayName((profile as any).displayName ?? "");
+      setPhone((profile as any).phone ?? "");
+    }
+  }, [profile]);
+
+  function handleSave() {
+    upsert.mutate(
+      { data: { role: "technician", displayName: displayName.trim(), phone: phone.trim() || undefined } as any },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["getUserProfile"] });
+          toast({ title: "Technician profile saved" });
+          setEditing(false);
+        },
+        onError: () => {
+          toast({ title: "Error saving profile", variant: "destructive" });
+        },
+      }
+    );
+  }
+
+  function copyNumber() {
+    const num = (profile as any)?.technicianNumber;
+    if (num) {
+      navigator.clipboard.writeText(num);
+      toast({ title: "Copied!", description: `${num} copied to clipboard.` });
+    }
+  }
+
+  const techPortalBase = import.meta.env.BASE_URL.replace(/casa-dossier\//, "tech/");
+
+  return (
+    <Card className="hover-elevate transition-shadow">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <HardHat className="h-5 w-5 text-muted-foreground" />
+          CasaService Technician
+        </CardTitle>
+        <CardDescription>
+          Register as a CasaService pro to accept jobs from the marketplace.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading profile…
+          </div>
+        ) : isTech && !editing ? (
+          <>
+            {(profile as any).technicianNumber && (
+              <div className="flex items-center justify-between bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Technician ID</p>
+                  <p className="font-mono font-bold text-foreground text-sm">{(profile as any).technicianNumber}</p>
+                </div>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-xs" onClick={copyNumber}>
+                  <Copy className="h-3.5 w-3.5" />
+                  Copy
+                </Button>
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Name</p>
+                <p className="font-medium">{(profile as any).displayName || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Phone</p>
+                <p className="font-medium">{(profile as any).phone || "—"}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="gap-1 text-xs">
+                <CheckCircle2 className="h-3 w-3 text-green-600" />
+                Active Technician
+              </Badge>
+              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+              <a href="/tech/" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs ml-auto">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open Tech Portal
+                </Button>
+              </a>
+            </div>
+          </>
+        ) : (
+          <>
+            {!isTech && (
+              <p className="text-sm text-muted-foreground">
+                Register your profile to appear on completed service records as a verified CasaService technician.
+              </p>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="tech-name">Display name</Label>
+              <Input
+                id="tech-name"
+                placeholder="Full name shown on service records"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tech-phone">Contact phone</Label>
+              <Input
+                id="tech-phone"
+                type="tel"
+                placeholder="(555) 123-4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={!displayName.trim() || upsert.isPending}
+                className="gap-2"
+              >
+                {upsert.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wrench className="h-4 w-4" />}
+                {isTech ? "Save Changes" : "Activate Technician Role"}
+              </Button>
+              {editing && (
+                <Button variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+              )}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Settings() {
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -368,24 +517,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <Card className="bg-muted/50 border-dashed">
-          <CardHeader>
-            <CardTitle className="text-lg">Pro Settings</CardTitle>
-            <CardDescription>For service professionals and inspectors.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Enable Pro Mode to access marketplace features and quick intake forms.
-            </p>
-            <div className="flex items-center justify-between bg-background p-4 rounded-lg border">
-              <div className="space-y-0.5">
-                <Label className="text-base font-semibold">Pro Mode</Label>
-                <p className="text-xs text-muted-foreground">Unlock inspector tools</p>
-              </div>
-              <Switch defaultChecked />
-            </div>
-          </CardContent>
-        </Card>
+        <TechnicianProfileCard />
       </div>
     </div>
   );

@@ -627,7 +627,45 @@ export const GetGuideResponse = zod.object({
 });
 
 /**
- * @summary List open service requests visible to pros
+ * @summary Get the current user's profile
+ */
+export const GetUserProfileResponse = zod.object({
+  userId: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().optional(),
+  role: zod.enum(["homeowner", "technician"]),
+  technicianNumber: zod.string().optional(),
+  phone: zod.string().optional(),
+  createdAt: zod.coerce.date().optional(),
+  updatedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary Create or update the current user's profile
+ */
+export const UpsertUserProfileBody = zod.object({
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().optional(),
+  role: zod.enum(["homeowner", "technician"]),
+  phone: zod.string().optional(),
+});
+
+export const UpsertUserProfileResponse = zod.object({
+  userId: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().optional(),
+  role: zod.enum(["homeowner", "technician"]),
+  technicianNumber: zod.string().optional(),
+  phone: zod.string().optional(),
+  createdAt: zod.coerce.date().optional(),
+  updatedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary List service requests posted by the current homeowner
  */
 export const ListMarketplaceJobsResponseItem = zod.object({
   id: zod.string(),
@@ -642,6 +680,8 @@ export const ListMarketplaceJobsResponseItem = zod.object({
   status: zod.enum(["open", "claimed", "completed"]),
   city: zod.string().optional(),
   state: zod.string().optional(),
+  technicianName: zod.string().optional(),
+  acceptedAt: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),
 });
 export const ListMarketplaceJobsResponse = zod.array(
@@ -655,6 +695,136 @@ export const CreateMarketplaceJobBody = zod.object({
   assetId: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]).optional(),
+  contactPhone: zod.string().optional(),
+});
+
+/**
+ * @summary List all open jobs visible to technicians (with location)
+ */
+export const ListOpenMarketplaceJobsResponseItem = zod.object({
+  id: zod.string(),
+  description: zod.string(),
+  urgency: zod.enum(["low", "medium", "high", "emergency"]),
+  status: zod.enum(["open", "claimed", "completed"]),
+  city: zod.string(),
+  state: zod.string(),
+  zipCode: zod.string().optional(),
+  assetCategory: zod.string(),
+  assetName: zod.string().optional(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
+  createdAt: zod.coerce.date(),
+});
+export const ListOpenMarketplaceJobsResponse = zod.array(
+  ListOpenMarketplaceJobsResponseItem,
+);
+
+/**
+ * @summary Get full job details including asset info and service history
+ */
+export const GetMarketplaceJobDetailsParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const GetMarketplaceJobDetailsResponse = zod.object({
+  id: zod.string(),
+  description: zod.string(),
+  urgency: zod.enum(["low", "medium", "high", "emergency"]),
+  status: zod.enum(["open", "claimed", "completed"]),
+  assetId: zod.string().optional(),
+  assetName: zod.string(),
+  assetCategory: zod.string(),
+  assetBrand: zod.string().optional(),
+  assetModel: zod.string().optional(),
+  assetSerialNumber: zod.string().optional(),
+  assetInstallDate: zod.string().optional(),
+  assetWarrantyExpiry: zod.string().optional(),
+  assetNotes: zod.string().optional(),
+  propertyAddress: zod.string().optional(),
+  propertyCity: zod.string().optional(),
+  propertyState: zod.string().optional(),
+  propertyZipCode: zod.string().optional(),
+  propertyYearBuilt: zod.number().optional(),
+  serviceHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        assetId: zod.string(),
+        date: zod.coerce.date(),
+        technicianName: zod.string().optional(),
+        companyName: zod.string().optional(),
+        description: zod.string(),
+        cost: zod.number().optional(),
+        nextServiceDate: zod.coerce.date().optional(),
+        receiptUrl: zod.string().optional(),
+        verified: zod.boolean().optional(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
+  contactPhone: zod
+    .string()
+    .optional()
+    .describe("Only present after job is accepted by this technician"),
+  technicianId: zod.string().optional(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
+  createdAt: zod.coerce.date(),
+  acceptedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary Technician accepts a job (reveals homeowner contact phone)
+ */
+export const AcceptMarketplaceJobParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const AcceptMarketplaceJobResponse = zod.object({
+  id: zod.string(),
+  description: zod.string(),
+  urgency: zod.enum(["low", "medium", "high", "emergency"]),
+  status: zod.enum(["open", "claimed", "completed"]),
+  assetId: zod.string().optional(),
+  assetName: zod.string(),
+  assetCategory: zod.string(),
+  assetBrand: zod.string().optional(),
+  assetModel: zod.string().optional(),
+  assetSerialNumber: zod.string().optional(),
+  assetInstallDate: zod.string().optional(),
+  assetWarrantyExpiry: zod.string().optional(),
+  assetNotes: zod.string().optional(),
+  propertyAddress: zod.string().optional(),
+  propertyCity: zod.string().optional(),
+  propertyState: zod.string().optional(),
+  propertyZipCode: zod.string().optional(),
+  propertyYearBuilt: zod.number().optional(),
+  serviceHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        assetId: zod.string(),
+        date: zod.coerce.date(),
+        technicianName: zod.string().optional(),
+        companyName: zod.string().optional(),
+        description: zod.string(),
+        cost: zod.number().optional(),
+        nextServiceDate: zod.coerce.date().optional(),
+        receiptUrl: zod.string().optional(),
+        verified: zod.boolean().optional(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .optional(),
+  contactPhone: zod
+    .string()
+    .optional()
+    .describe("Only present after job is accepted by this technician"),
+  technicianId: zod.string().optional(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
+  createdAt: zod.coerce.date(),
+  acceptedAt: zod.coerce.date().optional(),
 });
 
 /**

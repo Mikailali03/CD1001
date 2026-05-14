@@ -354,6 +354,42 @@ export interface Guide {
   createdAt: string;
 }
 
+export type UserProfileRole =
+  (typeof UserProfileRole)[keyof typeof UserProfileRole];
+
+export const UserProfileRole = {
+  homeowner: "homeowner",
+  technician: "technician",
+} as const;
+
+export interface UserProfile {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  role: UserProfileRole;
+  technicianNumber?: string;
+  phone?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type UpsertUserProfileBodyRole =
+  (typeof UpsertUserProfileBodyRole)[keyof typeof UpsertUserProfileBodyRole];
+
+export const UpsertUserProfileBodyRole = {
+  homeowner: "homeowner",
+  technician: "technician",
+} as const;
+
+export interface UpsertUserProfileBody {
+  firstName: string;
+  lastName: string;
+  email?: string;
+  role: UpsertUserProfileBodyRole;
+  phone?: string;
+}
+
 export type MarketplaceJobUrgency =
   (typeof MarketplaceJobUrgency)[keyof typeof MarketplaceJobUrgency];
 
@@ -386,6 +422,8 @@ export interface MarketplaceJob {
   status: MarketplaceJobStatus;
   city?: string;
   state?: string;
+  technicianName?: string;
+  acceptedAt?: string;
   createdAt: string;
 }
 
@@ -403,6 +441,89 @@ export interface CreateMarketplaceJobBody {
   assetId: string;
   description: string;
   urgency?: CreateMarketplaceJobBodyUrgency;
+  contactPhone?: string;
+}
+
+export type TechJobSummaryUrgency =
+  (typeof TechJobSummaryUrgency)[keyof typeof TechJobSummaryUrgency];
+
+export const TechJobSummaryUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  emergency: "emergency",
+} as const;
+
+export type TechJobSummaryStatus =
+  (typeof TechJobSummaryStatus)[keyof typeof TechJobSummaryStatus];
+
+export const TechJobSummaryStatus = {
+  open: "open",
+  claimed: "claimed",
+  completed: "completed",
+} as const;
+
+export interface TechJobSummary {
+  id: string;
+  description: string;
+  urgency: TechJobSummaryUrgency;
+  status: TechJobSummaryStatus;
+  city: string;
+  state: string;
+  zipCode?: string;
+  assetCategory: string;
+  assetName?: string;
+  latitude?: number;
+  longitude?: number;
+  createdAt: string;
+}
+
+export type TechJobDetailUrgency =
+  (typeof TechJobDetailUrgency)[keyof typeof TechJobDetailUrgency];
+
+export const TechJobDetailUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  emergency: "emergency",
+} as const;
+
+export type TechJobDetailStatus =
+  (typeof TechJobDetailStatus)[keyof typeof TechJobDetailStatus];
+
+export const TechJobDetailStatus = {
+  open: "open",
+  claimed: "claimed",
+  completed: "completed",
+} as const;
+
+export interface TechJobDetail {
+  id: string;
+  description: string;
+  urgency: TechJobDetailUrgency;
+  status: TechJobDetailStatus;
+  assetId?: string;
+  assetName: string;
+  assetCategory: string;
+  assetBrand?: string;
+  assetModel?: string;
+  assetSerialNumber?: string;
+  assetInstallDate?: string;
+  assetWarrantyExpiry?: string;
+  assetNotes?: string;
+  propertyAddress?: string;
+  propertyCity?: string;
+  propertyState?: string;
+  propertyZipCode?: string;
+  propertyYearBuilt?: number;
+  serviceHistory?: ServiceRecord[];
+  /** Only present after job is accepted by this technician */
+  contactPhone?: string;
+  technicianId?: string;
+  latitude?: number;
+  longitude?: number;
+  createdAt: string;
+  acceptedAt?: string;
 }
 
 /**

@@ -24,6 +24,10 @@ tags:
     description: Service pro marketplace
   - name: dashboard
     description: Dashboard summaries and analytics
+  - name: user
+    description: User profile management
+  - name: technician
+    description: Technician portal endpoints
 
 paths:
   /healthz:
@@ -486,12 +490,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/Guide"
 
+  # ─── User Profile ───────────────────────────────────────────────────────────
+  /user/profile:
+    get:
+      operationId: getUserProfile
+      tags: [user]
+      summary: Get the current user's profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          description: Profile not found
+    put:
+      operationId: upsertUserProfile
+      tags: [user]
+      summary: Create or update the current user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertUserProfileBody"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+
   # ─── Marketplace ────────────────────────────────────────────────────────────
   /marketplace/jobs:
     get:
       operationId: listMarketplaceJobs
       tags: [marketplace]
-      summary: List open service requests visible to pros
+      summary: List service requests posted by the current homeowner
       responses:
         "200":
           description: List of jobs
@@ -518,6 +555,63 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/MarketplaceJob"
+
+  /marketplace/jobs/open:
+    get:
+      operationId: listOpenMarketplaceJobs
+      tags: [technician]
+      summary: List all open jobs visible to technicians (with location)
+      responses:
+        "200":
+          description: List of open jobs with location
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TechJobSummary"
+
+  /marketplace/jobs/{jobId}/details:
+    get:
+      operationId: getMarketplaceJobDetails
+      tags: [technician]
+      summary: Get full job details including asset info and service history
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Full job details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechJobDetail"
+        "404":
+          description: Job not found
+
+  /marketplace/jobs/{jobId}/accept:
+    post:
+      operationId: acceptMarketplaceJob
+      tags: [technician]
+      summary: Technician accepts a job (reveals homeowner contact phone)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Accepted job with contact details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechJobDetail"
+        "404":
+          description: Job not found
 
   # ─── Inbox ──────────────────────────────────────────────────────────────────
   /inbox:
@@ -1143,6 +1237,49 @@ components:
           type: string
           format: date-time
 
+    # ─── User Profile ────────────────────────────────────────────────────────────
+    UserProfile:
+      type: object
+      required: [userId, firstName, lastName, role]
+      properties:
+        userId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [homeowner, technician]
+        technicianNumber:
+          type: string
+        phone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpsertUserProfileBody:
+      type: object
+      required: [firstName, lastName, role]
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [homeowner, technician]
+        phone:
+          type: string
+
     # ─── Marketplace ────────────────────────────────────────────────────────────
     MarketplaceJob:
       type: object
@@ -1174,6 +1311,11 @@ components:
           type: string
         state:
           type: string
+        technicianName:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
         createdAt:
           type: string
           format: date-time
@@ -1189,6 +1331,102 @@ components:
         urgency:
           type: string
           enum: [low, medium, high, emergency]
+        contactPhone:
+          type: string
+
+    TechJobSummary:
+      type: object
+      required: [id, description, urgency, status, city, state, assetCategory, createdAt]
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [low, medium, high, emergency]
+        status:
+          type: string
+          enum: [open, claimed, completed]
+        city:
+          type: string
+        state:
+          type: string
+        zipCode:
+          type: string
+        assetCategory:
+          type: string
+        assetName:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+
+    TechJobDetail:
+      type: object
+      required: [id, description, urgency, status, assetName, assetCategory, createdAt]
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [low, medium, high, emergency]
+        status:
+          type: string
+          enum: [open, claimed, completed]
+        assetId:
+          type: string
+        assetName:
+          type: string
+        assetCategory:
+          type: string
+        assetBrand:
+          type: string
+        assetModel:
+          type: string
+        assetSerialNumber:
+          type: string
+        assetInstallDate:
+          type: string
+        assetWarrantyExpiry:
+          type: string
+        assetNotes:
+          type: string
+        propertyAddress:
+          type: string
+        propertyCity:
+          type: string
+        propertyState:
+          type: string
+        propertyZipCode:
+          type: string
+        propertyYearBuilt:
+          type: integer
+        serviceHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceRecord"
+        contactPhone:
+          type: string
+          description: Only present after job is accepted by this technician
+        technicianId:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          format: date-time
 
     # ─── Dashboard ──────────────────────────────────────────────────────────────
     Dashboard:

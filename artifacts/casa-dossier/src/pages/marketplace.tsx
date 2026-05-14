@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +55,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
   const [assetId, setAssetId] = useState(initialAssetId);
   const [urgency, setUrgency] = useState("medium");
   const [description, setDescription] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
 
   // If initial values arrive after mount (e.g. data race), sync them in
   useEffect(() => {
@@ -80,7 +82,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
   function handleSubmit() {
     if (!assetId || !description.trim()) return;
     createJob.mutate(
-      { data: { assetId, description, urgency: urgency as "low" | "medium" | "high" | "emergency" } },
+      { data: { assetId, description, urgency: urgency as "low" | "medium" | "high" | "emergency", contactPhone: contactPhone.trim() || undefined } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
@@ -90,6 +92,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           setAssetId("");
           setDescription("");
           setUrgency("medium");
+          setContactPhone("");
         },
         onError: () => {
           toast({ title: "Error", description: "Could not post your request. Please try again.", variant: "destructive" });
@@ -166,6 +169,17 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
                 <SelectItem value="emergency">Emergency — needs immediate attention</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone-input">Your contact phone <span className="text-muted-foreground font-normal">(shown to the pro after they accept)</span></Label>
+            <Input
+              id="phone-input"
+              type="tel"
+              placeholder="e.g. (555) 123-4567"
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+            />
           </div>
 
           <div className="space-y-2">

@@ -8,12 +8,14 @@ export const serviceRecordsTable = pgTable("service_records", {
   assetId: text("asset_id").notNull().references(() => assetsTable.id, { onDelete: "cascade" }),
   date: text("date").notNull(),
   technicianName: text("technician_name"),
+  technicianNumber: text("technician_number"),
   companyName: text("company_name"),
   description: text("description").notNull(),
   cost: numeric("cost", { precision: 10, scale: 2 }),
   nextServiceDate: text("next_service_date"),
   receiptUrl: text("receipt_url"),
   verified: boolean("verified").notNull().default(false),
+  casaServiceTechId: text("casa_service_tech_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

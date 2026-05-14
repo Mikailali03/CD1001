@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/tech/"
+title = "CasaService Technician Portal"
+version = "1.0.0"
+id = "artifacts/tech-portal"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/tech/" ]
+localPort = 19255
+
+[services.development]
+run = "pnpm --filter @workspace/tech-portal run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tech-portal", "run", "build" ]
+publicDir = "artifacts/tech-portal/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19255"
+BASE_PATH = "/tech/"

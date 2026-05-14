@@ -37,9 +37,13 @@ import type {
   Property,
   PropertySummary,
   ServiceRecord,
+  TechJobDetail,
+  TechJobSummary,
   UpdateAssetBody,
   UpdateMaintenanceTaskBody,
   UpdatePropertyBody,
+  UpsertUserProfileBody,
+  UserProfile,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -1981,7 +1985,168 @@ export function useGetGuide<
 }
 
 /**
- * @summary List open service requests visible to pros
+ * @summary Get the current user's profile
+ */
+export const getGetUserProfileUrl = () => {
+  return `/api/user/profile`;
+};
+
+export const getUserProfile = async (
+  options?: RequestInit,
+): Promise<UserProfile> => {
+  return customFetch<UserProfile>(getGetUserProfileUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUserProfileQueryKey = () => {
+  return [`/api/user/profile`] as const;
+};
+
+export const getGetUserProfileQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUserProfile>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserProfile>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetUserProfileQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getUserProfile>>> = ({
+    signal,
+  }) => getUserProfile({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUserProfile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUserProfileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUserProfile>>
+>;
+export type GetUserProfileQueryError = ErrorType<void>;
+
+/**
+ * @summary Get the current user's profile
+ */
+
+export function useGetUserProfile<
+  TData = Awaited<ReturnType<typeof getUserProfile>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getUserProfile>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUserProfileQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create or update the current user's profile
+ */
+export const getUpsertUserProfileUrl = () => {
+  return `/api/user/profile`;
+};
+
+export const upsertUserProfile = async (
+  upsertUserProfileBody: UpsertUserProfileBody,
+  options?: RequestInit,
+): Promise<UserProfile> => {
+  return customFetch<UserProfile>(getUpsertUserProfileUrl(), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertUserProfileBody),
+  });
+};
+
+export const getUpsertUserProfileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertUserProfile>>,
+    TError,
+    { data: BodyType<UpsertUserProfileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof upsertUserProfile>>,
+  TError,
+  { data: BodyType<UpsertUserProfileBody> },
+  TContext
+> => {
+  const mutationKey = ["upsertUserProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof upsertUserProfile>>,
+    { data: BodyType<UpsertUserProfileBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return upsertUserProfile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpsertUserProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof upsertUserProfile>>
+>;
+export type UpsertUserProfileMutationBody = BodyType<UpsertUserProfileBody>;
+export type UpsertUserProfileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create or update the current user's profile
+ */
+export const useUpsertUserProfile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof upsertUserProfile>>,
+    TError,
+    { data: BodyType<UpsertUserProfileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof upsertUserProfile>>,
+  TError,
+  { data: BodyType<UpsertUserProfileBody> },
+  TContext
+> => {
+  return useMutation(getUpsertUserProfileMutationOptions(options));
+};
+
+/**
+ * @summary List service requests posted by the current homeowner
  */
 export const getListMarketplaceJobsUrl = () => {
   return `/api/marketplace/jobs`;
@@ -2032,7 +2197,7 @@ export type ListMarketplaceJobsQueryResult = NonNullable<
 export type ListMarketplaceJobsQueryError = ErrorType<unknown>;
 
 /**
- * @summary List open service requests visible to pros
+ * @summary List service requests posted by the current homeowner
  */
 
 export function useListMarketplaceJobs<
@@ -2140,6 +2305,255 @@ export const useCreateMarketplaceJob = <
   TContext
 > => {
   return useMutation(getCreateMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary List all open jobs visible to technicians (with location)
+ */
+export const getListOpenMarketplaceJobsUrl = () => {
+  return `/api/marketplace/jobs/open`;
+};
+
+export const listOpenMarketplaceJobs = async (
+  options?: RequestInit,
+): Promise<TechJobSummary[]> => {
+  return customFetch<TechJobSummary[]>(getListOpenMarketplaceJobsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListOpenMarketplaceJobsQueryKey = () => {
+  return [`/api/marketplace/jobs/open`] as const;
+};
+
+export const getListOpenMarketplaceJobsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listOpenMarketplaceJobs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOpenMarketplaceJobs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListOpenMarketplaceJobsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listOpenMarketplaceJobs>>
+  > = ({ signal }) => listOpenMarketplaceJobs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listOpenMarketplaceJobs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListOpenMarketplaceJobsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listOpenMarketplaceJobs>>
+>;
+export type ListOpenMarketplaceJobsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all open jobs visible to technicians (with location)
+ */
+
+export function useListOpenMarketplaceJobs<
+  TData = Awaited<ReturnType<typeof listOpenMarketplaceJobs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listOpenMarketplaceJobs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListOpenMarketplaceJobsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get full job details including asset info and service history
+ */
+export const getGetMarketplaceJobDetailsUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/details`;
+};
+
+export const getMarketplaceJobDetails = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<TechJobDetail> => {
+  return customFetch<TechJobDetail>(getGetMarketplaceJobDetailsUrl(jobId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMarketplaceJobDetailsQueryKey = (jobId: string) => {
+  return [`/api/marketplace/jobs/${jobId}/details`] as const;
+};
+
+export const getGetMarketplaceJobDetailsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMarketplaceJobDetails>>,
+  TError = ErrorType<void>,
+>(
+  jobId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMarketplaceJobDetails>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetMarketplaceJobDetailsQueryKey(jobId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getMarketplaceJobDetails>>
+  > = ({ signal }) =>
+    getMarketplaceJobDetails(jobId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!jobId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMarketplaceJobDetails>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMarketplaceJobDetailsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMarketplaceJobDetails>>
+>;
+export type GetMarketplaceJobDetailsQueryError = ErrorType<void>;
+
+/**
+ * @summary Get full job details including asset info and service history
+ */
+
+export function useGetMarketplaceJobDetails<
+  TData = Awaited<ReturnType<typeof getMarketplaceJobDetails>>,
+  TError = ErrorType<void>,
+>(
+  jobId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMarketplaceJobDetails>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMarketplaceJobDetailsQueryOptions(jobId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Technician accepts a job (reveals homeowner contact phone)
+ */
+export const getAcceptMarketplaceJobUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/accept`;
+};
+
+export const acceptMarketplaceJob = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<TechJobDetail> => {
+  return customFetch<TechJobDetail>(getAcceptMarketplaceJobUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAcceptMarketplaceJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptMarketplaceJob>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof acceptMarketplaceJob>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  const mutationKey = ["acceptMarketplaceJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof acceptMarketplaceJob>>,
+    { jobId: string }
+  > = (props) => {
+    const { jobId } = props ?? {};
+
+    return acceptMarketplaceJob(jobId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AcceptMarketplaceJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof acceptMarketplaceJob>>
+>;
+
+export type AcceptMarketplaceJobMutationError = ErrorType<void>;
+
+/**
+ * @summary Technician accepts a job (reveals homeowner contact phone)
+ */
+export const useAcceptMarketplaceJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof acceptMarketplaceJob>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof acceptMarketplaceJob>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  return useMutation(getAcceptMarketplaceJobMutationOptions(options));
 };
 
 /**

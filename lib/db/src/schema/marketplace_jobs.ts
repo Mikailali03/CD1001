@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { assetsTable } from "./assets";
@@ -9,6 +9,13 @@ export const marketplaceJobsTable = pgTable("marketplace_jobs", {
   description: text("description").notNull(),
   urgency: text("urgency").notNull().default("medium").$type<"low" | "medium" | "high" | "emergency">(),
   status: text("status").notNull().default("open").$type<"open" | "claimed" | "completed">(),
+  contactPhone: text("contact_phone"),
+  technicianId: text("technician_id"),
+  technicianNumber: text("technician_number"),
+  technicianName: text("technician_name"),
+  acceptedAt: timestamp("accepted_at"),
+  latitude: numeric("latitude", { precision: 10, scale: 7 }),
+  longitude: numeric("longitude", { precision: 10, scale: 7 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

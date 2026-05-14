@@ -1,34 +1,51 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { marketplaceJobsTable, assetsTable, propertiesTable } from "@workspace/db";
-import { eq, inArray } from "drizzle-orm";
+import {
+  marketplaceJobsTable,
+  assetsTable,
+  propertiesTable,
+  serviceRecordsTable,
+  userProfilesTable,
+} from "@workspace/db";
+import { eq, inArray, and } from "drizzle-orm";
 import { CreateMarketplaceJobBody } from "@workspace/api-zod";
+import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOwnedAsset } from "../lib/access.js";
 
 const router = Router();
 
+// ── Geocode a city/state/zip string via Nominatim ─────────────────────────
+async function geocodeCity(city: string, state: string, zip?: string | null): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const query = [zip, city, state, "USA"].filter(Boolean).join(", ");
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+    const res = await fetch(url, { headers: { "User-Agent": "CasaDossier/1.0 (info@casadossier.com)" } });
+    if (!res.ok) return null;
+    const data = await res.json() as Array<{ lat: string; lon: string }>;
+    if (!data.length) return null;
+    return { lat: parseFloat(data[0]!.lat), lng: parseFloat(data[0]!.lon) };
+  } catch {
+    return null;
+  }
+}
+
+// ── Homeowner: list their own posted jobs ─────────────────────────────────
 router.get("/marketplace/jobs", requireAuth(), async (req, res) => {
-  // Only show jobs posted by assets owned by the current user
   const userProperties = await db
     .select()
     .from(propertiesTable)
     .where(eq(propertiesTable.userId, req.userId));
 
-  if (userProperties.length === 0) {
-    return res.json([]);
-  }
+  if (userProperties.length === 0) return res.json([]);
 
   const propertyIds = userProperties.map((p) => p.id);
-
   const userAssets = await db
     .select()
     .from(assetsTable)
     .where(inArray(assetsTable.propertyId, propertyIds));
 
-  if (userAssets.length === 0) {
-    return res.json([]);
-  }
+  if (userAssets.length === 0) return res.json([]);
 
   const assetIds = userAssets.map((a) => a.id);
 
@@ -46,6 +63,8 @@ router.get("/marketplace/jobs", requireAuth(), async (req, res) => {
       status: marketplaceJobsTable.status,
       city: propertiesTable.city,
       state: propertiesTable.state,
+      technicianName: marketplaceJobsTable.technicianName,
+      acceptedAt: marketplaceJobsTable.acceptedAt,
       createdAt: marketplaceJobsTable.createdAt,
     })
     .from(marketplaceJobsTable)
@@ -57,21 +76,36 @@ router.get("/marketplace/jobs", requireAuth(), async (req, res) => {
   res.json(jobs);
 });
 
+// ── Homeowner: post a job ─────────────────────────────────────────────────
 router.post("/marketplace/jobs", requireAuth(), async (req, res) => {
   const body = CreateMarketplaceJobBody.parse(req.body);
 
   const asset = await getOwnedAsset(body.assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
-  const [job] = await db
-    .insert(marketplaceJobsTable)
-    .values({ assetId: body.assetId, description: body.description, urgency: body.urgency ?? "medium" })
-    .returning();
-
   const [property] = await db
     .select()
     .from(propertiesTable)
     .where(eq(propertiesTable.id, asset.propertyId));
+
+  let lat: number | null = null;
+  let lng: number | null = null;
+  if (property?.city && property?.state) {
+    const coords = await geocodeCity(property.city, property.state, property.zipCode);
+    if (coords) { lat = coords.lat; lng = coords.lng; }
+  }
+
+  const [job] = await db
+    .insert(marketplaceJobsTable)
+    .values({
+      assetId: body.assetId,
+      description: body.description,
+      urgency: body.urgency ?? "medium",
+      contactPhone: body.contactPhone ?? null,
+      latitude: lat != null ? String(lat) : null,
+      longitude: lng != null ? String(lng) : null,
+    })
+    .returning();
 
   res.status(201).json({
     ...job,
@@ -82,6 +116,178 @@ router.post("/marketplace/jobs", requireAuth(), async (req, res) => {
     assetSerialNumber: asset.serialNumber,
     city: property?.city ?? null,
     state: property?.state ?? null,
+  });
+});
+
+// ── Technician: list all open jobs with location ──────────────────────────
+router.get("/marketplace/jobs/open", requireAuth(), async (req, res) => {
+  const jobs = await db
+    .select({
+      id: marketplaceJobsTable.id,
+      description: marketplaceJobsTable.description,
+      urgency: marketplaceJobsTable.urgency,
+      status: marketplaceJobsTable.status,
+      assetName: assetsTable.name,
+      assetCategory: assetsTable.category,
+      city: propertiesTable.city,
+      state: propertiesTable.state,
+      zipCode: propertiesTable.zipCode,
+      latitude: marketplaceJobsTable.latitude,
+      longitude: marketplaceJobsTable.longitude,
+      createdAt: marketplaceJobsTable.createdAt,
+    })
+    .from(marketplaceJobsTable)
+    .innerJoin(assetsTable, eq(marketplaceJobsTable.assetId, assetsTable.id))
+    .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
+    .where(eq(marketplaceJobsTable.status, "open"))
+    .orderBy(marketplaceJobsTable.createdAt);
+
+  res.json(
+    jobs.map((j) => ({
+      ...j,
+      latitude: j.latitude != null ? parseFloat(String(j.latitude)) : null,
+      longitude: j.longitude != null ? parseFloat(String(j.longitude)) : null,
+    }))
+  );
+});
+
+// ── Technician: get full job details ──────────────────────────────────────
+const JobParams = z.object({ jobId: z.string() });
+
+router.get("/marketplace/jobs/:jobId/details", requireAuth(), async (req, res) => {
+  const { jobId } = JobParams.parse(req.params);
+
+  const [row] = await db
+    .select({
+      job: marketplaceJobsTable,
+      asset: assetsTable,
+      property: propertiesTable,
+    })
+    .from(marketplaceJobsTable)
+    .innerJoin(assetsTable, eq(marketplaceJobsTable.assetId, assetsTable.id))
+    .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
+    .where(eq(marketplaceJobsTable.id, jobId));
+
+  if (!row) return res.status(404).json({ error: "Job not found" });
+
+  const serviceHistory = await db
+    .select()
+    .from(serviceRecordsTable)
+    .where(eq(serviceRecordsTable.assetId, row.asset.id))
+    .orderBy(serviceRecordsTable.date);
+
+  const isAcceptedByMe = row.job.technicianId === req.userId;
+
+  res.json({
+    id: row.job.id,
+    description: row.job.description,
+    urgency: row.job.urgency,
+    status: row.job.status,
+    assetId: row.asset.id,
+    assetName: row.asset.name,
+    assetCategory: row.asset.category,
+    assetBrand: row.asset.brand,
+    assetModel: row.asset.model,
+    assetSerialNumber: row.asset.serialNumber,
+    assetInstallDate: row.asset.installDate,
+    assetWarrantyExpiry: row.asset.warrantyExpiry,
+    assetNotes: row.asset.notes,
+    propertyAddress: isAcceptedByMe ? row.property.address : null,
+    propertyCity: row.property.city,
+    propertyState: row.property.state,
+    propertyZipCode: row.property.zipCode,
+    propertyYearBuilt: row.property.yearBuilt,
+    serviceHistory,
+    contactPhone: isAcceptedByMe ? row.job.contactPhone : null,
+    technicianId: row.job.technicianId,
+    latitude: row.job.latitude != null ? parseFloat(String(row.job.latitude)) : null,
+    longitude: row.job.longitude != null ? parseFloat(String(row.job.longitude)) : null,
+    createdAt: row.job.createdAt,
+    acceptedAt: row.job.acceptedAt,
+  });
+});
+
+// ── Technician: accept a job ──────────────────────────────────────────────
+router.post("/marketplace/jobs/:jobId/accept", requireAuth(), async (req, res) => {
+  const { jobId } = JobParams.parse(req.params);
+
+  const [job] = await db
+    .select()
+    .from(marketplaceJobsTable)
+    .where(and(eq(marketplaceJobsTable.id, jobId), eq(marketplaceJobsTable.status, "open")));
+
+  if (!job) return res.status(404).json({ error: "Job not found or already claimed" });
+
+  // Look up the technician's profile for their name and number
+  const [techProfile] = await db
+    .select()
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, req.userId));
+
+  const techName = techProfile
+    ? `${techProfile.firstName} ${techProfile.lastName}`.trim()
+    : "Technician";
+
+  const [updatedJob] = await db
+    .update(marketplaceJobsTable)
+    .set({
+      status: "claimed",
+      technicianId: req.userId,
+      technicianNumber: techProfile?.technicianNumber ?? null,
+      technicianName: techName,
+      acceptedAt: new Date(),
+    })
+    .where(eq(marketplaceJobsTable.id, jobId))
+    .returning();
+
+  // Fetch full details to return
+  const [row] = await db
+    .select({
+      job: marketplaceJobsTable,
+      asset: assetsTable,
+      property: propertiesTable,
+    })
+    .from(marketplaceJobsTable)
+    .innerJoin(assetsTable, eq(marketplaceJobsTable.assetId, assetsTable.id))
+    .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
+    .where(eq(marketplaceJobsTable.id, jobId));
+
+  const serviceHistory = row
+    ? await db
+        .select()
+        .from(serviceRecordsTable)
+        .where(eq(serviceRecordsTable.assetId, row.asset.id))
+        .orderBy(serviceRecordsTable.date)
+    : [];
+
+  if (!row) return res.status(404).json({ error: "Row not found" });
+
+  res.json({
+    id: row.job.id,
+    description: row.job.description,
+    urgency: row.job.urgency,
+    status: row.job.status,
+    assetId: row.asset.id,
+    assetName: row.asset.name,
+    assetCategory: row.asset.category,
+    assetBrand: row.asset.brand,
+    assetModel: row.asset.model,
+    assetSerialNumber: row.asset.serialNumber,
+    assetInstallDate: row.asset.installDate,
+    assetWarrantyExpiry: row.asset.warrantyExpiry,
+    assetNotes: row.asset.notes,
+    propertyAddress: row.property.address,
+    propertyCity: row.property.city,
+    propertyState: row.property.state,
+    propertyZipCode: row.property.zipCode,
+    propertyYearBuilt: row.property.yearBuilt,
+    serviceHistory,
+    contactPhone: updatedJob?.contactPhone ?? null,
+    technicianId: row.job.technicianId,
+    latitude: row.job.latitude != null ? parseFloat(String(row.job.latitude)) : null,
+    longitude: row.job.longitude != null ? parseFloat(String(row.job.longitude)) : null,
+    createdAt: row.job.createdAt,
+    acceptedAt: row.job.acceptedAt,
   });
 });
 
