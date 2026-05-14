@@ -21,6 +21,8 @@ export interface Property {
   sqft?: number;
   bedrooms?: number;
   bathrooms?: number;
+  latitude?: number;
+  longitude?: number;
   photoUrl?: string;
   createdAt: string;
   updatedAt?: string;
@@ -88,6 +90,8 @@ export interface CreatePropertyBody {
   sqft?: number;
   bedrooms?: number;
   bathrooms?: number;
+  latitude?: number;
+  longitude?: number;
   photoUrl?: string;
 }
 
@@ -101,6 +105,8 @@ export interface UpdatePropertyBody {
   sqft?: number;
   bedrooms?: number;
   bathrooms?: number;
+  latitude?: number;
+  longitude?: number;
   photoUrl?: string;
 }
 

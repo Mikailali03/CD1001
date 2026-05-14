@@ -40,6 +40,8 @@ type LookupResult = {
   bedrooms: number | null;
   bathrooms: number | null;
   lotSize: number | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type Step = "address" | "verify" | "scouting" | "done";
@@ -88,6 +90,9 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   const [saveBusy, setSaveBusy] = useState(false);
   const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(null);
   const [createdPropertyId, setCreatedPropertyId] = useState<string | null>(null);
+  // Stored from lookup — not shown in UI, passed silently on save
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   function reset() {
     setStep("address");
@@ -99,6 +104,8 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     setSaveBusy(false);
     setScoutResult(null);
     setCreatedPropertyId(null);
+    setLatitude(null);
+    setLongitude(null);
   }
 
   function handleClose(v: boolean) {
@@ -130,6 +137,8 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
       setBedrooms(data.bedrooms != null ? String(data.bedrooms) : "");
       setBathrooms(data.bathrooms != null ? String(data.bathrooms) : "");
       setLotSize(data.lotSize != null ? String(data.lotSize) : "");
+      setLatitude(data.latitude ?? null);
+      setLongitude(data.longitude ?? null);
       // Default property name to the address
       setName(data.address);
 
@@ -161,6 +170,8 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
           bedrooms: bedrooms ? parseInt(bedrooms) : null,
           bathrooms: bathrooms ? parseFloat(bathrooms) : null,
           lotSize: lotSize ? parseInt(lotSize) : null,
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
         }),
       });
 

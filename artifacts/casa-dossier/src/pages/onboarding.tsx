@@ -39,6 +39,8 @@ type LookupResult = {
   bedrooms: number | null;
   bathrooms: number | null;
   lotSize: number | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 type Step = "welcome" | "address" | "verify" | "scouting" | "done";
@@ -92,9 +94,10 @@ export function Onboarding() {
   const [bathrooms, setBathrooms] = useState("");
 
   const [saveBusy, setSaveBusy] = useState(false);
-  const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(
-    null
-  );
+  const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(null);
+  // Stored from lookup — not shown in UI, passed silently on save
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
 
   async function handleLookup() {
     if (!addressInput.trim()) return;
@@ -122,6 +125,8 @@ export function Onboarding() {
       setSqft(data.sqft != null ? String(data.sqft) : "");
       setBedrooms(data.bedrooms != null ? String(data.bedrooms) : "");
       setBathrooms(data.bathrooms != null ? String(data.bathrooms) : "");
+      setLatitude(data.latitude ?? null);
+      setLongitude(data.longitude ?? null);
       setName(data.address);
       setStep("verify");
     } finally {
@@ -153,6 +158,8 @@ export function Onboarding() {
           sqft: sqft ? parseInt(sqft) : null,
           bedrooms: bedrooms ? parseInt(bedrooms) : null,
           bathrooms: bathrooms ? parseFloat(bathrooms) : null,
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
         }),
       });
 

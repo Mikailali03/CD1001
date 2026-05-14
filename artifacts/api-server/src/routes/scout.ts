@@ -44,6 +44,8 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
     bedrooms: p.bedrooms ?? null,
     bathrooms: p.bathrooms ?? null,
     lotSize: p.lotSize ?? null,
+    latitude: p.latitude ?? null,
+    longitude: p.longitude ?? null,
   });
 });
 

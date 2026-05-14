@@ -1,4 +1,4 @@
-import { pgTable, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, numeric, real, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -14,6 +14,8 @@ export const propertiesTable = pgTable("properties", {
   bedrooms: integer("bedrooms"),
   bathrooms: numeric("bathrooms", { precision: 4, scale: 1 }),
   lotSize: integer("lot_size"),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
   photoUrl: text("photo_url"),
   userId: text("user_id").notNull().default("demo-user"),
   ownerEmail: text("owner_email"),

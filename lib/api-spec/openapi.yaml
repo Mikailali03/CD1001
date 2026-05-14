@@ -839,6 +839,10 @@ components:
           type: integer
         bathrooms:
           type: number
+        latitude:
+          type: number
+        longitude:
+          type: number
         photoUrl:
           type: string
         createdAt:
@@ -870,6 +874,10 @@ components:
           type: integer
         bathrooms:
           type: number
+        latitude:
+          type: number
+        longitude:
+          type: number
         photoUrl:
           type: string
 
@@ -893,6 +901,10 @@ components:
         bedrooms:
           type: integer
         bathrooms:
+          type: number
+        latitude:
+          type: number
+        longitude:
           type: number
         photoUrl:
           type: string
