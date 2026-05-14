@@ -690,6 +690,8 @@ export const ListMarketplaceJobsResponseItem = zod.object({
   status: zod.enum(["open", "claimed", "completed"]),
   city: zod.string().optional(),
   state: zod.string().optional(),
+  latitude: zod.number().optional(),
+  longitude: zod.number().optional(),
   technicianName: zod.string().optional(),
   acceptedAt: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),

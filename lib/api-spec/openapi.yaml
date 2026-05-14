@@ -1323,6 +1323,10 @@ components:
           type: string
         state:
           type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
         technicianName:
           type: string
         acceptedAt:

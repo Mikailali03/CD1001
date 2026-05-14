@@ -428,6 +428,8 @@ export interface MarketplaceJob {
   status: MarketplaceJobStatus;
   city?: string;
   state?: string;
+  latitude?: number;
+  longitude?: number;
   technicianName?: string;
   acceptedAt?: string;
   createdAt: string;

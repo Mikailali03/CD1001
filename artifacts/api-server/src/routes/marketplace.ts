@@ -132,8 +132,8 @@ router.get("/marketplace/jobs/open", requireAuth(), async (req, res) => {
       city: propertiesTable.city,
       state: propertiesTable.state,
       zipCode: propertiesTable.zipCode,
-      latitude: marketplaceJobsTable.latitude,
-      longitude: marketplaceJobsTable.longitude,
+      latitude: propertiesTable.latitude,
+      longitude: propertiesTable.longitude,
       createdAt: marketplaceJobsTable.createdAt,
     })
     .from(marketplaceJobsTable)
@@ -145,8 +145,8 @@ router.get("/marketplace/jobs/open", requireAuth(), async (req, res) => {
   res.json(
     jobs.map((j) => ({
       ...j,
-      latitude: j.latitude != null ? parseFloat(String(j.latitude)) : null,
-      longitude: j.longitude != null ? parseFloat(String(j.longitude)) : null,
+      latitude: j.latitude != null ? Number(j.latitude) : null,
+      longitude: j.longitude != null ? Number(j.longitude) : null,
     }))
   );
 });
