@@ -54,3 +54,4 @@ channel = "stable-25_05"
 
 [userenv.shared]
 VITE_CLERK_PUBLISHABLE_KEY = "pk_test_bG95YWwtbGFicmFkb3ItOTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+ADMIN_EMAIL = "mikailali03@gmail.com"
