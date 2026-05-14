@@ -805,6 +805,22 @@ export interface UpsertEmailTriggerBody {
   description?: string;
 }
 
+export interface BackfillResultRow {
+  id: string;
+  address: string;
+  ownerEmailUpdated?: boolean;
+  latLngUpdated?: boolean;
+  error?: string;
+}
+
+export interface BackfillResult {
+  total: number;
+  ownerEmailUpdated: number;
+  latLngUpdated: number;
+  errors: number;
+  rows: BackfillResultRow[];
+}
+
 export interface AdminProperty {
   id: string;
   name: string;

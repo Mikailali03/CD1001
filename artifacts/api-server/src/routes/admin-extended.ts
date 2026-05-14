@@ -1,12 +1,126 @@
 import { Router } from "express";
 import { db, propertiesTable, assetsTable, userProfilesTable, marketplaceJobsTable, serviceRecordsTable, subscriptionsTable } from "@workspace/db";
-import { eq, ilike, or, sql, count } from "drizzle-orm";
+import { eq, ilike, or, sql, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
 
 const router = Router();
 const adminAuth = [requireAuth(), requireAdmin()];
+
+// ─── Backfill Properties ──────────────────────────────────────────────────────
+
+router.post("/admin/backfill-properties", ...adminAuth, async (req, res) => {
+  const apiKey = process.env.RENTCAST_API_KEY;
+
+  // Step 1: Backfill owner_email via JOIN with user_profiles (pure SQL, fast)
+  await db.execute(sql`
+    UPDATE properties p
+    SET owner_email = up.email
+    FROM user_profiles up
+    WHERE p.user_id = up.user_id
+      AND p.owner_email IS NULL
+      AND up.email IS NOT NULL
+  `);
+
+  // Step 2: Fetch properties still missing lat/lng
+  const missing = await db
+    .select({
+      id: propertiesTable.id,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      state: propertiesTable.state,
+      zipCode: propertiesTable.zipCode,
+    })
+    .from(propertiesTable)
+    .where(isNull(propertiesTable.latitude));
+
+  // Step 3: Re-count after owner_email update
+  const afterEmailUpdate = await db
+    .select({ id: propertiesTable.id, ownerEmail: propertiesTable.ownerEmail })
+    .from(propertiesTable);
+
+  let ownerEmailUpdated = afterEmailUpdate.filter((r) => r.ownerEmail).length;
+  let latLngUpdated = 0;
+  let errors = 0;
+
+  const rows: Array<{
+    id: string;
+    address: string;
+    ownerEmailUpdated: boolean;
+    latLngUpdated: boolean;
+    error?: string;
+  }> = [];
+
+  // Step 4: Geocode each property missing lat/lng via RentCast
+  for (const prop of missing) {
+    const fullAddress = [prop.address, prop.city, prop.state, prop.zipCode]
+      .filter(Boolean)
+      .join(", ");
+
+    const row: (typeof rows)[0] = {
+      id: prop.id,
+      address: prop.address,
+      ownerEmailUpdated: false,
+      latLngUpdated: false,
+    };
+
+    if (!apiKey) {
+      row.error = "RENTCAST_API_KEY not configured";
+      errors++;
+      rows.push(row);
+      continue;
+    }
+
+    try {
+      const url = `https://api.rentcast.io/v1/properties?address=${encodeURIComponent(fullAddress)}&limit=1`;
+      const response = await fetch(url, {
+        headers: { "X-Api-Key": apiKey, Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        req.log.warn({ id: prop.id, status: response.status, body: text }, "RentCast backfill failed");
+        row.error = `RentCast ${response.status}: ${text.slice(0, 100)}`;
+        errors++;
+        rows.push(row);
+        continue;
+      }
+
+      const data = (await response.json()) as any[];
+      if (!data || data.length === 0) {
+        row.error = "No RentCast match found";
+        errors++;
+        rows.push(row);
+        continue;
+      }
+
+      const p = data[0];
+      if (p.latitude != null && p.longitude != null) {
+        await db
+          .update(propertiesTable)
+          .set({ latitude: p.latitude, longitude: p.longitude })
+          .where(eq(propertiesTable.id, prop.id));
+        row.latLngUpdated = true;
+        latLngUpdated++;
+      }
+    } catch (err: any) {
+      req.log.error({ id: prop.id, err: err.message }, "Backfill geocode error");
+      row.error = err.message ?? "Unknown error";
+      errors++;
+    }
+
+    rows.push(row);
+  }
+
+  res.json({
+    total: afterEmailUpdate.length,
+    ownerEmailUpdated,
+    latLngUpdated,
+    errors,
+    rows,
+  });
+});
 
 // ─── Properties ───────────────────────────────────────────────────────────────
 

@@ -25,6 +25,7 @@ import type {
   AdminUser,
   Asset,
   AssignedJobSummary,
+  BackfillResult,
   Collaborator,
   CompleteJobBody,
   CompleteMarketplaceJob200,
@@ -4475,6 +4476,87 @@ export const useToggleEmailTrigger = <
   TContext
 > => {
   return useMutation(getToggleEmailTriggerMutationOptions(options));
+};
+
+/**
+ * @summary Backfill owner_email and lat/lng for all properties
+ */
+export const getBackfillPropertiesUrl = () => {
+  return `/api/admin/backfill-properties`;
+};
+
+export const backfillProperties = async (
+  options?: RequestInit,
+): Promise<BackfillResult> => {
+  return customFetch<BackfillResult>(getBackfillPropertiesUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getBackfillPropertiesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof backfillProperties>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof backfillProperties>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["backfillProperties"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof backfillProperties>>,
+    void
+  > = () => {
+    return backfillProperties(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BackfillPropertiesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof backfillProperties>>
+>;
+
+export type BackfillPropertiesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Backfill owner_email and lat/lng for all properties
+ */
+export const useBackfillProperties = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof backfillProperties>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof backfillProperties>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getBackfillPropertiesMutationOptions(options));
 };
 
 /**

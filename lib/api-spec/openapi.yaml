@@ -1070,6 +1070,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmailTrigger"
 
+  /admin/backfill-properties:
+    post:
+      operationId: backfillProperties
+      tags: [admin]
+      summary: Backfill owner_email and lat/lng for all properties
+      responses:
+        "200":
+          description: Backfill result summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BackfillResult"
+
   /admin/properties:
     get:
       operationId: listAdminProperties
@@ -2173,6 +2186,38 @@ components:
           type: boolean
         description:
           type: string
+
+    BackfillResultRow:
+      type: object
+      required: [id, address]
+      properties:
+        id:
+          type: string
+        address:
+          type: string
+        ownerEmailUpdated:
+          type: boolean
+        latLngUpdated:
+          type: boolean
+        error:
+          type: string
+
+    BackfillResult:
+      type: object
+      required: [total, ownerEmailUpdated, latLngUpdated, errors, rows]
+      properties:
+        total:
+          type: integer
+        ownerEmailUpdated:
+          type: integer
+        latLngUpdated:
+          type: integer
+        errors:
+          type: integer
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/BackfillResultRow"
 
     AdminProperty:
       type: object

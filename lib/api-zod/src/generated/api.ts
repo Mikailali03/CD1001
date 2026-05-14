@@ -1394,6 +1394,25 @@ export const ToggleEmailTriggerResponse = zod.object({
 });
 
 /**
+ * @summary Backfill owner_email and lat/lng for all properties
+ */
+export const BackfillPropertiesResponse = zod.object({
+  total: zod.number(),
+  ownerEmailUpdated: zod.number(),
+  latLngUpdated: zod.number(),
+  errors: zod.number(),
+  rows: zod.array(
+    zod.object({
+      id: zod.string(),
+      address: zod.string(),
+      ownerEmailUpdated: zod.boolean().optional(),
+      latLngUpdated: zod.boolean().optional(),
+      error: zod.string().optional(),
+    }),
+  ),
+});
+
+/**
  * @summary List all properties on the platform with owner info
  */
 export const ListAdminPropertiesQueryParams = zod.object({
