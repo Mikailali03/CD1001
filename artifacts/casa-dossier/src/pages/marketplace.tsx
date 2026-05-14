@@ -39,8 +39,30 @@ import {
   Clock,
   AlertCircle,
   FileText,
+  TriangleAlert,
 } from "lucide-react";
 import { format } from "date-fns";
+
+// ── Service area check ────────────────────────────────────────────────────────
+// CasaService currently serves the Atlanta metro within a 50-mile radius.
+// We approximate this using state + the first 3 digits of the zip code.
+// Valid prefixes: 300, 301, 302, 303 cover essentially all of metro Atlanta
+// and its surrounding counties (Fulton, DeKalb, Cobb, Gwinnett, Clayton, etc.)
+const ATLANTA_METRO_ZIP_PREFIXES = ["300", "301", "302", "303"];
+
+function isInAtlantaServiceArea(property: {
+  state?: string | null;
+  zipCode?: string | null;
+}): boolean {
+  const state = property.state?.trim().toUpperCase();
+  // If no state info, give benefit of the doubt
+  if (!state) return true;
+  if (state !== "GA" && state !== "GEORGIA") return false;
+  const zip = property.zipCode?.trim() ?? "";
+  // In GA but no zip — allow
+  if (!zip) return true;
+  return ATLANTA_METRO_ZIP_PREFIXES.includes(zip.slice(0, 3));
+}
 
 type PostJobDialogProps = {
   initialOpen?: boolean;
@@ -104,6 +126,9 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
   // Find selected asset name for dialog subtitle
   const selectedAsset = assets?.find((a) => a.id === assetId);
   const selectedProperty = properties?.find((p) => p.id === propertyId);
+
+  // Service area gate — checked whenever a property is selected
+  const inServiceArea = selectedProperty ? isInAtlantaServiceArea(selectedProperty) : true;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -196,11 +221,24 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           </div>
         </div>
 
+        {selectedProperty && !inServiceArea && (
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+            <div>
+              <p className="font-semibold">Outside our service area</p>
+              <p className="text-xs mt-0.5 text-amber-700">
+                CasaService currently serves the Atlanta metro area (within 50 miles of Atlanta, GA).
+                We're not yet available at this property's location. We'll let you know when we expand!
+              </p>
+            </div>
+          </div>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
           <Button
             onClick={handleSubmit}
-            disabled={!assetId || !description.trim() || createJob.isPending}
+            disabled={!assetId || !description.trim() || createJob.isPending || !inServiceArea}
             data-testid="button-submit-job"
           >
             {createJob.isPending ? "Posting..." : "Post Request"}

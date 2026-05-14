@@ -38,6 +38,26 @@ import {
   DollarSign,
 } from "lucide-react";
 
+// ── Service area ──────────────────────────────────────────────────────────────
+const ATLANTA_LAT = 33.749;
+const ATLANTA_LNG = -84.388;
+const SERVICE_RADIUS_MILES = 50;
+
+// Georgia map bounds (sw, ne corners)
+const GEORGIA_BOUNDS: L.LatLngBoundsExpression = [[30.3, -87.0], [35.2, -80.8]];
+
+function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Fix Leaflet default icon paths broken by bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -81,7 +101,15 @@ function createUrgencyIcon(urgency: string) {
 export default function MapPage() {
   const { signOut } = useAuth();
   const { user } = useUser();
-  const { data: jobs = [], isLoading: jobsLoading } = useListOpenMarketplaceJobs();
+  const { data: rawJobs = [], isLoading: jobsLoading } = useListOpenMarketplaceJobs();
+
+  // Only show jobs within 50 miles of Atlanta
+  const jobs = rawJobs.filter(
+    (j) =>
+      j.latitude != null &&
+      j.longitude != null &&
+      distanceMiles(ATLANTA_LAT, ATLANTA_LNG, j.latitude!, j.longitude!) <= SERVICE_RADIUS_MILES,
+  );
   const { data: profile } = useGetUserProfile({ query: { queryKey: getGetUserProfileQueryKey(), retry: false } });
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -113,7 +141,13 @@ export default function MapPage() {
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
-    const map = L.map(mapRef.current, { center: [39.5, -98.35], zoom: 4 });
+    const map = L.map(mapRef.current, {
+      center: [ATLANTA_LAT, ATLANTA_LNG],
+      zoom: 10,
+      maxBounds: GEORGIA_BOUNDS,
+      maxBoundsViscosity: 0.85,
+      minZoom: 8,
+    });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
@@ -131,14 +165,8 @@ export default function MapPage() {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current.clear();
 
-    const validJobs = jobs.filter((j) => j.latitude != null && j.longitude != null);
-
-    if (validJobs.length > 0) {
-      const bounds = L.latLngBounds(validJobs.map((j) => [j.latitude!, j.longitude!] as [number, number]));
-      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 13 });
-    }
-
-    validJobs.forEach((job) => {
+    // jobs are already filtered to within 50 miles of Atlanta
+    jobs.forEach((job) => {
       const marker = L.marker([job.latitude!, job.longitude!], {
         icon: createUrgencyIcon(job.urgency),
       });
@@ -221,7 +249,7 @@ export default function MapPage() {
             ) : jobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-center px-6">
                 <CheckCircle2 className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">No open jobs right now.</p>
+                <p className="text-sm text-muted-foreground">No open jobs in the Atlanta area.</p>
                 <p className="text-xs text-muted-foreground/70 mt-1">Check back soon!</p>
               </div>
             ) : (
@@ -258,11 +286,9 @@ export default function MapPage() {
         {/* Map */}
         <div className="flex-1 relative">
           <div ref={mapRef} className="absolute inset-0" />
-          {jobs.filter((j) => j.latitude == null).length > 0 && (
-            <div className="absolute bottom-4 right-4 bg-card border border-border rounded-lg px-3 py-2 text-xs text-muted-foreground shadow-sm z-10">
-              {jobs.filter((j) => j.latitude == null).length} job(s) have no location data
-            </div>
-          )}
+          <div className="absolute bottom-4 right-4 bg-card/90 border border-border rounded-lg px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm z-10 pointer-events-none">
+            Atlanta metro · 50-mile radius
+          </div>
         </div>
       </div>
 
