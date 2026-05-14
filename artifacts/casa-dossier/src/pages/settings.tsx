@@ -11,9 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   Bell, Shield, User, ArrowRightLeft, Clock, X, Copy,
-  CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Home,
+  CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Home, LayoutDashboard, ArrowRight,
 } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "wouter";
+import { useGetUserProfile, getGetUserProfileQueryKey } from "@workspace/api-client-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -275,6 +277,42 @@ function DeedTransferCard() {
   );
 }
 
+function AdminCard() {
+  const { data: profile } = useGetUserProfile({
+    query: { queryKey: getGetUserProfileQueryKey(), retry: false },
+  });
+  const isAdmin = (profile as { role?: string } | undefined)?.role === "admin";
+  if (!isAdmin) return null;
+
+  return (
+    <div className="md:col-span-2">
+      <Card className="border-primary/30 bg-primary/5 hover-elevate transition-shadow">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <LayoutDashboard className="h-5 w-5 text-primary" />
+            Admin Access
+            <Badge className="ml-1 text-[10px] font-semibold uppercase tracking-wider bg-primary/15 text-primary border-primary/20">
+              Admin
+            </Badge>
+          </CardTitle>
+          <CardDescription>
+            You have admin privileges. Access the platform-wide admin dashboard to manage users, properties, and technicians.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link href="/admin">
+            <Button className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              Go to Admin Dashboard
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function Settings() {
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
@@ -284,6 +322,7 @@ export default function Settings() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
+        <AdminCard />
         <Card className="hover-elevate transition-shadow">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">

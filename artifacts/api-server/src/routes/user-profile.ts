@@ -11,7 +11,7 @@ const UpsertBody = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   email: z.string().optional(),
-  role: z.enum(["homeowner", "technician"]),
+  role: z.enum(["homeowner", "technician", "admin"]),
   phone: z.string().optional(),
 });
 

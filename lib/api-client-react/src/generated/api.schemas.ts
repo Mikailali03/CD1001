@@ -366,6 +366,7 @@ export type UserProfileRole =
 export const UserProfileRole = {
   homeowner: "homeowner",
   technician: "technician",
+  admin: "admin",
 } as const;
 
 export interface UserProfile {
@@ -386,6 +387,7 @@ export type UpsertUserProfileBodyRole =
 export const UpsertUserProfileBodyRole = {
   homeowner: "homeowner",
   technician: "technician",
+  admin: "admin",
 } as const;
 
 export interface UpsertUserProfileBody {

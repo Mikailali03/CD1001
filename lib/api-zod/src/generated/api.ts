@@ -644,7 +644,7 @@ export const GetUserProfileResponse = zod.object({
   firstName: zod.string(),
   lastName: zod.string(),
   email: zod.string().optional(),
-  role: zod.enum(["homeowner", "technician"]),
+  role: zod.enum(["homeowner", "technician", "admin"]),
   technicianNumber: zod.string().optional(),
   phone: zod.string().optional(),
   createdAt: zod.coerce.date().optional(),
@@ -658,7 +658,7 @@ export const UpsertUserProfileBody = zod.object({
   firstName: zod.string(),
   lastName: zod.string(),
   email: zod.string().optional(),
-  role: zod.enum(["homeowner", "technician"]),
+  role: zod.enum(["homeowner", "technician", "admin"]),
   phone: zod.string().optional(),
 });
 
@@ -667,7 +667,7 @@ export const UpsertUserProfileResponse = zod.object({
   firstName: zod.string(),
   lastName: zod.string(),
   email: zod.string().optional(),
-  role: zod.enum(["homeowner", "technician"]),
+  role: zod.enum(["homeowner", "technician", "admin"]),
   technicianNumber: zod.string().optional(),
   phone: zod.string().optional(),
   createdAt: zod.coerce.date().optional(),

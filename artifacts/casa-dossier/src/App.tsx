@@ -29,6 +29,7 @@ import CapitalOutlook from "@/pages/capital-outlook";
 import Settings from "@/pages/settings";
 import ClaimTransfer from "@/pages/claim";
 import PropertyReport from "@/pages/report";
+import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -148,7 +149,9 @@ function TechnicianAwareRedirect() {
     );
   }
 
-  if (!isError && (profile as { role?: string } | undefined)?.role === "technician") {
+  const role = (profile as { role?: string } | undefined)?.role;
+
+  if (!isError && role === "technician") {
     window.location.href = "/tech/";
     return null;
   }
@@ -220,6 +223,7 @@ function AppRoutes() {
         <Route path="/settings" component={Settings} />
         <Route path="/claim/:token" component={ClaimTransfer} />
         <Route path="/properties/:id/report" component={PropertyReport} />
+        <Route path="/admin" component={AdminDashboard} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

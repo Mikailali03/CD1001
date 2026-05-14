@@ -7,7 +7,7 @@ export const userProfilesTable = pgTable("user_profiles", {
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email"),
-  role: text("role").notNull().default("homeowner").$type<"homeowner" | "technician">(),
+  role: text("role").notNull().default("homeowner").$type<"homeowner" | "technician" | "admin">(),
   technicianNumber: text("technician_number"),
   phone: text("phone"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

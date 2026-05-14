@@ -15,9 +15,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Building2, ChevronDown, Check, Plus, FileText, LogOut, User, Zap, Shield, Star, Crown } from "lucide-react";
+import { Building2, ChevronDown, Check, Plus, FileText, LogOut, User, Zap, Shield, Star, Crown, LayoutDashboard } from "lucide-react";
 import { Link } from "wouter";
 import { useClerk, useUser } from "@clerk/react";
+import { useGetUserProfile, getGetUserProfileQueryKey } from "@workspace/api-client-react";
 
 function PropertySwitcher() {
   const { activeProperty, properties, setActivePropertyId } = useProperty();
@@ -136,6 +137,11 @@ function UserMenu() {
   const { user } = useUser();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
+  const { data: profile } = useGetUserProfile({
+    query: { queryKey: getGetUserProfileQueryKey(), retry: false },
+  });
+  const isAdmin = (profile as { role?: string } | undefined)?.role === "admin";
+
   const displayName = user?.firstName
     ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}`
     : user?.emailAddresses?.[0]?.emailAddress ?? "Account";
@@ -154,6 +160,18 @@ function UserMenu() {
           {user?.emailAddresses?.[0]?.emailAddress}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {isAdmin && (
+          <DropdownMenuItem asChild>
+            <Link
+              href="/admin"
+              className="flex items-center gap-2 text-sm cursor-pointer text-primary focus:text-primary font-medium"
+            >
+              <LayoutDashboard className="h-3.5 w-3.5" />
+              Admin Dashboard
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {isAdmin && <DropdownMenuSeparator />}
         <DropdownMenuItem
           onSelect={() => signOut({ redirectUrl: `${basePath}/` })}
           className="gap-2 text-sm cursor-pointer text-destructive focus:text-destructive"

@@ -1404,7 +1404,7 @@ components:
           type: string
         role:
           type: string
-          enum: [homeowner, technician]
+          enum: [homeowner, technician, admin]
         technicianNumber:
           type: string
         phone:
@@ -1428,7 +1428,7 @@ components:
           type: string
         role:
           type: string
-          enum: [homeowner, technician]
+          enum: [homeowner, technician, admin]
         phone:
           type: string
 
