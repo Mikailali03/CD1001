@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useUpdateProperty,
@@ -54,6 +54,11 @@ export function EditPropertySheet({ property, open, onOpenChange, onSaved }: Pro
   const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && property) populate(property);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, property?.id]);
 
   function populate(p: Property) {
     setName(p.name ?? "");
