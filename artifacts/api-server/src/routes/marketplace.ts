@@ -64,12 +64,15 @@ router.get("/marketplace/jobs", requireAuth(), async (req, res) => {
       city: propertiesTable.city,
       state: propertiesTable.state,
       technicianName: marketplaceJobsTable.technicianName,
+      technicianPhone: userProfilesTable.phone,
+      scheduledAt: marketplaceJobsTable.scheduledAt,
       acceptedAt: marketplaceJobsTable.acceptedAt,
       createdAt: marketplaceJobsTable.createdAt,
     })
     .from(marketplaceJobsTable)
     .innerJoin(assetsTable, eq(marketplaceJobsTable.assetId, assetsTable.id))
     .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
+    .leftJoin(userProfilesTable, eq(marketplaceJobsTable.technicianId, userProfilesTable.userId))
     .where(inArray(marketplaceJobsTable.assetId, assetIds))
     .orderBy(marketplaceJobsTable.createdAt);
 
@@ -151,6 +154,41 @@ router.get("/marketplace/jobs/open", requireAuth(), async (req, res) => {
   );
 });
 
+// ── Technician: list jobs assigned to them ────────────────────────────────
+router.get("/marketplace/jobs/assigned", requireAuth(), async (req, res) => {
+  const rows = await db
+    .select({
+      id: marketplaceJobsTable.id,
+      description: marketplaceJobsTable.description,
+      urgency: marketplaceJobsTable.urgency,
+      status: marketplaceJobsTable.status,
+      assetName: assetsTable.name,
+      assetCategory: assetsTable.category,
+      assetBrand: assetsTable.brand,
+      assetModel: assetsTable.model,
+      propertyAddress: propertiesTable.address,
+      propertyCity: propertiesTable.city,
+      propertyState: propertiesTable.state,
+      propertyZipCode: propertiesTable.zipCode,
+      contactPhone: marketplaceJobsTable.contactPhone,
+      scheduledAt: marketplaceJobsTable.scheduledAt,
+      acceptedAt: marketplaceJobsTable.acceptedAt,
+      createdAt: marketplaceJobsTable.createdAt,
+    })
+    .from(marketplaceJobsTable)
+    .innerJoin(assetsTable, eq(marketplaceJobsTable.assetId, assetsTable.id))
+    .innerJoin(propertiesTable, eq(assetsTable.propertyId, propertiesTable.id))
+    .where(
+      and(
+        eq(marketplaceJobsTable.technicianId, req.userId),
+        eq(marketplaceJobsTable.status, "claimed")
+      )
+    )
+    .orderBy(marketplaceJobsTable.acceptedAt);
+
+  res.json(rows);
+});
+
 // ── Technician: get full job details ──────────────────────────────────────
 const JobParams = z.object({ jobId: z.string() });
 
@@ -200,11 +238,40 @@ router.get("/marketplace/jobs/:jobId/details", requireAuth(), async (req, res) =
     serviceHistory,
     contactPhone: isAcceptedByMe ? row.job.contactPhone : null,
     technicianId: row.job.technicianId,
+    scheduledAt: row.job.scheduledAt,
     latitude: row.job.latitude != null ? parseFloat(String(row.job.latitude)) : null,
     longitude: row.job.longitude != null ? parseFloat(String(row.job.longitude)) : null,
     createdAt: row.job.createdAt,
     acceptedAt: row.job.acceptedAt,
   });
+});
+
+// ── Technician: schedule a job ────────────────────────────────────────────
+const ScheduleBody = z.object({ scheduledAt: z.string() });
+
+router.patch("/marketplace/jobs/:jobId/schedule", requireAuth(), async (req, res) => {
+  const { jobId } = JobParams.parse(req.params);
+  const { scheduledAt } = ScheduleBody.parse(req.body);
+
+  const [job] = await db
+    .select()
+    .from(marketplaceJobsTable)
+    .where(
+      and(
+        eq(marketplaceJobsTable.id, jobId),
+        eq(marketplaceJobsTable.technicianId, req.userId)
+      )
+    );
+
+  if (!job) return res.status(404).json({ error: "Job not found or not assigned to you" });
+
+  const newDate = new Date(scheduledAt);
+  await db
+    .update(marketplaceJobsTable)
+    .set({ scheduledAt: newDate })
+    .where(eq(marketplaceJobsTable.id, jobId));
+
+  res.json({ ok: true, scheduledAt: newDate.toISOString() });
 });
 
 // ── Technician: accept a job ──────────────────────────────────────────────
@@ -284,6 +351,7 @@ router.post("/marketplace/jobs/:jobId/accept", requireAuth(), async (req, res) =
     serviceHistory,
     contactPhone: updatedJob?.contactPhone ?? null,
     technicianId: row.job.technicianId,
+    scheduledAt: row.job.scheduledAt,
     latitude: row.job.latitude != null ? parseFloat(String(row.job.latitude)) : null,
     longitude: row.job.longitude != null ? parseFloat(String(row.job.longitude)) : null,
     createdAt: row.job.createdAt,

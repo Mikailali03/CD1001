@@ -19,6 +19,7 @@ import type {
 import type {
   ActivityItem,
   Asset,
+  AssignedJobSummary,
   Collaborator,
   CreateAssetBody,
   CreateMaintenanceTaskBody,
@@ -36,6 +37,8 @@ import type {
   MarketplaceJob,
   Property,
   PropertySummary,
+  ScheduleJobBody,
+  ScheduleMarketplaceJob200,
   ServiceRecord,
   TechJobDetail,
   TechJobSummary,
@@ -2554,6 +2557,171 @@ export const useAcceptMarketplaceJob = <
   TContext
 > => {
   return useMutation(getAcceptMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary List jobs claimed by the current technician
+ */
+export const getListAssignedJobsUrl = () => {
+  return `/api/marketplace/jobs/assigned`;
+};
+
+export const listAssignedJobs = async (
+  options?: RequestInit,
+): Promise<AssignedJobSummary[]> => {
+  return customFetch<AssignedJobSummary[]>(getListAssignedJobsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAssignedJobsQueryKey = () => {
+  return [`/api/marketplace/jobs/assigned`] as const;
+};
+
+export const getListAssignedJobsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAssignedJobs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAssignedJobs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAssignedJobsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAssignedJobs>>
+  > = ({ signal }) => listAssignedJobs({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAssignedJobs>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAssignedJobsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAssignedJobs>>
+>;
+export type ListAssignedJobsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List jobs claimed by the current technician
+ */
+
+export function useListAssignedJobs<
+  TData = Awaited<ReturnType<typeof listAssignedJobs>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAssignedJobs>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAssignedJobsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Set a scheduled date and time for a claimed job
+ */
+export const getScheduleMarketplaceJobUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/schedule`;
+};
+
+export const scheduleMarketplaceJob = async (
+  jobId: string,
+  scheduleJobBody: ScheduleJobBody,
+  options?: RequestInit,
+): Promise<ScheduleMarketplaceJob200> => {
+  return customFetch<ScheduleMarketplaceJob200>(
+    getScheduleMarketplaceJobUrl(jobId),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(scheduleJobBody),
+    },
+  );
+};
+
+export const getScheduleMarketplaceJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scheduleMarketplaceJob>>,
+    TError,
+    { jobId: string; data: BodyType<ScheduleJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scheduleMarketplaceJob>>,
+  TError,
+  { jobId: string; data: BodyType<ScheduleJobBody> },
+  TContext
+> => {
+  const mutationKey = ["scheduleMarketplaceJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scheduleMarketplaceJob>>,
+    { jobId: string; data: BodyType<ScheduleJobBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return scheduleMarketplaceJob(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScheduleMarketplaceJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scheduleMarketplaceJob>>
+>;
+export type ScheduleMarketplaceJobMutationBody = BodyType<ScheduleJobBody>;
+export type ScheduleMarketplaceJobMutationError = ErrorType<void>;
+
+/**
+ * @summary Set a scheduled date and time for a claimed job
+ */
+export const useScheduleMarketplaceJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scheduleMarketplaceJob>>,
+    TError,
+    { jobId: string; data: BodyType<ScheduleJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scheduleMarketplaceJob>>,
+  TError,
+  { jobId: string; data: BodyType<ScheduleJobBody> },
+  TContext
+> => {
+  return useMutation(getScheduleMarketplaceJobMutationOptions(options));
 };
 
 /**

@@ -205,6 +205,16 @@ export default function MapPage() {
           <span className="text-sidebar-foreground font-semibold text-sm">CasaService</span>
           <span className="text-sidebar-foreground/40 text-xs font-normal">Technician Portal</span>
         </div>
+        <nav className="flex items-center gap-1 ml-4">
+          <Button size="sm" variant="ghost" className="text-sidebar-foreground bg-sidebar-accent h-8 text-xs font-semibold">
+            Open Jobs
+          </Button>
+          <Link href="/my-jobs">
+            <Button size="sm" variant="ghost" className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs">
+              My Jobs
+            </Button>
+          </Link>
+        </nav>
         <div className="ml-auto flex items-center gap-2">
           {profile && (
             <span className="text-xs text-sidebar-foreground/60 font-mono hidden sm:block">

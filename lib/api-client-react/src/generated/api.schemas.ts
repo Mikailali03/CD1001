@@ -431,6 +431,8 @@ export interface MarketplaceJob {
   latitude?: number;
   longitude?: number;
   technicianName?: string;
+  technicianPhone?: string;
+  scheduledAt?: string;
   acceptedAt?: string;
   createdAt: string;
 }
@@ -528,10 +530,53 @@ export interface TechJobDetail {
   /** Only present after job is accepted by this technician */
   contactPhone?: string;
   technicianId?: string;
+  scheduledAt?: string;
   latitude?: number;
   longitude?: number;
   createdAt: string;
   acceptedAt?: string;
+}
+
+export type AssignedJobSummaryUrgency =
+  (typeof AssignedJobSummaryUrgency)[keyof typeof AssignedJobSummaryUrgency];
+
+export const AssignedJobSummaryUrgency = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  emergency: "emergency",
+} as const;
+
+export type AssignedJobSummaryStatus =
+  (typeof AssignedJobSummaryStatus)[keyof typeof AssignedJobSummaryStatus];
+
+export const AssignedJobSummaryStatus = {
+  open: "open",
+  claimed: "claimed",
+  completed: "completed",
+} as const;
+
+export interface AssignedJobSummary {
+  id: string;
+  description: string;
+  urgency: AssignedJobSummaryUrgency;
+  status: AssignedJobSummaryStatus;
+  assetName: string;
+  assetCategory: string;
+  assetBrand?: string;
+  assetModel?: string;
+  propertyAddress: string;
+  propertyCity: string;
+  propertyState: string;
+  propertyZipCode: string;
+  contactPhone: string;
+  scheduledAt?: string;
+  acceptedAt: string;
+  createdAt: string;
+}
+
+export interface ScheduleJobBody {
+  scheduledAt: string;
 }
 
 /**
@@ -607,4 +652,9 @@ export type ListAssetsParams = {
 export type ListGuidesParams = {
   category?: string;
   difficulty?: string;
+};
+
+export type ScheduleMarketplaceJob200 = {
+  ok?: boolean;
+  scheduledAt?: string;
 };

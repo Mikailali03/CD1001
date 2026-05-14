@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPropertySummary,
   useUpdateProperty,
+  useListMarketplaceJobs,
   getGetPropertyQueryKey,
 } from "@workspace/api-client-react";
 import { useProperty } from "@/contexts/property-context";
@@ -31,6 +32,9 @@ import {
   BedDouble,
   Bath,
   Ruler,
+  Wrench,
+  Clock,
+  Calendar,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -129,6 +133,67 @@ function LedgerCard({ onClick }: { onClick: () => void }) {
   );
 }
 
+// ── Pending service requests widget ───────────────────────────────────────────
+const jobUrgencyConfig: Record<string, { label: string; icon: React.ReactNode; borderColor: string; textColor: string }> = {
+  emergency: { label: "Emergency", borderColor: "border-l-destructive",   textColor: "text-destructive",    icon: <AlertCircle className="h-3 w-3 text-destructive" /> },
+  high:      { label: "High",      borderColor: "border-l-orange-500",    textColor: "text-orange-600",     icon: <AlertCircle className="h-3 w-3 text-orange-500" /> },
+  medium:    { label: "Medium",    borderColor: "border-l-amber-400",     textColor: "text-amber-600",      icon: <Clock className="h-3 w-3 text-amber-500" /> },
+  low:       { label: "Low",       borderColor: "border-l-muted-foreground/30", textColor: "text-muted-foreground", icon: <Clock className="h-3 w-3 text-muted-foreground" /> },
+};
+
+function PendingJobsWidget() {
+  const { data: jobs } = useListMarketplaceJobs();
+  const activeJobs = (jobs ?? []).filter((j) => j.status === "open" || j.status === "claimed");
+  if (!activeJobs.length) return null;
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wrench className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-semibold text-foreground">Active Service Requests</h2>
+          <span className="text-xs bg-primary/10 text-primary font-semibold rounded-full px-2 py-0.5">{activeJobs.length}</span>
+        </div>
+        <Link href="/marketplace">
+          <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground">
+            View all <ArrowRight className="h-3 w-3" />
+          </Button>
+        </Link>
+      </div>
+      <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3">
+        {activeJobs.map((job) => {
+          const uc = jobUrgencyConfig[job.urgency ?? "medium"] ?? jobUrgencyConfig.medium;
+          const isClaimed = job.status === "claimed";
+          return (
+            <Link key={job.id} href="/marketplace">
+              <div className={`shrink-0 w-64 sm:w-auto rounded-xl border border-l-4 ${uc.borderColor} bg-card hover:shadow-md hover:-translate-y-0.5 transition-all p-3.5 space-y-2 cursor-pointer`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {uc.icon}
+                    <span className="text-xs font-semibold text-foreground truncate">{job.assetName}</span>
+                  </div>
+                  <Badge variant={isClaimed ? "default" : "secondary"} className="text-[10px] shrink-0">
+                    {isClaimed ? "Pro Assigned" : "Awaiting Pro"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground line-clamp-2">{job.description}</p>
+                {isClaimed && (
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    {(job as any).scheduledAt
+                      ? <span className="font-medium text-foreground">{format(new Date((job as any).scheduledAt), "MMM d 'at' h:mm a")}</span>
+                      : <span className="italic">Service date pending</span>}
+                  </div>
+                )}
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function NoPropertyState() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
@@ -222,6 +287,9 @@ export default function Dashboard() {
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+      {/* ── Active service requests widget ── */}
+      <PendingJobsWidget />
 
       {/* ── Property header + score widget ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

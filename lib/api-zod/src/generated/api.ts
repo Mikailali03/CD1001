@@ -693,6 +693,8 @@ export const ListMarketplaceJobsResponseItem = zod.object({
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   technicianName: zod.string().optional(),
+  technicianPhone: zod.string().optional(),
+  scheduledAt: zod.coerce.date().optional(),
   acceptedAt: zod.coerce.date().optional(),
   createdAt: zod.coerce.date(),
 });
@@ -779,6 +781,7 @@ export const GetMarketplaceJobDetailsResponse = zod.object({
     .optional()
     .describe("Only present after job is accepted by this technician"),
   technicianId: zod.string().optional(),
+  scheduledAt: zod.coerce.date().optional(),
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   createdAt: zod.coerce.date(),
@@ -833,10 +836,50 @@ export const AcceptMarketplaceJobResponse = zod.object({
     .optional()
     .describe("Only present after job is accepted by this technician"),
   technicianId: zod.string().optional(),
+  scheduledAt: zod.coerce.date().optional(),
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   createdAt: zod.coerce.date(),
   acceptedAt: zod.coerce.date().optional(),
+});
+
+/**
+ * @summary List jobs claimed by the current technician
+ */
+export const ListAssignedJobsResponseItem = zod.object({
+  id: zod.string(),
+  description: zod.string(),
+  urgency: zod.enum(["low", "medium", "high", "emergency"]),
+  status: zod.enum(["open", "claimed", "completed"]),
+  assetName: zod.string(),
+  assetCategory: zod.string(),
+  assetBrand: zod.string().optional(),
+  assetModel: zod.string().optional(),
+  propertyAddress: zod.string(),
+  propertyCity: zod.string(),
+  propertyState: zod.string(),
+  propertyZipCode: zod.string(),
+  contactPhone: zod.string(),
+  scheduledAt: zod.coerce.date().optional(),
+  acceptedAt: zod.coerce.date(),
+  createdAt: zod.coerce.date(),
+});
+export const ListAssignedJobsResponse = zod.array(ListAssignedJobsResponseItem);
+
+/**
+ * @summary Set a scheduled date and time for a claimed job
+ */
+export const ScheduleMarketplaceJobParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const ScheduleMarketplaceJobBody = zod.object({
+  scheduledAt: zod.coerce.date(),
+});
+
+export const ScheduleMarketplaceJobResponse = zod.object({
+  ok: zod.boolean().optional(),
+  scheduledAt: zod.coerce.date().optional(),
 });
 
 /**

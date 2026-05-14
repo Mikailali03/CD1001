@@ -13,6 +13,7 @@ export const marketplaceJobsTable = pgTable("marketplace_jobs", {
   technicianId: text("technician_id"),
   technicianNumber: text("technician_number"),
   technicianName: text("technician_name"),
+  scheduledAt: timestamp("scheduled_at"),
   acceptedAt: timestamp("accepted_at"),
   latitude: numeric("latitude", { precision: 10, scale: 7 }),
   longitude: numeric("longitude", { precision: 10, scale: 7 }),

@@ -613,6 +613,54 @@ paths:
         "404":
           description: Job not found
 
+  /marketplace/jobs/assigned:
+    get:
+      operationId: listAssignedJobs
+      tags: [technician]
+      summary: List jobs claimed by the current technician
+      responses:
+        "200":
+          description: List of claimed jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AssignedJobSummary"
+
+  /marketplace/jobs/{jobId}/schedule:
+    patch:
+      operationId: scheduleMarketplaceJob
+      tags: [technician]
+      summary: Set a scheduled date and time for a claimed job
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScheduleJobBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  scheduledAt:
+                    type: string
+                    format: date-time
+        "404":
+          description: Job not found
+
   # ─── Inbox ──────────────────────────────────────────────────────────────────
   /inbox:
     get:
@@ -1329,6 +1377,11 @@ components:
           type: number
         technicianName:
           type: string
+        technicianPhone:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
         acceptedAt:
           type: string
           format: date-time
@@ -1433,6 +1486,9 @@ components:
           description: Only present after job is accepted by this technician
         technicianId:
           type: string
+        scheduledAt:
+          type: string
+          format: date-time
         latitude:
           type: number
         longitude:
@@ -1441,6 +1497,56 @@ components:
           type: string
           format: date-time
         acceptedAt:
+          type: string
+          format: date-time
+
+    AssignedJobSummary:
+      type: object
+      required: [id, description, urgency, status, assetName, assetCategory, propertyAddress, propertyCity, propertyState, propertyZipCode, contactPhone, acceptedAt, createdAt]
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+          enum: [low, medium, high, emergency]
+        status:
+          type: string
+          enum: [open, claimed, completed]
+        assetName:
+          type: string
+        assetCategory:
+          type: string
+        assetBrand:
+          type: string
+        assetModel:
+          type: string
+        propertyAddress:
+          type: string
+        propertyCity:
+          type: string
+        propertyState:
+          type: string
+        propertyZipCode:
+          type: string
+        contactPhone:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    ScheduleJobBody:
+      type: object
+      required: [scheduledAt]
+      properties:
+        scheduledAt:
           type: string
           format: date-time
 
