@@ -20,14 +20,11 @@ function AuthGate() {
 
   useEffect(() => {
     if (isSignedIn) {
-      setAuthTokenGetter(() => getToken({ template: "casa-dossier" }));
+      setAuthTokenGetter(() => getToken());
     } else {
       setAuthTokenGetter(null);
     }
-    return () => {
-      setAuthTokenGetter(null);
-    };
-  }, [isSignedIn, getToken]);
+  }, [isSignedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isLoaded) {
     return (

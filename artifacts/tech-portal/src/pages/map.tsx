@@ -119,9 +119,9 @@ export default function MapPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: jobDetail, isLoading: detailLoading } = useGetMarketplaceJobDetails(
+  const { data: jobDetail, isLoading: detailLoading, isError: detailError } = useGetMarketplaceJobDetails(
     selectedJobId ?? "",
-    { query: { queryKey: getGetMarketplaceJobDetailsQueryKey(selectedJobId ?? ""), enabled: !!selectedJobId } }
+    { query: { queryKey: getGetMarketplaceJobDetailsQueryKey(selectedJobId ?? ""), enabled: !!selectedJobId, retry: 1 } }
   );
 
   const acceptMutation = useAcceptMarketplaceJob({
@@ -295,7 +295,13 @@ export default function MapPage() {
       {/* Job detail sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="right" className="w-full sm:w-[420px] overflow-y-auto p-0">
-          {detailLoading || !jobDetail ? (
+          {detailError ? (
+            <div className="p-6 flex flex-col items-center justify-center gap-3 text-center">
+              <AlertCircle className="h-8 w-8 text-destructive/60" />
+              <p className="text-sm font-medium text-foreground">Could not load job details</p>
+              <p className="text-xs text-muted-foreground">Please try again or contact support.</p>
+            </div>
+          ) : detailLoading || !jobDetail ? (
             <div className="p-6 space-y-4">
               <Skeleton className="h-6 w-48" />
               <Skeleton className="h-4 w-full" />
@@ -332,22 +338,31 @@ export default function MapPage() {
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
-                      {(jobDetail as any).assetInstallYear && (
-                        <p className="text-muted-foreground text-xs">Installed {(jobDetail as any).assetInstallYear}</p>
+                      {(jobDetail as any).assetInstallDate && (
+                        <p className="text-muted-foreground text-xs">Installed {(jobDetail as any).assetInstallDate}</p>
+                      )}
+                      {(jobDetail as any).assetWarrantyExpiry && (
+                        <p className="text-muted-foreground text-xs">Warranty expires {(jobDetail as any).assetWarrantyExpiry}</p>
+                      )}
+                      {(jobDetail as any).assetSerialNumber && (
+                        <p className="text-muted-foreground text-xs">S/N: {(jobDetail as any).assetSerialNumber}</p>
+                      )}
+                      {(jobDetail as any).assetNotes && (
+                        <p className="text-muted-foreground text-xs mt-1 italic">{(jobDetail as any).assetNotes}</p>
                       )}
                     </div>
                   </div>
                 )}
 
                 {/* Location */}
-                {(jobDetail as any).city && (
+                {(jobDetail as any).propertyCity && (
                   <div className="flex items-start gap-3 text-sm">
                     <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div>
                       <p className="font-medium text-foreground">
                         {isMine && (jobDetail as any).propertyAddress
                           ? (jobDetail as any).propertyAddress
-                          : `${(jobDetail as any).city}, ${(jobDetail as any).state ?? ""}`}
+                          : `${(jobDetail as any).propertyCity}, ${(jobDetail as any).propertyState ?? ""}`}
                       </p>
                       {!isMine && <p className="text-xs text-muted-foreground">Full address revealed after accepting</p>}
                     </div>
@@ -365,19 +380,19 @@ export default function MapPage() {
                 )}
 
                 {/* Property & home info */}
-                {(jobDetail as any).propertyType && (
+                {(jobDetail as any).propertyYearBuilt && (
                   <div className="flex items-center gap-3 text-sm">
                     <Home className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-foreground capitalize">{(jobDetail as any).propertyType?.replace(/_/g, " ")}</span>
+                    <span className="text-foreground">Built {(jobDetail as any).propertyYearBuilt}</span>
                   </div>
                 )}
 
                 {/* Service history */}
-                {(jobDetail as any).recentServiceRecords && (jobDetail as any).recentServiceRecords.length > 0 && (
+                {(jobDetail as any).serviceHistory && (jobDetail as any).serviceHistory.length > 0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Service History</p>
                     <div className="space-y-2">
-                      {(jobDetail as any).recentServiceRecords.slice(0, 3).map((r: any, i: number) => (
+                      {(jobDetail as any).serviceHistory.slice(0, 3).map((r: any, i: number) => (
                         <div key={i} className="bg-muted/50 rounded-lg p-2.5 text-xs">
                           <div className="flex items-center justify-between mb-0.5">
                             <span className="font-medium text-foreground">{r.description}</span>
