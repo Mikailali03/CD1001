@@ -1392,3 +1392,78 @@ export const ToggleEmailTriggerResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date(),
 });
+
+/**
+ * @summary List all properties on the platform with owner info
+ */
+export const ListAdminPropertiesQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+});
+
+export const ListAdminPropertiesResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  address: zod.string(),
+  city: zod.string().optional(),
+  state: zod.string().optional(),
+  yearBuilt: zod.number().optional(),
+  sqft: zod.number().optional(),
+  photoUrl: zod.string().optional(),
+  userId: zod.string(),
+  ownerName: zod.string().optional(),
+  ownerEmail: zod.string().optional(),
+  assetCount: zod.number(),
+  createdAt: zod.coerce.date(),
+});
+export const ListAdminPropertiesResponse = zod.array(
+  ListAdminPropertiesResponseItem,
+);
+
+/**
+ * @summary List all technicians with job stats
+ */
+export const ListAdminTechniciansResponseItem = zod.object({
+  userId: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().optional(),
+  phone: zod.string().optional(),
+  technicianNumber: zod.string().optional(),
+  completedJobs: zod.number(),
+  totalServiceRecords: zod.number(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListAdminTechniciansResponse = zod.array(
+  ListAdminTechniciansResponseItem,
+);
+
+/**
+ * @summary Platform analytics data for charts
+ */
+export const GetAdminAnalyticsResponse = zod.object({
+  usersByMonth: zod.array(
+    zod.object({
+      label: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  serviceRecordsByMonth: zod.array(
+    zod.object({
+      label: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  jobsByStatus: zod.array(
+    zod.object({
+      label: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+  subscriptionsByTier: zod.array(
+    zod.object({
+      label: zod.string(),
+      count: zod.number(),
+    }),
+  ),
+});

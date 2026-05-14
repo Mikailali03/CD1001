@@ -805,6 +805,47 @@ export interface UpsertEmailTriggerBody {
   description?: string;
 }
 
+export interface AdminProperty {
+  id: string;
+  name: string;
+  address: string;
+  city?: string;
+  state?: string;
+  yearBuilt?: number;
+  sqft?: number;
+  photoUrl?: string;
+  userId: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  assetCount: number;
+  createdAt: string;
+}
+
+export interface AdminTechnician {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  phone?: string;
+  technicianNumber?: string;
+  completedJobs: number;
+  totalServiceRecords: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminAnalyticsBucket {
+  label: string;
+  count: number;
+}
+
+export interface AdminAnalytics {
+  usersByMonth: AdminAnalyticsBucket[];
+  serviceRecordsByMonth: AdminAnalyticsBucket[];
+  jobsByStatus: AdminAnalyticsBucket[];
+  subscriptionsByTier: AdminAnalyticsBucket[];
+}
+
 export type ListAssetsParams = {
   category?: string;
 };
@@ -837,3 +878,7 @@ export const ListAdminUsersRole = {
   technician: "technician",
   admin: "admin",
 } as const;
+
+export type ListAdminPropertiesParams = {
+  search?: string;
+};

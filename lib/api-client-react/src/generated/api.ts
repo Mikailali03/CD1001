@@ -18,7 +18,10 @@ import type {
 
 import type {
   ActivityItem,
+  AdminAnalytics,
+  AdminProperty,
   AdminStats,
+  AdminTechnician,
   AdminUser,
   Asset,
   AssignedJobSummary,
@@ -38,6 +41,7 @@ import type {
   HealthStatus,
   Inbox,
   InviteCollaboratorBody,
+  ListAdminPropertiesParams,
   ListAdminUsersParams,
   ListAssetsParams,
   ListGuidesParams,
@@ -4472,3 +4476,253 @@ export const useToggleEmailTrigger = <
 > => {
   return useMutation(getToggleEmailTriggerMutationOptions(options));
 };
+
+/**
+ * @summary List all properties on the platform with owner info
+ */
+export const getListAdminPropertiesUrl = (
+  params?: ListAdminPropertiesParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/properties?${stringifiedParams}`
+    : `/api/admin/properties`;
+};
+
+export const listAdminProperties = async (
+  params?: ListAdminPropertiesParams,
+  options?: RequestInit,
+): Promise<AdminProperty[]> => {
+  return customFetch<AdminProperty[]>(getListAdminPropertiesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminPropertiesQueryKey = (
+  params?: ListAdminPropertiesParams,
+) => {
+  return [`/api/admin/properties`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminPropertiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminProperties>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminPropertiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminProperties>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdminPropertiesQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminProperties>>
+  > = ({ signal }) =>
+    listAdminProperties(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminProperties>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminPropertiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminProperties>>
+>;
+export type ListAdminPropertiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all properties on the platform with owner info
+ */
+
+export function useListAdminProperties<
+  TData = Awaited<ReturnType<typeof listAdminProperties>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminPropertiesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminProperties>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminPropertiesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all technicians with job stats
+ */
+export const getListAdminTechniciansUrl = () => {
+  return `/api/admin/technicians`;
+};
+
+export const listAdminTechnicians = async (
+  options?: RequestInit,
+): Promise<AdminTechnician[]> => {
+  return customFetch<AdminTechnician[]>(getListAdminTechniciansUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminTechniciansQueryKey = () => {
+  return [`/api/admin/technicians`] as const;
+};
+
+export const getListAdminTechniciansQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminTechnicians>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminTechnicians>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminTechniciansQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminTechnicians>>
+  > = ({ signal }) => listAdminTechnicians({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminTechnicians>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminTechniciansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminTechnicians>>
+>;
+export type ListAdminTechniciansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all technicians with job stats
+ */
+
+export function useListAdminTechnicians<
+  TData = Awaited<ReturnType<typeof listAdminTechnicians>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminTechnicians>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminTechniciansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Platform analytics data for charts
+ */
+export const getGetAdminAnalyticsUrl = () => {
+  return `/api/admin/analytics`;
+};
+
+export const getAdminAnalytics = async (
+  options?: RequestInit,
+): Promise<AdminAnalytics> => {
+  return customFetch<AdminAnalytics>(getGetAdminAnalyticsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminAnalyticsQueryKey = () => {
+  return [`/api/admin/analytics`] as const;
+};
+
+export const getGetAdminAnalyticsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminAnalyticsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getAdminAnalytics>>
+  > = ({ signal }) => getAdminAnalytics({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminAnalytics>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminAnalyticsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminAnalytics>>
+>;
+export type GetAdminAnalyticsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Platform analytics data for charts
+ */
+
+export function useGetAdminAnalytics<
+  TData = Awaited<ReturnType<typeof getAdminAnalytics>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminAnalytics>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminAnalyticsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}

@@ -4,25 +4,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from "@/components/admin/overview-tab";
 import { UsersTab } from "@/components/admin/users-tab";
 import { CommunicationHubTab } from "@/components/admin/communication-hub-tab";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { PropertiesTab } from "@/components/admin/properties-tab";
+import { TechniciansTab } from "@/components/admin/technicians-tab";
+import { AnalyticsTab } from "@/components/admin/analytics-tab";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { Link } from "wouter";
-
-function PlaceholderTab({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
-  return (
-    <Card className="border-dashed opacity-70 max-w-lg mx-auto mt-8">
-      <CardHeader className="pb-3 text-center">
-        <div className="mx-auto mb-2 p-3 rounded-xl bg-muted w-fit">{icon}</div>
-        <CardTitle className="text-base text-muted-foreground">{title}</CardTitle>
-        <CardDescription className="text-sm leading-relaxed">{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="text-center pb-6">
-        <Badge variant="secondary" className="text-xs font-semibold">Coming Soon</Badge>
-      </CardContent>
-    </Card>
-  );
-}
 
 export default function AdminDashboard() {
   return (
@@ -94,27 +81,15 @@ export default function AdminDashboard() {
           </TabsContent>
 
           <TabsContent value="properties" className="mt-0">
-            <PlaceholderTab
-              icon={<Building2 className="h-6 w-6 text-muted-foreground" />}
-              title="Property Overview"
-              description="Browse all properties on the platform, see dossier health scores, and flag properties needing review."
-            />
+            <PropertiesTab />
           </TabsContent>
 
           <TabsContent value="technicians" className="mt-0">
-            <PlaceholderTab
-              icon={<Wrench className="h-6 w-6 text-muted-foreground" />}
-              title="Technician Verification"
-              description="Review technician applications, verify credentials, and manage technician numbers and service histories."
-            />
+            <TechniciansTab />
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-0">
-            <PlaceholderTab
-              icon={<BarChart3 className="h-6 w-6 text-muted-foreground" />}
-              title="Platform Analytics"
-              description="Track platform growth, service record volume, marketplace activity, and subscription metrics over time."
-            />
+            <AnalyticsTab />
           </TabsContent>
         </div>
       </Tabs>

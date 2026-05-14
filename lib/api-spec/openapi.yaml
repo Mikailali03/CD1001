@@ -1070,6 +1070,54 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmailTrigger"
 
+  /admin/properties:
+    get:
+      operationId: listAdminProperties
+      tags: [admin]
+      summary: List all properties on the platform with owner info
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminProperty"
+
+  /admin/technicians:
+    get:
+      operationId: listAdminTechnicians
+      tags: [admin]
+      summary: List all technicians with job stats
+      responses:
+        "200":
+          description: List of technicians
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminTechnician"
+
+  /admin/analytics:
+    get:
+      operationId: getAdminAnalytics
+      tags: [admin]
+      summary: Platform analytics data for charts
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminAnalytics"
+
 components:
   schemas:
     HealthStatus:
@@ -2125,3 +2173,92 @@ components:
           type: boolean
         description:
           type: string
+
+    AdminProperty:
+      type: object
+      required: [id, name, address, userId, assetCount, createdAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        yearBuilt:
+          type: integer
+        sqft:
+          type: integer
+        photoUrl:
+          type: string
+        userId:
+          type: string
+        ownerName:
+          type: string
+        ownerEmail:
+          type: string
+        assetCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    AdminTechnician:
+      type: object
+      required: [userId, firstName, lastName, role, createdAt, updatedAt, completedJobs, totalServiceRecords]
+      properties:
+        userId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        technicianNumber:
+          type: string
+        completedJobs:
+          type: integer
+        totalServiceRecords:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    AdminAnalyticsBucket:
+      type: object
+      required: [label, count]
+      properties:
+        label:
+          type: string
+        count:
+          type: integer
+
+    AdminAnalytics:
+      type: object
+      required: [usersByMonth, serviceRecordsByMonth, jobsByStatus, subscriptionsByTier]
+      properties:
+        usersByMonth:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsBucket"
+        serviceRecordsByMonth:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsBucket"
+        jobsByStatus:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsBucket"
+        subscriptionsByTier:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminAnalyticsBucket"

@@ -20,6 +20,7 @@ import stripeCheckoutRouter from "./stripe-checkout";
 import collaboratorsRouter from "./collaborators";
 import inboxRouter from "./inbox";
 import adminRouter from "./admin";
+import adminExtendedRouter from "./admin-extended";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(marketplaceRouter);
 router.use(dashboardRouter);
 router.use(userProfileRouter);
 router.use(adminRouter);
+router.use(adminExtendedRouter);
 
 export default router;
