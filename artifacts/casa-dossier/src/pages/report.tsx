@@ -63,7 +63,9 @@ function TechSpec({ label, value }: { label: string; value: string | number | nu
 
 function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: boolean }) {
   const performer = (r: ServiceRecord) =>
-    r.companyName ?? r.technicianName ?? "Homeowner (DIY)";
+    r.companyName === "CasaService" && r.technicianName
+      ? `CasaService - ${r.technicianName}`
+      : r.companyName ?? r.technicianName ?? "Homeowner (DIY)";
 
   return (
     <div

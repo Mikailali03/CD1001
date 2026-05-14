@@ -308,8 +308,10 @@ router.post("/marketplace/jobs/:jobId/complete", requireAuth(), async (req, res)
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, req.userId));
 
-  const techName = techProfile
-    ? `${techProfile.firstName} ${techProfile.lastName}`.trim()
+  const firstName = techProfile?.firstName ?? "";
+  const lastInitial = techProfile?.lastName?.[0] ?? "";
+  const techDisplayName = firstName
+    ? `${firstName}${lastInitial ? ` ${lastInitial}` : ""} Technician`
     : "Technician";
 
   const serviceDate = row.job.scheduledAt.toISOString().slice(0, 10);
@@ -320,7 +322,8 @@ router.post("/marketplace/jobs/:jobId/complete", requireAuth(), async (req, res)
       assetId: row.asset.id,
       date: serviceDate,
       description: body.workSummary,
-      technicianName: techName,
+      companyName: "CasaService",
+      technicianName: techDisplayName,
       technicianNumber: techProfile?.technicianNumber ?? null,
       cost: body.cost != null ? String(body.cost) : null,
       nextServiceDate: body.nextServiceDate ?? null,

@@ -318,7 +318,11 @@ export function InvestmentLedgerModal({
                             {(r.companyName || r.technicianName) && (
                               <>
                                 <span>·</span>
-                                <span>{r.companyName || r.technicianName}</span>
+                                <span>
+                                  {r.companyName === "CasaService" && r.technicianName
+                                    ? `CasaService - ${r.technicianName}`
+                                    : r.companyName || r.technicianName}
+                                </span>
                               </>
                             )}
                           </div>

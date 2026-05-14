@@ -988,13 +988,13 @@ export default function AssetDetail() {
                         <p className="flex items-center gap-1.5">
                           {record.companyName === "CasaService" && (
                             <span className="inline-flex items-center gap-1 bg-primary/10 text-primary font-semibold px-1.5 py-0.5 rounded text-[10px] tracking-wide">
-                              ✦ CasaService
+                              ✦ CasaService{record.technicianName ? ` — ${record.technicianName}` : ""}
                             </span>
                           )}
                           {record.companyName !== "CasaService" && record.companyName && (
                             <span>{record.companyName}</span>
                           )}
-                          {record.technicianName && (
+                          {record.companyName !== "CasaService" && record.technicianName && (
                             <span className="text-muted-foreground">({record.technicianName})</span>
                           )}
                         </p>
