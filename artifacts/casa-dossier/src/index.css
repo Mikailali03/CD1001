@@ -1,5 +1,29 @@
 @layer theme, base, clerk, components, utilities;
 @import "tailwindcss";
+
+@keyframes gold-shimmer {
+  0%   { background-position: -250% center; }
+  100% { background-position: 250% center; }
+}
+
+.casa-shimmer-gold {
+  background-image: linear-gradient(
+    90deg,
+    #7a4f00 0%,
+    #c8860a 15%,
+    #f5c842 35%,
+    #fff9c4 50%,
+    #f5c842 65%,
+    #c8860a 85%,
+    #7a4f00 100%
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: gold-shimmer 2.8s linear infinite;
+}
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
