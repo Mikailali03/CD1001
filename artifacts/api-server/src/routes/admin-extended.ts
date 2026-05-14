@@ -8,6 +8,89 @@ import { requireAdmin } from "../middlewares/requireAdmin.js";
 const router = Router();
 const adminAuth = [requireAuth(), requireAdmin()];
 
+// ─── Backfill User Profiles ───────────────────────────────────────────────────
+
+router.post("/admin/backfill-user-profiles", ...adminAuth, async (req, res) => {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) {
+    res.status(500).json({ error: "CLERK_SECRET_KEY not configured" });
+    return;
+  }
+
+  const CLERK_API = "https://api.clerk.com/v1";
+  const headers = { Authorization: `Bearer ${secretKey}`, "Content-Type": "application/json" };
+
+  // Page through all Clerk users (max 500 per request)
+  let allUsers: any[] = [];
+  let offset = 0;
+  const limit = 500;
+
+  while (true) {
+    const resp = await fetch(`${CLERK_API}/users?limit=${limit}&offset=${offset}`, { headers });
+    if (!resp.ok) {
+      const text = await resp.text();
+      req.log.error({ status: resp.status, body: text }, "Clerk users fetch failed");
+      res.status(502).json({ error: "Failed to fetch users from Clerk", detail: text });
+      return;
+    }
+    const page = (await resp.json()) as any[];
+    if (!page.length) break;
+    allUsers = allUsers.concat(page);
+    if (page.length < limit) break;
+    offset += limit;
+  }
+
+  let inserted = 0;
+  let updated = 0;
+  let errors = 0;
+  const errorDetails: string[] = [];
+
+  for (const user of allUsers) {
+    const primaryEmail = user.email_addresses?.find(
+      (e: any) => e.id === user.primary_email_address_id,
+    )?.email_address ?? user.email_addresses?.[0]?.email_address ?? null;
+
+    const firstName = (user.first_name ?? "").trim();
+    const lastName = (user.last_name ?? "").trim();
+
+    try {
+      const existing = await db
+        .select({ userId: userProfilesTable.userId })
+        .from(userProfilesTable)
+        .where(eq(userProfilesTable.userId, user.id))
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(userProfilesTable)
+          .set({
+            firstName: firstName || existing[0].userId,
+            lastName,
+            email: primaryEmail,
+            updatedAt: new Date(),
+          })
+          .where(eq(userProfilesTable.userId, user.id));
+        updated++;
+      } else {
+        await db.insert(userProfilesTable).values({
+          userId: user.id,
+          firstName: firstName || "User",
+          lastName,
+          email: primaryEmail,
+          role: "homeowner",
+        });
+        inserted++;
+      }
+    } catch (err: any) {
+      req.log.error({ userId: user.id, err: err.message }, "User profile upsert failed");
+      errorDetails.push(`${user.id}: ${err.message}`);
+      errors++;
+    }
+  }
+
+  res.json({ totalClerkUsers: allUsers.length, inserted, updated, errors, errorDetails });
+});
+
 // ─── Backfill Properties ──────────────────────────────────────────────────────
 
 router.post("/admin/backfill-properties", ...adminAuth, async (req, res) => {

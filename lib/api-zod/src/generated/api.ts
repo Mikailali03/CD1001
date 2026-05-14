@@ -1394,6 +1394,17 @@ export const ToggleEmailTriggerResponse = zod.object({
 });
 
 /**
+ * @summary Backfill user_profiles table from Clerk for all existing users
+ */
+export const BackfillUserProfilesResponse = zod.object({
+  totalClerkUsers: zod.number(),
+  inserted: zod.number(),
+  updated: zod.number(),
+  errors: zod.number(),
+  errorDetails: zod.array(zod.string()).optional(),
+});
+
+/**
  * @summary Backfill owner_email and lat/lng for all properties
  */
 export const BackfillPropertiesResponse = zod.object({

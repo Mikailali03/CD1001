@@ -1070,6 +1070,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmailTrigger"
 
+  /admin/backfill-user-profiles:
+    post:
+      operationId: backfillUserProfiles
+      tags: [admin]
+      summary: Backfill user_profiles table from Clerk for all existing users
+      responses:
+        "200":
+          description: Backfill result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfileBackfillResult"
+
   /admin/backfill-properties:
     post:
       operationId: backfillProperties
@@ -2186,6 +2199,23 @@ components:
           type: boolean
         description:
           type: string
+
+    UserProfileBackfillResult:
+      type: object
+      required: [totalClerkUsers, inserted, updated, errors]
+      properties:
+        totalClerkUsers:
+          type: integer
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        errors:
+          type: integer
+        errorDetails:
+          type: array
+          items:
+            type: string
 
     BackfillResultRow:
       type: object

@@ -65,6 +65,7 @@ import type {
   UpsertEmailTriggerBody,
   UpsertUserProfileBody,
   UserProfile,
+  UserProfileBackfillResult,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -4476,6 +4477,87 @@ export const useToggleEmailTrigger = <
   TContext
 > => {
   return useMutation(getToggleEmailTriggerMutationOptions(options));
+};
+
+/**
+ * @summary Backfill user_profiles table from Clerk for all existing users
+ */
+export const getBackfillUserProfilesUrl = () => {
+  return `/api/admin/backfill-user-profiles`;
+};
+
+export const backfillUserProfiles = async (
+  options?: RequestInit,
+): Promise<UserProfileBackfillResult> => {
+  return customFetch<UserProfileBackfillResult>(getBackfillUserProfilesUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getBackfillUserProfilesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof backfillUserProfiles>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof backfillUserProfiles>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["backfillUserProfiles"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof backfillUserProfiles>>,
+    void
+  > = () => {
+    return backfillUserProfiles(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BackfillUserProfilesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof backfillUserProfiles>>
+>;
+
+export type BackfillUserProfilesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Backfill user_profiles table from Clerk for all existing users
+ */
+export const useBackfillUserProfiles = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof backfillUserProfiles>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof backfillUserProfiles>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getBackfillUserProfilesMutationOptions(options));
 };
 
 /**

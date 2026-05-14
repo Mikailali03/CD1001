@@ -805,6 +805,14 @@ export interface UpsertEmailTriggerBody {
   description?: string;
 }
 
+export interface UserProfileBackfillResult {
+  totalClerkUsers: number;
+  inserted: number;
+  updated: number;
+  errors: number;
+  errorDetails?: string[];
+}
+
 export interface BackfillResultRow {
   id: string;
   address: string;

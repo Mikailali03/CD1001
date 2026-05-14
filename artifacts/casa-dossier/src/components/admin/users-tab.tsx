@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, ChevronDown, Loader2, UserCog } from "lucide-react";
+import { Search, ChevronDown, Loader2, UserCog, RefreshCw, CheckCircle2, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,9 @@ import {
   useListAdminUsers,
   getListAdminUsersQueryKey,
   useUpdateAdminUser,
+  useBackfillUserProfiles,
   type AdminUser,
+  type UserProfileBackfillResult,
 } from "@workspace/api-client-react";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -119,6 +121,9 @@ function UserRow({ user }: { user: AdminUser }) {
 export function UsersTab() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [backfillResult, setBackfillResult] = useState<UserProfileBackfillResult | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   type AdminRole = "homeowner" | "technician" | "admin";
   const roleParam = roleFilter !== "all" ? (roleFilter as AdminRole) : undefined;
@@ -127,6 +132,17 @@ export function UsersTab() {
     { search: search || undefined, role: roleParam },
     { query: { queryKey: getListAdminUsersQueryKey({ search, role: roleParam }) } },
   );
+
+  const { mutate: runBackfill, isPending: isBackfilling } = useBackfillUserProfiles({
+    mutation: {
+      onSuccess: (data) => {
+        setBackfillResult(data);
+        queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey({}) });
+        toast({ title: `Synced ${data.inserted + data.updated} user profiles from Clerk` });
+      },
+      onError: () => toast({ title: "Backfill failed", variant: "destructive" }),
+    },
+  });
 
   return (
     <div className="space-y-4">
@@ -152,7 +168,57 @@ export function UsersTab() {
             <SelectItem value="admin">Admins</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 shrink-0"
+          onClick={() => runBackfill()}
+          disabled={isBackfilling}
+        >
+          <RefreshCw className={`h-4 w-4 ${isBackfilling ? "animate-spin" : ""}`} />
+          {isBackfilling ? "Syncing…" : "Sync from Clerk"}
+        </Button>
       </div>
+
+      {backfillResult && (
+        <div
+          className={`flex items-start gap-3 rounded-lg border p-4 text-sm ${
+            backfillResult.errors === 0
+              ? "border-green-200 bg-green-50/50"
+              : "border-amber-200 bg-amber-50/50"
+          }`}
+        >
+          {backfillResult.errors === 0 ? (
+            <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+          ) : (
+            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+          )}
+          <div>
+            <p className="font-medium mb-1">
+              {backfillResult.errors === 0 ? "Sync complete" : "Sync completed with errors"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {backfillResult.totalClerkUsers} Clerk users &nbsp;·&nbsp;{" "}
+              <span className="text-green-700 font-medium">{backfillResult.inserted} inserted</span>
+              &nbsp;·&nbsp;
+              <span className="text-blue-700 font-medium">{backfillResult.updated} updated</span>
+              {backfillResult.errors > 0 && (
+                <>
+                  &nbsp;·&nbsp;
+                  <span className="text-amber-700 font-medium">{backfillResult.errors} errors</span>
+                </>
+              )}
+            </p>
+            {backfillResult.errorDetails && backfillResult.errorDetails.length > 0 && (
+              <ul className="mt-2 space-y-0.5">
+                {backfillResult.errorDetails.map((e, i) => (
+                  <li key={i} className="text-[11px] text-amber-700">{e}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardContent className="p-0">
