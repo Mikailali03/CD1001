@@ -30,6 +30,8 @@ tags:
     description: Technician portal endpoints
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: admin
+    description: Admin-only platform management endpoints
 
 paths:
   /healthz:
@@ -844,6 +846,229 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+
+  # ─── Admin ──────────────────────────────────────────────────────────────────
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Platform-wide stats for admin dashboard
+      responses:
+        "200":
+          description: Platform stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users on the platform
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [homeowner, technician, admin]
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminUser"
+
+  /admin/users/{userId}:
+    patch:
+      operationId: updateAdminUser
+      tags: [admin]
+      summary: Update a user's role
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+
+  /admin/email-templates:
+    get:
+      operationId: listEmailTemplates
+      tags: [admin]
+      summary: List all email templates
+      responses:
+        "200":
+          description: List of email templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmailTemplate"
+    post:
+      operationId: createEmailTemplate
+      tags: [admin]
+      summary: Create an email template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertEmailTemplateBody"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTemplate"
+
+  /admin/email-templates/{templateId}:
+    put:
+      operationId: updateEmailTemplate
+      tags: [admin]
+      summary: Update an email template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertEmailTemplateBody"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTemplate"
+    delete:
+      operationId: deleteEmailTemplate
+      tags: [admin]
+      summary: Delete an email template
+      parameters:
+        - name: templateId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/email-triggers:
+    get:
+      operationId: listEmailTriggers
+      tags: [admin]
+      summary: List all email triggers
+      responses:
+        "200":
+          description: List of email triggers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EmailTrigger"
+    post:
+      operationId: createEmailTrigger
+      tags: [admin]
+      summary: Create an email trigger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertEmailTriggerBody"
+      responses:
+        "201":
+          description: Created trigger
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTrigger"
+
+  /admin/email-triggers/{triggerId}:
+    put:
+      operationId: updateEmailTrigger
+      tags: [admin]
+      summary: Update an email trigger
+      parameters:
+        - name: triggerId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertEmailTriggerBody"
+      responses:
+        "200":
+          description: Updated trigger
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTrigger"
+    delete:
+      operationId: deleteEmailTrigger
+      tags: [admin]
+      summary: Delete an email trigger
+      parameters:
+        - name: triggerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /admin/email-triggers/{triggerId}/toggle:
+    patch:
+      operationId: toggleEmailTrigger
+      tags: [admin]
+      summary: Toggle an email trigger active/inactive
+      parameters:
+        - name: triggerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated trigger
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailTrigger"
 
 components:
   schemas:
@@ -1765,4 +1990,138 @@ components:
       required: [error]
       properties:
         error:
+          type: string
+
+    # ─── Admin ──────────────────────────────────────────────────────────────────
+    AdminStats:
+      type: object
+      required: [totalUsers, totalProperties, totalTechnicians, totalServiceRecords]
+      properties:
+        totalUsers:
+          type: integer
+        totalProperties:
+          type: integer
+        totalTechnicians:
+          type: integer
+        totalServiceRecords:
+          type: integer
+
+    AdminUser:
+      type: object
+      required: [userId, firstName, lastName, role, createdAt, updatedAt]
+      properties:
+        userId:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [homeowner, technician, admin]
+        technicianNumber:
+          type: string
+        phone:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpdateAdminUserBody:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [homeowner, technician, admin]
+
+    EmailTemplate:
+      type: object
+      required: [id, name, subject, bodyHtml, category, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        subject:
+          type: string
+        bodyHtml:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [marketing, notification, transactional]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpsertEmailTemplateBody:
+      type: object
+      required: [name, subject, bodyHtml, category]
+      properties:
+        name:
+          type: string
+        subject:
+          type: string
+        bodyHtml:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+          enum: [marketing, notification, transactional]
+
+    EmailTrigger:
+      type: object
+      required: [id, name, triggerEvent, isActive, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        templateId:
+          type: string
+        triggerEvent:
+          type: string
+          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, new_feature_announcement, monthly_update, custom]
+        conditions:
+          type: object
+          additionalProperties: true
+        isActive:
+          type: boolean
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpsertEmailTriggerBody:
+      type: object
+      required: [name, triggerEvent]
+      properties:
+        name:
+          type: string
+        templateId:
+          type: string
+        triggerEvent:
+          type: string
+          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, new_feature_announcement, monthly_update, custom]
+        conditions:
+          type: object
+          additionalProperties: true
+        isActive:
+          type: boolean
+        description:
           type: string

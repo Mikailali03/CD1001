@@ -18,6 +18,8 @@ import type {
 
 import type {
   ActivityItem,
+  AdminStats,
+  AdminUser,
   Asset,
   AssignedJobSummary,
   Collaborator,
@@ -29,11 +31,14 @@ import type {
   CreatePropertyBody,
   CreateServiceRecordBody,
   Dashboard,
+  EmailTemplate,
+  EmailTrigger,
   ErrorEnvelope,
   Guide,
   HealthStatus,
   Inbox,
   InviteCollaboratorBody,
+  ListAdminUsersParams,
   ListAssetsParams,
   ListGuidesParams,
   MaintenanceTask,
@@ -45,11 +50,14 @@ import type {
   ServiceRecord,
   TechJobDetail,
   TechJobSummary,
+  UpdateAdminUserBody,
   UpdateAssetBody,
   UpdateMaintenanceTaskBody,
   UpdatePropertyBody,
   UploadUrlRequest,
   UploadUrlResponse,
+  UpsertEmailTemplateBody,
+  UpsertEmailTriggerBody,
   UpsertUserProfileBody,
   UserProfile,
 } from "./api.schemas";
@@ -3460,3 +3468,1007 @@ export function useGetStorageObject<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Platform-wide stats for admin dashboard
+ */
+export const getGetAdminStatsUrl = () => {
+  return `/api/admin/stats`;
+};
+
+export const getAdminStats = async (
+  options?: RequestInit,
+): Promise<AdminStats> => {
+  return customFetch<AdminStats>(getGetAdminStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetAdminStatsQueryKey = () => {
+  return [`/api/admin/stats`] as const;
+};
+
+export const getGetAdminStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getAdminStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetAdminStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminStats>>> = ({
+    signal,
+  }) => getAdminStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetAdminStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getAdminStats>>
+>;
+export type GetAdminStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Platform-wide stats for admin dashboard
+ */
+
+export function useGetAdminStats<
+  TData = Awaited<ReturnType<typeof getAdminStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getAdminStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetAdminStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all users on the platform
+ */
+export const getListAdminUsersUrl = (params?: ListAdminUsersParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/users?${stringifiedParams}`
+    : `/api/admin/users`;
+};
+
+export const listAdminUsers = async (
+  params?: ListAdminUsersParams,
+  options?: RequestInit,
+): Promise<AdminUser[]> => {
+  return customFetch<AdminUser[]>(getListAdminUsersUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListAdminUsersQueryKey = (params?: ListAdminUsersParams) => {
+  return [`/api/admin/users`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminUsersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListAdminUsersQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminUsers>>> = ({
+    signal,
+  }) => listAdminUsers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminUsers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminUsersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminUsers>>
+>;
+export type ListAdminUsersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all users on the platform
+ */
+
+export function useListAdminUsers<
+  TData = Awaited<ReturnType<typeof listAdminUsers>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminUsersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminUsers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminUsersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Update a user's role
+ */
+export const getUpdateAdminUserUrl = (userId: string) => {
+  return `/api/admin/users/${userId}`;
+};
+
+export const updateAdminUser = async (
+  userId: string,
+  updateAdminUserBody: UpdateAdminUserBody,
+  options?: RequestInit,
+): Promise<AdminUser> => {
+  return customFetch<AdminUser>(getUpdateAdminUserUrl(userId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateAdminUserBody),
+  });
+};
+
+export const getUpdateAdminUserMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminUser>>,
+    TError,
+    { userId: string; data: BodyType<UpdateAdminUserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateAdminUser>>,
+  TError,
+  { userId: string; data: BodyType<UpdateAdminUserBody> },
+  TContext
+> => {
+  const mutationKey = ["updateAdminUser"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateAdminUser>>,
+    { userId: string; data: BodyType<UpdateAdminUserBody> }
+  > = (props) => {
+    const { userId, data } = props ?? {};
+
+    return updateAdminUser(userId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateAdminUserMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateAdminUser>>
+>;
+export type UpdateAdminUserMutationBody = BodyType<UpdateAdminUserBody>;
+export type UpdateAdminUserMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update a user's role
+ */
+export const useUpdateAdminUser = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateAdminUser>>,
+    TError,
+    { userId: string; data: BodyType<UpdateAdminUserBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateAdminUser>>,
+  TError,
+  { userId: string; data: BodyType<UpdateAdminUserBody> },
+  TContext
+> => {
+  return useMutation(getUpdateAdminUserMutationOptions(options));
+};
+
+/**
+ * @summary List all email templates
+ */
+export const getListEmailTemplatesUrl = () => {
+  return `/api/admin/email-templates`;
+};
+
+export const listEmailTemplates = async (
+  options?: RequestInit,
+): Promise<EmailTemplate[]> => {
+  return customFetch<EmailTemplate[]>(getListEmailTemplatesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEmailTemplatesQueryKey = () => {
+  return [`/api/admin/email-templates`] as const;
+};
+
+export const getListEmailTemplatesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEmailTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListEmailTemplatesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEmailTemplates>>
+  > = ({ signal }) => listEmailTemplates({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailTemplates>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListEmailTemplatesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEmailTemplates>>
+>;
+export type ListEmailTemplatesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all email templates
+ */
+
+export function useListEmailTemplates<
+  TData = Awaited<ReturnType<typeof listEmailTemplates>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailTemplates>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListEmailTemplatesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an email template
+ */
+export const getCreateEmailTemplateUrl = () => {
+  return `/api/admin/email-templates`;
+};
+
+export const createEmailTemplate = async (
+  upsertEmailTemplateBody: UpsertEmailTemplateBody,
+  options?: RequestInit,
+): Promise<EmailTemplate> => {
+  return customFetch<EmailTemplate>(getCreateEmailTemplateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertEmailTemplateBody),
+  });
+};
+
+export const getCreateEmailTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEmailTemplate>>,
+    TError,
+    { data: BodyType<UpsertEmailTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEmailTemplate>>,
+  TError,
+  { data: BodyType<UpsertEmailTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["createEmailTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEmailTemplate>>,
+    { data: BodyType<UpsertEmailTemplateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createEmailTemplate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEmailTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEmailTemplate>>
+>;
+export type CreateEmailTemplateMutationBody = BodyType<UpsertEmailTemplateBody>;
+export type CreateEmailTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an email template
+ */
+export const useCreateEmailTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEmailTemplate>>,
+    TError,
+    { data: BodyType<UpsertEmailTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createEmailTemplate>>,
+  TError,
+  { data: BodyType<UpsertEmailTemplateBody> },
+  TContext
+> => {
+  return useMutation(getCreateEmailTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Update an email template
+ */
+export const getUpdateEmailTemplateUrl = (templateId: string) => {
+  return `/api/admin/email-templates/${templateId}`;
+};
+
+export const updateEmailTemplate = async (
+  templateId: string,
+  upsertEmailTemplateBody: UpsertEmailTemplateBody,
+  options?: RequestInit,
+): Promise<EmailTemplate> => {
+  return customFetch<EmailTemplate>(getUpdateEmailTemplateUrl(templateId), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertEmailTemplateBody),
+  });
+};
+
+export const getUpdateEmailTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmailTemplate>>,
+    TError,
+    { templateId: string; data: BodyType<UpsertEmailTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEmailTemplate>>,
+  TError,
+  { templateId: string; data: BodyType<UpsertEmailTemplateBody> },
+  TContext
+> => {
+  const mutationKey = ["updateEmailTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEmailTemplate>>,
+    { templateId: string; data: BodyType<UpsertEmailTemplateBody> }
+  > = (props) => {
+    const { templateId, data } = props ?? {};
+
+    return updateEmailTemplate(templateId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEmailTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEmailTemplate>>
+>;
+export type UpdateEmailTemplateMutationBody = BodyType<UpsertEmailTemplateBody>;
+export type UpdateEmailTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update an email template
+ */
+export const useUpdateEmailTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmailTemplate>>,
+    TError,
+    { templateId: string; data: BodyType<UpsertEmailTemplateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateEmailTemplate>>,
+  TError,
+  { templateId: string; data: BodyType<UpsertEmailTemplateBody> },
+  TContext
+> => {
+  return useMutation(getUpdateEmailTemplateMutationOptions(options));
+};
+
+/**
+ * @summary Delete an email template
+ */
+export const getDeleteEmailTemplateUrl = (templateId: string) => {
+  return `/api/admin/email-templates/${templateId}`;
+};
+
+export const deleteEmailTemplate = async (
+  templateId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteEmailTemplateUrl(templateId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteEmailTemplateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEmailTemplate>>,
+    TError,
+    { templateId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteEmailTemplate>>,
+  TError,
+  { templateId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteEmailTemplate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteEmailTemplate>>,
+    { templateId: string }
+  > = (props) => {
+    const { templateId } = props ?? {};
+
+    return deleteEmailTemplate(templateId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteEmailTemplateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteEmailTemplate>>
+>;
+
+export type DeleteEmailTemplateMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an email template
+ */
+export const useDeleteEmailTemplate = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEmailTemplate>>,
+    TError,
+    { templateId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteEmailTemplate>>,
+  TError,
+  { templateId: string },
+  TContext
+> => {
+  return useMutation(getDeleteEmailTemplateMutationOptions(options));
+};
+
+/**
+ * @summary List all email triggers
+ */
+export const getListEmailTriggersUrl = () => {
+  return `/api/admin/email-triggers`;
+};
+
+export const listEmailTriggers = async (
+  options?: RequestInit,
+): Promise<EmailTrigger[]> => {
+  return customFetch<EmailTrigger[]>(getListEmailTriggersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListEmailTriggersQueryKey = () => {
+  return [`/api/admin/email-triggers`] as const;
+};
+
+export const getListEmailTriggersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listEmailTriggers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailTriggers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListEmailTriggersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listEmailTriggers>>
+  > = ({ signal }) => listEmailTriggers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailTriggers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListEmailTriggersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listEmailTriggers>>
+>;
+export type ListEmailTriggersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all email triggers
+ */
+
+export function useListEmailTriggers<
+  TData = Awaited<ReturnType<typeof listEmailTriggers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listEmailTriggers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListEmailTriggersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create an email trigger
+ */
+export const getCreateEmailTriggerUrl = () => {
+  return `/api/admin/email-triggers`;
+};
+
+export const createEmailTrigger = async (
+  upsertEmailTriggerBody: UpsertEmailTriggerBody,
+  options?: RequestInit,
+): Promise<EmailTrigger> => {
+  return customFetch<EmailTrigger>(getCreateEmailTriggerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertEmailTriggerBody),
+  });
+};
+
+export const getCreateEmailTriggerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEmailTrigger>>,
+    TError,
+    { data: BodyType<UpsertEmailTriggerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createEmailTrigger>>,
+  TError,
+  { data: BodyType<UpsertEmailTriggerBody> },
+  TContext
+> => {
+  const mutationKey = ["createEmailTrigger"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createEmailTrigger>>,
+    { data: BodyType<UpsertEmailTriggerBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createEmailTrigger(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateEmailTriggerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createEmailTrigger>>
+>;
+export type CreateEmailTriggerMutationBody = BodyType<UpsertEmailTriggerBody>;
+export type CreateEmailTriggerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an email trigger
+ */
+export const useCreateEmailTrigger = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createEmailTrigger>>,
+    TError,
+    { data: BodyType<UpsertEmailTriggerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createEmailTrigger>>,
+  TError,
+  { data: BodyType<UpsertEmailTriggerBody> },
+  TContext
+> => {
+  return useMutation(getCreateEmailTriggerMutationOptions(options));
+};
+
+/**
+ * @summary Update an email trigger
+ */
+export const getUpdateEmailTriggerUrl = (triggerId: string) => {
+  return `/api/admin/email-triggers/${triggerId}`;
+};
+
+export const updateEmailTrigger = async (
+  triggerId: string,
+  upsertEmailTriggerBody: UpsertEmailTriggerBody,
+  options?: RequestInit,
+): Promise<EmailTrigger> => {
+  return customFetch<EmailTrigger>(getUpdateEmailTriggerUrl(triggerId), {
+    ...options,
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(upsertEmailTriggerBody),
+  });
+};
+
+export const getUpdateEmailTriggerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmailTrigger>>,
+    TError,
+    { triggerId: string; data: BodyType<UpsertEmailTriggerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateEmailTrigger>>,
+  TError,
+  { triggerId: string; data: BodyType<UpsertEmailTriggerBody> },
+  TContext
+> => {
+  const mutationKey = ["updateEmailTrigger"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateEmailTrigger>>,
+    { triggerId: string; data: BodyType<UpsertEmailTriggerBody> }
+  > = (props) => {
+    const { triggerId, data } = props ?? {};
+
+    return updateEmailTrigger(triggerId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateEmailTriggerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateEmailTrigger>>
+>;
+export type UpdateEmailTriggerMutationBody = BodyType<UpsertEmailTriggerBody>;
+export type UpdateEmailTriggerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update an email trigger
+ */
+export const useUpdateEmailTrigger = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateEmailTrigger>>,
+    TError,
+    { triggerId: string; data: BodyType<UpsertEmailTriggerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateEmailTrigger>>,
+  TError,
+  { triggerId: string; data: BodyType<UpsertEmailTriggerBody> },
+  TContext
+> => {
+  return useMutation(getUpdateEmailTriggerMutationOptions(options));
+};
+
+/**
+ * @summary Delete an email trigger
+ */
+export const getDeleteEmailTriggerUrl = (triggerId: string) => {
+  return `/api/admin/email-triggers/${triggerId}`;
+};
+
+export const deleteEmailTrigger = async (
+  triggerId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteEmailTriggerUrl(triggerId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteEmailTriggerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEmailTrigger>>,
+    TError,
+    { triggerId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteEmailTrigger>>,
+  TError,
+  { triggerId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteEmailTrigger"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteEmailTrigger>>,
+    { triggerId: string }
+  > = (props) => {
+    const { triggerId } = props ?? {};
+
+    return deleteEmailTrigger(triggerId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteEmailTriggerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteEmailTrigger>>
+>;
+
+export type DeleteEmailTriggerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete an email trigger
+ */
+export const useDeleteEmailTrigger = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteEmailTrigger>>,
+    TError,
+    { triggerId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteEmailTrigger>>,
+  TError,
+  { triggerId: string },
+  TContext
+> => {
+  return useMutation(getDeleteEmailTriggerMutationOptions(options));
+};
+
+/**
+ * @summary Toggle an email trigger active/inactive
+ */
+export const getToggleEmailTriggerUrl = (triggerId: string) => {
+  return `/api/admin/email-triggers/${triggerId}/toggle`;
+};
+
+export const toggleEmailTrigger = async (
+  triggerId: string,
+  options?: RequestInit,
+): Promise<EmailTrigger> => {
+  return customFetch<EmailTrigger>(getToggleEmailTriggerUrl(triggerId), {
+    ...options,
+    method: "PATCH",
+  });
+};
+
+export const getToggleEmailTriggerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleEmailTrigger>>,
+    TError,
+    { triggerId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof toggleEmailTrigger>>,
+  TError,
+  { triggerId: string },
+  TContext
+> => {
+  const mutationKey = ["toggleEmailTrigger"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof toggleEmailTrigger>>,
+    { triggerId: string }
+  > = (props) => {
+    const { triggerId } = props ?? {};
+
+    return toggleEmailTrigger(triggerId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ToggleEmailTriggerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof toggleEmailTrigger>>
+>;
+
+export type ToggleEmailTriggerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Toggle an email trigger active/inactive
+ */
+export const useToggleEmailTrigger = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof toggleEmailTrigger>>,
+    TError,
+    { triggerId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof toggleEmailTrigger>>,
+  TError,
+  { triggerId: string },
+  TContext
+> => {
+  return useMutation(getToggleEmailTriggerMutationOptions(options));
+};

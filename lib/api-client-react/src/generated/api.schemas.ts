@@ -675,6 +675,136 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+export interface AdminStats {
+  totalUsers: number;
+  totalProperties: number;
+  totalTechnicians: number;
+  totalServiceRecords: number;
+}
+
+export type AdminUserRole = (typeof AdminUserRole)[keyof typeof AdminUserRole];
+
+export const AdminUserRole = {
+  homeowner: "homeowner",
+  technician: "technician",
+  admin: "admin",
+} as const;
+
+export interface AdminUser {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  role: AdminUserRole;
+  technicianNumber?: string;
+  phone?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type UpdateAdminUserBodyRole =
+  (typeof UpdateAdminUserBodyRole)[keyof typeof UpdateAdminUserBodyRole];
+
+export const UpdateAdminUserBodyRole = {
+  homeowner: "homeowner",
+  technician: "technician",
+  admin: "admin",
+} as const;
+
+export interface UpdateAdminUserBody {
+  role: UpdateAdminUserBodyRole;
+}
+
+export type EmailTemplateCategory =
+  (typeof EmailTemplateCategory)[keyof typeof EmailTemplateCategory];
+
+export const EmailTemplateCategory = {
+  marketing: "marketing",
+  notification: "notification",
+  transactional: "transactional",
+} as const;
+
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  description?: string;
+  category: EmailTemplateCategory;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type UpsertEmailTemplateBodyCategory =
+  (typeof UpsertEmailTemplateBodyCategory)[keyof typeof UpsertEmailTemplateBodyCategory];
+
+export const UpsertEmailTemplateBodyCategory = {
+  marketing: "marketing",
+  notification: "notification",
+  transactional: "transactional",
+} as const;
+
+export interface UpsertEmailTemplateBody {
+  name: string;
+  subject: string;
+  bodyHtml: string;
+  description?: string;
+  category: UpsertEmailTemplateBodyCategory;
+}
+
+export type EmailTriggerTriggerEvent =
+  (typeof EmailTriggerTriggerEvent)[keyof typeof EmailTriggerTriggerEvent];
+
+export const EmailTriggerTriggerEvent = {
+  technician_accepted_job: "technician_accepted_job",
+  job_completed: "job_completed",
+  overdue_maintenance: "overdue_maintenance",
+  asset_end_of_life: "asset_end_of_life",
+  property_transfer_initiated: "property_transfer_initiated",
+  new_feature_announcement: "new_feature_announcement",
+  monthly_update: "monthly_update",
+  custom: "custom",
+} as const;
+
+export type EmailTriggerConditions = { [key: string]: unknown };
+
+export interface EmailTrigger {
+  id: string;
+  name: string;
+  templateId?: string;
+  triggerEvent: EmailTriggerTriggerEvent;
+  conditions?: EmailTriggerConditions;
+  isActive: boolean;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type UpsertEmailTriggerBodyTriggerEvent =
+  (typeof UpsertEmailTriggerBodyTriggerEvent)[keyof typeof UpsertEmailTriggerBodyTriggerEvent];
+
+export const UpsertEmailTriggerBodyTriggerEvent = {
+  technician_accepted_job: "technician_accepted_job",
+  job_completed: "job_completed",
+  overdue_maintenance: "overdue_maintenance",
+  asset_end_of_life: "asset_end_of_life",
+  property_transfer_initiated: "property_transfer_initiated",
+  new_feature_announcement: "new_feature_announcement",
+  monthly_update: "monthly_update",
+  custom: "custom",
+} as const;
+
+export type UpsertEmailTriggerBodyConditions = { [key: string]: unknown };
+
+export interface UpsertEmailTriggerBody {
+  name: string;
+  templateId?: string;
+  triggerEvent: UpsertEmailTriggerBodyTriggerEvent;
+  conditions?: UpsertEmailTriggerBodyConditions;
+  isActive?: boolean;
+  description?: string;
+}
+
 export type ListAssetsParams = {
   category?: string;
 };
@@ -693,3 +823,17 @@ export type CompleteMarketplaceJob200 = {
   ok?: boolean;
   serviceRecordId?: string;
 };
+
+export type ListAdminUsersParams = {
+  search?: string;
+  role?: ListAdminUsersRole;
+};
+
+export type ListAdminUsersRole =
+  (typeof ListAdminUsersRole)[keyof typeof ListAdminUsersRole];
+
+export const ListAdminUsersRole = {
+  homeowner: "homeowner",
+  technician: "technician",
+  admin: "admin",
+} as const;

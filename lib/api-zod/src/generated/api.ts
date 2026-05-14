@@ -1148,3 +1148,247 @@ export const RequestUploadUrlResponse = zod.object({
 export const GetStorageObjectParams = zod.object({
   objectPath: zod.coerce.string(),
 });
+
+/**
+ * @summary Platform-wide stats for admin dashboard
+ */
+export const GetAdminStatsResponse = zod.object({
+  totalUsers: zod.number(),
+  totalProperties: zod.number(),
+  totalTechnicians: zod.number(),
+  totalServiceRecords: zod.number(),
+});
+
+/**
+ * @summary List all users on the platform
+ */
+export const ListAdminUsersQueryParams = zod.object({
+  search: zod.coerce.string().optional(),
+  role: zod.enum(["homeowner", "technician", "admin"]).optional(),
+});
+
+export const ListAdminUsersResponseItem = zod.object({
+  userId: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().optional(),
+  role: zod.enum(["homeowner", "technician", "admin"]),
+  technicianNumber: zod.string().optional(),
+  phone: zod.string().optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListAdminUsersResponse = zod.array(ListAdminUsersResponseItem);
+
+/**
+ * @summary Update a user's role
+ */
+export const UpdateAdminUserParams = zod.object({
+  userId: zod.coerce.string(),
+});
+
+export const UpdateAdminUserBody = zod.object({
+  role: zod.enum(["homeowner", "technician", "admin"]),
+});
+
+export const UpdateAdminUserResponse = zod.object({
+  userId: zod.string(),
+  firstName: zod.string(),
+  lastName: zod.string(),
+  email: zod.string().optional(),
+  role: zod.enum(["homeowner", "technician", "admin"]),
+  technicianNumber: zod.string().optional(),
+  phone: zod.string().optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary List all email templates
+ */
+export const ListEmailTemplatesResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  subject: zod.string(),
+  bodyHtml: zod.string(),
+  description: zod.string().optional(),
+  category: zod.enum(["marketing", "notification", "transactional"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListEmailTemplatesResponse = zod.array(
+  ListEmailTemplatesResponseItem,
+);
+
+/**
+ * @summary Create an email template
+ */
+export const CreateEmailTemplateBody = zod.object({
+  name: zod.string(),
+  subject: zod.string(),
+  bodyHtml: zod.string(),
+  description: zod.string().optional(),
+  category: zod.enum(["marketing", "notification", "transactional"]),
+});
+
+/**
+ * @summary Update an email template
+ */
+export const UpdateEmailTemplateParams = zod.object({
+  templateId: zod.coerce.string(),
+});
+
+export const UpdateEmailTemplateBody = zod.object({
+  name: zod.string(),
+  subject: zod.string(),
+  bodyHtml: zod.string(),
+  description: zod.string().optional(),
+  category: zod.enum(["marketing", "notification", "transactional"]),
+});
+
+export const UpdateEmailTemplateResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  subject: zod.string(),
+  bodyHtml: zod.string(),
+  description: zod.string().optional(),
+  category: zod.enum(["marketing", "notification", "transactional"]),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete an email template
+ */
+export const DeleteEmailTemplateParams = zod.object({
+  templateId: zod.coerce.string(),
+});
+
+/**
+ * @summary List all email triggers
+ */
+export const ListEmailTriggersResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  templateId: zod.string().optional(),
+  triggerEvent: zod.enum([
+    "technician_accepted_job",
+    "job_completed",
+    "overdue_maintenance",
+    "asset_end_of_life",
+    "property_transfer_initiated",
+    "new_feature_announcement",
+    "monthly_update",
+    "custom",
+  ]),
+  conditions: zod.record(zod.string(), zod.unknown()).optional(),
+  isActive: zod.boolean(),
+  description: zod.string().optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListEmailTriggersResponse = zod.array(
+  ListEmailTriggersResponseItem,
+);
+
+/**
+ * @summary Create an email trigger
+ */
+export const CreateEmailTriggerBody = zod.object({
+  name: zod.string(),
+  templateId: zod.string().optional(),
+  triggerEvent: zod.enum([
+    "technician_accepted_job",
+    "job_completed",
+    "overdue_maintenance",
+    "asset_end_of_life",
+    "property_transfer_initiated",
+    "new_feature_announcement",
+    "monthly_update",
+    "custom",
+  ]),
+  conditions: zod.record(zod.string(), zod.unknown()).optional(),
+  isActive: zod.boolean().optional(),
+  description: zod.string().optional(),
+});
+
+/**
+ * @summary Update an email trigger
+ */
+export const UpdateEmailTriggerParams = zod.object({
+  triggerId: zod.coerce.string(),
+});
+
+export const UpdateEmailTriggerBody = zod.object({
+  name: zod.string(),
+  templateId: zod.string().optional(),
+  triggerEvent: zod.enum([
+    "technician_accepted_job",
+    "job_completed",
+    "overdue_maintenance",
+    "asset_end_of_life",
+    "property_transfer_initiated",
+    "new_feature_announcement",
+    "monthly_update",
+    "custom",
+  ]),
+  conditions: zod.record(zod.string(), zod.unknown()).optional(),
+  isActive: zod.boolean().optional(),
+  description: zod.string().optional(),
+});
+
+export const UpdateEmailTriggerResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  templateId: zod.string().optional(),
+  triggerEvent: zod.enum([
+    "technician_accepted_job",
+    "job_completed",
+    "overdue_maintenance",
+    "asset_end_of_life",
+    "property_transfer_initiated",
+    "new_feature_announcement",
+    "monthly_update",
+    "custom",
+  ]),
+  conditions: zod.record(zod.string(), zod.unknown()).optional(),
+  isActive: zod.boolean(),
+  description: zod.string().optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete an email trigger
+ */
+export const DeleteEmailTriggerParams = zod.object({
+  triggerId: zod.coerce.string(),
+});
+
+/**
+ * @summary Toggle an email trigger active/inactive
+ */
+export const ToggleEmailTriggerParams = zod.object({
+  triggerId: zod.coerce.string(),
+});
+
+export const ToggleEmailTriggerResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  templateId: zod.string().optional(),
+  triggerEvent: zod.enum([
+    "technician_accepted_job",
+    "job_completed",
+    "overdue_maintenance",
+    "asset_end_of_life",
+    "property_transfer_initiated",
+    "new_feature_announcement",
+    "monthly_update",
+    "custom",
+  ]),
+  conditions: zod.record(zod.string(), zod.unknown()).optional(),
+  isActive: zod.boolean(),
+  description: zod.string().optional(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});

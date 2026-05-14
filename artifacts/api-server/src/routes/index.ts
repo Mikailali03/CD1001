@@ -19,6 +19,7 @@ import subscriptionRouter from "./subscription";
 import stripeCheckoutRouter from "./stripe-checkout";
 import collaboratorsRouter from "./collaborators";
 import inboxRouter from "./inbox";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(guidesRouter);
 router.use(marketplaceRouter);
 router.use(dashboardRouter);
 router.use(userProfileRouter);
+router.use(adminRouter);
 
 export default router;

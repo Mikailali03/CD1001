@@ -8,3 +8,5 @@ export * from "./property_transfers";
 export * from "./subscriptions";
 export * from "./collaborators";
 export * from "./user_profiles";
+export * from "./email_templates";
+export * from "./email_triggers";
