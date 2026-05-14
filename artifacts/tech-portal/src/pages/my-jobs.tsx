@@ -3,6 +3,7 @@ import {
   useListAssignedJobs,
   useGetMarketplaceJobDetails,
   useScheduleMarketplaceJob,
+  useCompleteMarketplaceJob,
   getGetMarketplaceJobDetailsQueryKey,
   useGetUserProfile,
   getGetUserProfileQueryKey,
@@ -14,6 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import {
   Sheet,
@@ -34,15 +38,24 @@ import {
   Home,
   Calendar,
   Briefcase,
+  ClipboardCheck,
+  DollarSign,
 } from "lucide-react";
 import { format } from "date-fns";
 
-const urgencyConfig: Record<string, { label: string; color: string; textColor: string; borderColor: string; icon: React.ReactNode }> = {
-  emergency: { label: "Emergency", color: "bg-red-50",     textColor: "text-red-700",    borderColor: "border-l-red-500",    icon: <AlertCircle className="h-3.5 w-3.5 text-red-600" /> },
-  high:      { label: "High",      color: "bg-orange-50",  textColor: "text-orange-700", borderColor: "border-l-orange-500", icon: <AlertCircle className="h-3.5 w-3.5 text-orange-500" /> },
-  medium:    { label: "Medium",    color: "bg-yellow-50",  textColor: "text-yellow-700", borderColor: "border-l-yellow-400", icon: <Clock className="h-3.5 w-3.5 text-yellow-600" /> },
-  low:       { label: "Low",       color: "bg-gray-50",    textColor: "text-gray-600",   borderColor: "border-l-gray-300",   icon: <Clock className="h-3.5 w-3.5 text-gray-400" /> },
+const urgencyConfig: Record<string, { label: string; textColor: string; borderColor: string; icon: React.ReactNode }> = {
+  emergency: { label: "Emergency", textColor: "text-red-700",    borderColor: "border-l-red-500",    icon: <AlertCircle className="h-3.5 w-3.5 text-red-600" /> },
+  high:      { label: "High",      textColor: "text-orange-700", borderColor: "border-l-orange-500", icon: <AlertCircle className="h-3.5 w-3.5 text-orange-500" /> },
+  medium:    { label: "Medium",    textColor: "text-yellow-700", borderColor: "border-l-yellow-400", icon: <Clock className="h-3.5 w-3.5 text-yellow-600" /> },
+  low:       { label: "Low",       textColor: "text-gray-600",   borderColor: "border-l-gray-300",   icon: <Clock className="h-3.5 w-3.5 text-gray-400" /> },
 };
+
+function toDatetimeLocal(iso: string) {
+  const d = new Date(iso);
+  const offset = d.getTimezoneOffset();
+  const local = new Date(d.getTime() - offset * 60000);
+  return local.toISOString().slice(0, 16);
+}
 
 export default function MyJobsPage() {
   const { signOut } = useAuth();
@@ -51,7 +64,16 @@ export default function MyJobsPage() {
   const { data: assignedJobs = [], isLoading } = useListAssignedJobs();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Schedule state
   const [schedulingValue, setSchedulingValue] = useState("");
+
+  // Completion form state
+  const [showCompletionForm, setShowCompletionForm] = useState(false);
+  const [workSummary, setWorkSummary] = useState("");
+  const [costValue, setCostValue] = useState("");
+  const [nextServiceDate, setNextServiceDate] = useState("");
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -67,10 +89,30 @@ export default function MyJobsPage() {
         queryClient.invalidateQueries({ queryKey: ["listAssignedJobs"] });
         const iso = (data as any)?.scheduledAt;
         const friendly = iso ? format(new Date(iso), "MMM d, yyyy 'at' h:mm a") : "confirmed";
-        toast({ title: "Service date set", description: `Scheduled for ${friendly}. Contact the homeowner to confirm.` });
+        toast({ title: "Service date set", description: `Scheduled for ${friendly}.` });
       },
-      onError: () => {
-        toast({ title: "Could not save schedule", variant: "destructive" });
+      onError: () => toast({ title: "Could not save schedule", variant: "destructive" }),
+    },
+  });
+
+  const completeMutation = useCompleteMarketplaceJob({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["listAssignedJobs"] });
+        queryClient.invalidateQueries({ queryKey: getGetMarketplaceJobDetailsQueryKey(selectedJobId ?? "") });
+        toast({
+          title: "Job marked complete",
+          description: "A verified service record has been added to the homeowner's asset history.",
+        });
+        setSheetOpen(false);
+        setShowCompletionForm(false);
+        setWorkSummary("");
+        setCostValue("");
+        setNextServiceDate("");
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.error ?? "Could not complete job. Make sure a service date is set.";
+        toast({ title: "Error", description: msg, variant: "destructive" });
       },
     },
   });
@@ -78,21 +120,12 @@ export default function MyJobsPage() {
   function openJob(jobId: string) {
     setSelectedJobId(jobId);
     setSheetOpen(true);
-    // Pre-fill the schedule input with existing scheduled date if any
+    setShowCompletionForm(false);
+    setWorkSummary("");
+    setCostValue("");
+    setNextServiceDate("");
     const job = assignedJobs.find((j) => j.id === jobId);
-    if (job?.scheduledAt) {
-      setSchedulingValue(toDatetimeLocal(job.scheduledAt));
-    } else {
-      setSchedulingValue("");
-    }
-  }
-
-  function toDatetimeLocal(iso: string) {
-    const d = new Date(iso);
-    // Shift to local time for the input
-    const offset = d.getTimezoneOffset();
-    const local = new Date(d.getTime() - offset * 60000);
-    return local.toISOString().slice(0, 16);
+    setSchedulingValue(job?.scheduledAt ? toDatetimeLocal(job.scheduledAt as string) : "");
   }
 
   function handleSaveSchedule() {
@@ -102,6 +135,20 @@ export default function MyJobsPage() {
       data: { scheduledAt: new Date(schedulingValue).toISOString() },
     });
   }
+
+  function handleComplete() {
+    if (!selectedJobId || !workSummary.trim()) return;
+    completeMutation.mutate({
+      jobId: selectedJobId,
+      data: {
+        workSummary: workSummary.trim(),
+        cost: costValue ? parseFloat(costValue) : undefined,
+        nextServiceDate: nextServiceDate || undefined,
+      },
+    });
+  }
+
+  const jobHasSchedule = !!(jobDetail as any)?.scheduledAt;
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
@@ -153,14 +200,12 @@ export default function MyJobsPage() {
           <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-4">
             <div>
               <h1 className="text-xl font-bold text-foreground">My Assigned Jobs</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">Jobs you've claimed — contact homeowners and set service dates.</p>
+              <p className="text-sm text-muted-foreground mt-0.5">Jobs you've claimed — set service dates and log completion to update the homeowner's report.</p>
             </div>
 
             {isLoading ? (
               <div className="space-y-3">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-28 rounded-xl" />
-                ))}
+                {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
               </div>
             ) : assignedJobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed rounded-xl bg-muted/30">
@@ -185,14 +230,11 @@ export default function MyJobsPage() {
                       className={`w-full text-left rounded-xl border border-l-4 ${uc.borderColor} bg-card hover:shadow-md hover:-translate-y-0.5 transition-all p-4 space-y-3`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className={`text-xs ${uc.textColor}`}>
-                            {uc.icon}
-                            <span className="ml-1">{uc.label}</span>
-                          </Badge>
-                          <span className="text-xs font-semibold text-foreground">{(job as any).assetName}</span>
+                        <div className="flex items-center gap-2 flex-wrap min-w-0">
+                          {uc.icon}
+                          <span className="text-xs font-semibold text-foreground truncate">{(job as any).assetName}</span>
                           {(job as any).assetBrand && (
-                            <span className="text-xs text-muted-foreground">— {(job as any).assetBrand}</span>
+                            <span className="text-xs text-muted-foreground truncate">— {(job as any).assetBrand}</span>
                           )}
                         </div>
                         {hasSchedule ? (
@@ -206,15 +248,12 @@ export default function MyJobsPage() {
                           </span>
                         )}
                       </div>
-
                       <p className="text-xs text-muted-foreground line-clamp-2">{(job as any).description}</p>
-
                       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                         <span className="flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
                           {[(job as any).propertyAddress, (job as any).propertyCity, (job as any).propertyState]
-                            .filter(Boolean)
-                            .join(", ")}
+                            .filter(Boolean).join(", ")}
                         </span>
                         {(job as any).contactPhone && (
                           <span className="flex items-center gap-1">
@@ -233,8 +272,8 @@ export default function MyJobsPage() {
       </div>
 
       {/* Job detail sheet */}
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right" className="w-full sm:w-[440px] overflow-y-auto p-0">
+      <Sheet open={sheetOpen} onOpenChange={(v) => { setSheetOpen(v); if (!v) setShowCompletionForm(false); }}>
+        <SheetContent side="right" className="w-full sm:w-[460px] overflow-y-auto p-0">
           {detailError ? (
             <div className="p-6 flex flex-col items-center justify-center gap-3 text-center h-full">
               <AlertCircle className="h-8 w-8 text-destructive/60" />
@@ -275,8 +314,7 @@ export default function MyJobsPage() {
                       <p className="font-medium text-foreground">{(jobDetail as any).assetName}</p>
                       <p className="text-muted-foreground text-xs">
                         {[(jobDetail as any).assetBrand, (jobDetail as any).assetModel, (jobDetail as any).assetCategory]
-                          .filter(Boolean)
-                          .join(" · ")}
+                          .filter(Boolean).join(" · ")}
                       </p>
                       {(jobDetail as any).assetSerialNumber && (
                         <p className="text-muted-foreground text-xs">S/N: {(jobDetail as any).assetSerialNumber}</p>
@@ -302,13 +340,11 @@ export default function MyJobsPage() {
                       <p className="font-medium text-foreground">{(jobDetail as any).propertyAddress}</p>
                       <p className="text-xs text-muted-foreground">
                         {[(jobDetail as any).propertyCity, (jobDetail as any).propertyState, (jobDetail as any).propertyZipCode]
-                          .filter(Boolean)
-                          .join(", ")}
+                          .filter(Boolean).join(", ")}
                       </p>
                       {(jobDetail as any).propertyYearBuilt && (
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Home className="h-3 w-3" />
-                          Built {(jobDetail as any).propertyYearBuilt}
+                          <Home className="h-3 w-3" />Built {(jobDetail as any).propertyYearBuilt}
                         </p>
                       )}
                     </div>
@@ -349,7 +385,6 @@ export default function MyJobsPage() {
                   </div>
                 )}
 
-                {/* Accepted date */}
                 {(jobDetail as any).acceptedAt && (
                   <p className="text-xs text-muted-foreground">
                     Accepted {format(new Date((jobDetail as any).acceptedAt), "MMM d, yyyy")}
@@ -357,14 +392,14 @@ export default function MyJobsPage() {
                 )}
               </div>
 
-              {/* Schedule section */}
-              <div className="px-6 pb-6 pt-2 border-t border-border space-y-3">
+              {/* ── Schedule section ── */}
+              <div className="px-6 pb-4 pt-2 border-t border-border space-y-3">
                 <div>
-                  <p className="text-sm font-semibold text-foreground mb-1">Service Date &amp; Time</p>
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Service Date &amp; Time</p>
                   <p className="text-xs text-muted-foreground">
-                    {(jobDetail as any).scheduledAt
-                      ? `Currently scheduled: ${format(new Date((jobDetail as any).scheduledAt), "EEEE, MMM d, yyyy 'at' h:mm a")}`
-                      : "No date set yet — confirm with the homeowner and enter it below."}
+                    {jobHasSchedule
+                      ? `Scheduled: ${format(new Date((jobDetail as any).scheduledAt), "EEEE, MMM d, yyyy 'at' h:mm a")}`
+                      : "Confirm with the homeowner, then enter the date below."}
                   </p>
                 </div>
                 <input
@@ -374,24 +409,109 @@ export default function MyJobsPage() {
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring"
                 />
                 <Button
+                  variant={jobHasSchedule ? "outline" : "default"}
                   className="w-full gap-2"
                   disabled={!schedulingValue || scheduleMutation.isPending}
                   onClick={handleSaveSchedule}
                 >
                   <Calendar className="h-4 w-4" />
-                  {scheduleMutation.isPending
-                    ? "Saving..."
-                    : (jobDetail as any).scheduledAt
-                    ? "Update Schedule"
-                    : "Set Service Date"}
+                  {scheduleMutation.isPending ? "Saving…" : jobHasSchedule ? "Update Date" : "Set Service Date"}
                 </Button>
-                {(jobDetail as any).scheduledAt && (
-                  <div className="flex items-center gap-2 text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2.5">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>Scheduled for {format(new Date((jobDetail as any).scheduledAt), "MMM d, yyyy 'at' h:mm a")}</span>
-                  </div>
-                )}
               </div>
+
+              {/* ── Completion section — only shown once a date is set ── */}
+              {jobHasSchedule && (
+                <div className="px-6 pb-6 pt-2 border-t border-border space-y-3">
+                  {!showCompletionForm ? (
+                    <Button
+                      className="w-full gap-2"
+                      onClick={() => setShowCompletionForm(true)}
+                    >
+                      <ClipboardCheck className="h-4 w-4" />
+                      Mark Job Complete
+                    </Button>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2">
+                        <ClipboardCheck className="h-4 w-4 text-primary shrink-0" />
+                        <p className="text-sm font-semibold text-foreground">Log Completed Work</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground -mt-1">
+                        This creates a verified service record in the homeowner's asset history and updates their home report.
+                      </p>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="work-summary" className="text-xs font-medium">
+                          What was done <span className="text-destructive">*</span>
+                        </Label>
+                        <Textarea
+                          id="work-summary"
+                          placeholder="e.g. Replaced capacitor and recharged refrigerant. Unit cooling normally. Checked electrical connections — all secure."
+                          value={workSummary}
+                          onChange={(e) => setWorkSummary(e.target.value)}
+                          className="resize-none text-sm"
+                          rows={4}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="cost-input" className="text-xs font-medium flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" />
+                            Total cost charged
+                          </Label>
+                          <Input
+                            id="cost-input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={costValue}
+                            onChange={(e) => setCostValue(e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="next-service" className="text-xs font-medium flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            Next service (optional)
+                          </Label>
+                          <Input
+                            id="next-service"
+                            type="date"
+                            value={nextServiceDate}
+                            onChange={(e) => setNextServiceDate(e.target.value)}
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setShowCompletionForm(false)}
+                          disabled={completeMutation.isPending}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          className="flex-1 gap-2"
+                          disabled={!workSummary.trim() || completeMutation.isPending}
+                          onClick={handleComplete}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          {completeMutation.isPending ? "Completing…" : "Submit & Complete"}
+                        </Button>
+                      </div>
+
+                      <p className="text-[11px] text-muted-foreground text-center">
+                        This action cannot be undone. The homeowner will see this entry on their home report.
+      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </SheetContent>

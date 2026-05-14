@@ -883,6 +883,31 @@ export const ScheduleMarketplaceJobResponse = zod.object({
 });
 
 /**
+ * @summary Mark a claimed job as complete and write a verified service record
+ */
+export const CompleteMarketplaceJobParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const CompleteMarketplaceJobBody = zod.object({
+  workSummary: zod
+    .string()
+    .describe(
+      "What was done — written to the homeowner's asset service history",
+    ),
+  cost: zod.number().optional().describe("Total cost charged (optional)"),
+  nextServiceDate: zod
+    .string()
+    .optional()
+    .describe("Recommended next service date (YYYY-MM-DD, optional)"),
+});
+
+export const CompleteMarketplaceJobResponse = zod.object({
+  ok: zod.boolean().optional(),
+  serviceRecordId: zod.string().optional(),
+});
+
+/**
  * @summary Pending deed transfers and collaborator invites addressed to the current user
  */
 export const GetInboxResponse = zod.object({

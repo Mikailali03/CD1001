@@ -21,6 +21,8 @@ import type {
   Asset,
   AssignedJobSummary,
   Collaborator,
+  CompleteJobBody,
+  CompleteMarketplaceJob200,
   CreateAssetBody,
   CreateMaintenanceTaskBody,
   CreateMarketplaceJobBody,
@@ -2722,6 +2724,96 @@ export const useScheduleMarketplaceJob = <
   TContext
 > => {
   return useMutation(getScheduleMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary Mark a claimed job as complete and write a verified service record
+ */
+export const getCompleteMarketplaceJobUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/complete`;
+};
+
+export const completeMarketplaceJob = async (
+  jobId: string,
+  completeJobBody: CompleteJobBody,
+  options?: RequestInit,
+): Promise<CompleteMarketplaceJob200> => {
+  return customFetch<CompleteMarketplaceJob200>(
+    getCompleteMarketplaceJobUrl(jobId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(completeJobBody),
+    },
+  );
+};
+
+export const getCompleteMarketplaceJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeMarketplaceJob>>,
+    TError,
+    { jobId: string; data: BodyType<CompleteJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeMarketplaceJob>>,
+  TError,
+  { jobId: string; data: BodyType<CompleteJobBody> },
+  TContext
+> => {
+  const mutationKey = ["completeMarketplaceJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeMarketplaceJob>>,
+    { jobId: string; data: BodyType<CompleteJobBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return completeMarketplaceJob(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteMarketplaceJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeMarketplaceJob>>
+>;
+export type CompleteMarketplaceJobMutationBody = BodyType<CompleteJobBody>;
+export type CompleteMarketplaceJobMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark a claimed job as complete and write a verified service record
+ */
+export const useCompleteMarketplaceJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeMarketplaceJob>>,
+    TError,
+    { jobId: string; data: BodyType<CompleteJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeMarketplaceJob>>,
+  TError,
+  { jobId: string; data: BodyType<CompleteJobBody> },
+  TContext
+> => {
+  return useMutation(getCompleteMarketplaceJobMutationOptions(options));
 };
 
 /**

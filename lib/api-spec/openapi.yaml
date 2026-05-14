@@ -661,6 +661,40 @@ paths:
         "404":
           description: Job not found
 
+  /marketplace/jobs/{jobId}/complete:
+    post:
+      operationId: completeMarketplaceJob
+      tags: [technician]
+      summary: Mark a claimed job as complete and write a verified service record
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteJobBody"
+      responses:
+        "200":
+          description: Job marked complete, service record created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  serviceRecordId:
+                    type: string
+        "400":
+          description: Job not yet scheduled or not in claimed status
+        "404":
+          description: Job not found or not assigned to you
+
   # ─── Inbox ──────────────────────────────────────────────────────────────────
   /inbox:
     get:
@@ -1549,6 +1583,20 @@ components:
         scheduledAt:
           type: string
           format: date-time
+
+    CompleteJobBody:
+      type: object
+      required: [workSummary]
+      properties:
+        workSummary:
+          type: string
+          description: What was done — written to the homeowner's asset service history
+        cost:
+          type: number
+          description: Total cost charged (optional)
+        nextServiceDate:
+          type: string
+          description: Recommended next service date (YYYY-MM-DD, optional)
 
     # ─── Dashboard ──────────────────────────────────────────────────────────────
     Dashboard:

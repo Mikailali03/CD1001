@@ -274,6 +274,69 @@ router.patch("/marketplace/jobs/:jobId/schedule", requireAuth(), async (req, res
   res.json({ ok: true, scheduledAt: newDate.toISOString() });
 });
 
+// ── Technician: complete a job ────────────────────────────────────────────
+const CompleteBody = z.object({
+  workSummary: z.string().min(1),
+  cost: z.number().optional(),
+  nextServiceDate: z.string().optional(),
+});
+
+router.post("/marketplace/jobs/:jobId/complete", requireAuth(), async (req, res) => {
+  const { jobId } = JobParams.parse(req.params);
+  const body = CompleteBody.parse(req.body);
+
+  const [row] = await db
+    .select({
+      job: marketplaceJobsTable,
+      asset: assetsTable,
+    })
+    .from(marketplaceJobsTable)
+    .innerJoin(assetsTable, eq(marketplaceJobsTable.assetId, assetsTable.id))
+    .where(
+      and(
+        eq(marketplaceJobsTable.id, jobId),
+        eq(marketplaceJobsTable.technicianId, req.userId)
+      )
+    );
+
+  if (!row) return res.status(404).json({ error: "Job not found or not assigned to you" });
+  if (row.job.status !== "claimed") return res.status(400).json({ error: "Job must be in claimed status to complete" });
+  if (!row.job.scheduledAt) return res.status(400).json({ error: "A service date must be set before marking complete" });
+
+  const [techProfile] = await db
+    .select()
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, req.userId));
+
+  const techName = techProfile
+    ? `${techProfile.firstName} ${techProfile.lastName}`.trim()
+    : "Technician";
+
+  const serviceDate = row.job.scheduledAt.toISOString().slice(0, 10);
+
+  const [serviceRecord] = await db
+    .insert(serviceRecordsTable)
+    .values({
+      assetId: row.asset.id,
+      date: serviceDate,
+      description: body.workSummary,
+      technicianName: techName,
+      technicianNumber: techProfile?.technicianNumber ?? null,
+      cost: body.cost != null ? String(body.cost) : null,
+      nextServiceDate: body.nextServiceDate ?? null,
+      verified: true,
+      casaServiceTechId: req.userId,
+    })
+    .returning();
+
+  await db
+    .update(marketplaceJobsTable)
+    .set({ status: "completed" })
+    .where(eq(marketplaceJobsTable.id, jobId));
+
+  res.json({ ok: true, serviceRecordId: serviceRecord!.id });
+});
+
 // ── Technician: accept a job ──────────────────────────────────────────────
 router.post("/marketplace/jobs/:jobId/accept", requireAuth(), async (req, res) => {
   const { jobId } = JobParams.parse(req.params);

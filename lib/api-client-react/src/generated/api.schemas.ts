@@ -579,6 +579,15 @@ export interface ScheduleJobBody {
   scheduledAt: string;
 }
 
+export interface CompleteJobBody {
+  /** What was done — written to the homeowner's asset service history */
+  workSummary: string;
+  /** Total cost charged (optional) */
+  cost?: number;
+  /** Recommended next service date (YYYY-MM-DD, optional) */
+  nextServiceDate?: string;
+}
+
 /**
  * Letter grade derived from homeHealthScore
  */
@@ -657,4 +666,9 @@ export type ListGuidesParams = {
 export type ScheduleMarketplaceJob200 = {
   ok?: boolean;
   scheduledAt?: string;
+};
+
+export type CompleteMarketplaceJob200 = {
+  ok?: boolean;
+  serviceRecordId?: string;
 };
