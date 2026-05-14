@@ -440,9 +440,14 @@ export default function Dashboard() {
                       <p className="text-sm font-medium leading-snug line-clamp-2">{record.description}</p>
                       <p className="text-xs text-muted-foreground break-words">
                         {record.assetName && <span className="font-medium">{record.assetName} · </span>}
-                        {record.companyName === "CasaService" && record.technicianName
-                          ? `CasaService - ${record.technicianName}`
-                          : record.technicianName || record.companyName || "Service"}
+                        {record.companyName === "CasaService" ? (
+                          <>
+                            <span className="inline-flex items-center bg-amber-50 border border-amber-200 font-semibold px-1 py-px rounded text-[10px] tracking-wide mr-0.5">
+                              <span className="casa-shimmer-gold">✦ CasaService</span>
+                            </span>
+                            {record.technicianName && ` — ${record.technicianName}`}
+                          </>
+                        ) : (record.technicianName || record.companyName || "Service")}
                         {" · "}{format(new Date(record.date), "MMM d, yyyy")}
                       </p>
                     </div>

@@ -62,10 +62,17 @@ function TechSpec({ label, value }: { label: string; value: string | number | nu
 }
 
 function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: boolean }) {
-  const performer = (r: ServiceRecord) =>
-    r.companyName === "CasaService" && r.technicianName
-      ? `CasaService - ${r.technicianName}`
-      : r.companyName ?? r.technicianName ?? "Homeowner (DIY)";
+  const renderPerformer = (r: ServiceRecord) => {
+    if (r.companyName === "CasaService") {
+      return (
+        <>
+          <span className="casa-shimmer-gold font-semibold">✦ CasaService</span>
+          {r.technicianName && ` — ${r.technicianName}`}
+        </>
+      );
+    }
+    return r.companyName ?? r.technicianName ?? "Homeowner (DIY)";
+  };
 
   return (
     <div
@@ -112,7 +119,7 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
               <tr key={r.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="px-4 py-2 text-gray-500 whitespace-nowrap font-mono text-[10px]">{fmtDate(r.date)}</td>
                 <td className="px-4 py-2 text-gray-800">{r.description}</td>
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{performer(r)}</td>
+                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{renderPerformer(r)}</td>
               </tr>
             ))}
           </tbody>

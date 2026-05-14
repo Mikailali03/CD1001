@@ -22,7 +22,7 @@
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  animation: gold-shimmer 2.8s linear infinite;
+  animation: gold-shimmer 5.6s linear infinite;
 }
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
