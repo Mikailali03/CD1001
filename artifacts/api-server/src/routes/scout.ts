@@ -58,6 +58,18 @@ router.post("/properties/:propertyId/scout", requireAuth(), async (req, res) => 
   if (!property) return res.status(404).json({ error: "Property not found" });
 
   const homeAge = property.yearBuilt ? new Date().getFullYear() - property.yearBuilt : null;
+
+  // Fetch existing named assets so the AI knows what NOT to duplicate
+  const existingAssets = await db
+    .select({ name: assetsTable.name, category: assetsTable.category })
+    .from(assetsTable)
+    .where(eq(assetsTable.propertyId, propertyId))
+    .then((rows) => rows.filter((r) => r.name !== "Home Stewardship"));
+
+  const assetList = existingAssets.length > 0
+    ? existingAssets.map((a) => `- ${a.name} (${a.category})`).join("\n")
+    : "None recorded yet";
+
   const prompt = `You are a home maintenance expert generating a "Whole-Home Stewardship Plan" for a homeowner.
 
 Property details:
@@ -66,7 +78,28 @@ Property details:
 - Size: ${property.sqft ? `${property.sqft.toLocaleString()} sq ft` : "unknown size"}
 - Bedrooms: ${property.bedrooms ?? "unknown"}, Bathrooms: ${property.bathrooms ?? "unknown"}
 
-Generate 8–12 recurring home maintenance tasks appropriate for this property's age, climate region (inferred from state/location), and size. Focus on tasks a homeowner can realistically do themselves (DIY). Include some professional tasks too.
+This homeowner already has the following appliances and systems tracked as individual assets:
+${assetList}
+
+YOUR TASK: Generate 8–12 recurring maintenance tasks for the Home Stewardship asset. This asset covers ONLY whole-home safety and structural items that do NOT belong to any specific appliance or system.
+
+STRICT RULES:
+1. Do NOT generate tasks for any asset listed above. Each of those assets manages its own maintenance schedule. Generating tasks like "HVAC filter replacement", "water heater flushing", "furnace tune-up", "refrigerator coil cleaning", or anything tied to a named appliance or system causes duplication and must be avoided.
+2. ONLY include tasks for items that don't have a dedicated asset record — things like:
+   - Smoke and carbon monoxide detector testing and battery replacement
+   - Foundation and basement inspection
+   - Pest and termite inspection
+   - Gutter cleaning and downspout flushing
+   - Dryer vent cleaning (the vent duct, not the appliance)
+   - Exterior caulking and weatherstripping
+   - Roof and attic visual inspection
+   - Window and door seals
+   - Chimney and fireplace inspection (if applicable to age/region)
+   - Exterior grading and drainage check
+   - Driveway and walkway inspection
+   - Exterior paint and siding condition check
+3. Tailor frequency and urgency to the property's age and climate region (inferred from state).
+4. Include a mix of DIY and professional tasks.
 
 Respond ONLY with a JSON array. No markdown, no explanation, just the array. Each object must have exactly these fields:
 {
