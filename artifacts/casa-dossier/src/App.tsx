@@ -8,10 +8,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppLayout } from "@/components/layout";
 import { PropertyProvider, useProperty } from "@/contexts/property-context";
 import { SubscriptionProvider, useSubscription } from "@/contexts/subscription-context";
-import { setExtraHeaders, setAuthTokenGetter } from "@workspace/api-client-react";
+import { setExtraHeaders, setAuthTokenGetter, useGetUserProfile, getGetUserProfileQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowRight, Eye } from "lucide-react";
+import { ArrowRight, Eye, Loader2 } from "lucide-react";
 
 // Pages
 import Landing from "@/pages/landing";
@@ -130,11 +130,37 @@ function ClerkQueryClientCacheInvalidator() {
   return null;
 }
 
+function TechnicianAwareRedirect() {
+  const { getToken, isLoaded } = useAuth();
+
+  // Set token getter synchronously so the query below already has auth on first fire
+  setAuthTokenGetter(getToken);
+
+  const { data: profile, isLoading, isError } = useGetUserProfile({
+    query: { queryKey: getGetUserProfileQueryKey(), enabled: isLoaded, retry: 1 },
+  });
+
+  if (!isLoaded || isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isError && (profile as { role?: string } | undefined)?.role === "technician") {
+    window.location.href = "/tech/";
+    return null;
+  }
+
+  return <Redirect to="/dashboard" />;
+}
+
 function HomeRedirect() {
   return (
     <>
       <Show when="signed-in">
-        <Redirect to="/dashboard" />
+        <TechnicianAwareRedirect />
       </Show>
       <Show when="signed-out">
         <Landing />
@@ -337,7 +363,7 @@ function SignInPage() {
         routing="path"
         path={`${basePath}/sign-in`}
         signUpUrl={`${basePath}/sign-up`}
-        fallbackRedirectUrl={`${basePath}/dashboard`}
+        fallbackRedirectUrl={`${basePath}/`}
       />
     </div>
   );
@@ -350,7 +376,7 @@ function SignUpPage() {
         routing="path"
         path={`${basePath}/sign-up`}
         signInUrl={`${basePath}/sign-in`}
-        fallbackRedirectUrl={`${basePath}/dashboard`}
+        fallbackRedirectUrl={`${basePath}/`}
       />
     </div>
   );
@@ -366,8 +392,8 @@ function ClerkProviderWithRoutes() {
       appearance={clerkAppearance}
       signInUrl={`${basePath}/sign-in`}
       signUpUrl={`${basePath}/sign-up`}
-      signInFallbackRedirectUrl={`${basePath}/dashboard`}
-      signUpFallbackRedirectUrl={`${basePath}/dashboard`}
+      signInFallbackRedirectUrl={`${basePath}/`}
+      signUpFallbackRedirectUrl={`${basePath}/`}
       afterSignOutUrl={`${basePath}/`}
       localization={{
         signIn: {
