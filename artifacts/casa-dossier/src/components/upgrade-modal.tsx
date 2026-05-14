@@ -170,7 +170,7 @@ export function UpgradeModal() {
               if (isCurrent) return <><Check className="h-3.5 w-3.5" />Active</>;
               if (isLoading) return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
               if (isPaidSwitch) return <><ExternalLink className="h-3.5 w-3.5" />Switch Plan</>;
-              if (isUpgrade && plan.paid) return <><Zap className="h-3.5 w-3.5" />Upgrade — ${plan.price.replace("$", "")}/mo</>;
+              if (isUpgrade && plan.paid) return <><Zap className="h-3.5 w-3.5" />Upgrade — ${plan.price.replace(/\$/g, "")}/mo</>;
               if (isDowngrade) return "Downgrade";
               return <><Zap className="h-3.5 w-3.5" />Upgrade</>;
             }

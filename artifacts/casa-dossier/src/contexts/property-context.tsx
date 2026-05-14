@@ -1,7 +1,23 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useListProperties } from "@workspace/api-client-react";
 
-type Property = { id: string; name: string; address: string; city?: string | null; state?: string | null };
+type Property = {
+  id: string;
+  name: string;
+  address: string;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  yearBuilt?: number | null;
+  sqft?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  photoUrl?: string | null;
+  createdAt: string;
+  updatedAt?: string | null;
+};
 
 type PropertyContextValue = {
   activePropertyId: string | null;

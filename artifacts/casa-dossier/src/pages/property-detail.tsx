@@ -10,6 +10,7 @@ import {
   useListAssets,
   getListAssetsQueryKey,
   useUpdateProperty,
+  type Asset,
 } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -59,7 +60,7 @@ export default function PropertyDetail() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [addAssetOpen, setAddAssetOpen] = useState(false);
-  const [editAsset, setEditAsset] = useState<(typeof assets)[0] | null>(null);
+  const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [retiredOpen, setRetiredOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");

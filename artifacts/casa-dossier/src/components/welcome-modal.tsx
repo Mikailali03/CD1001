@@ -104,21 +104,17 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
   const storageKey = user?.id ? `casa_welcome_seen_${user.id}` : null;
 
   useEffect(() => {
-    if (forceOpen) {
-      setCurrentIdx(0);
-      setAnimKey(0);
-      const timer = setTimeout(() => setOpen(true), 400);
-      return () => clearTimeout(timer);
-    }
+    if (!forceOpen) return;
+    setCurrentIdx(0);
+    setAnimKey(0);
+    const timer = setTimeout(() => setOpen(true), 400);
+    return () => clearTimeout(timer);
   }, [forceOpen]);
 
   useEffect(() => {
-    if (forceOpen) return;
-    if (!storageKey) return;
-    if (!localStorage.getItem(storageKey)) {
-      const timer = setTimeout(() => setOpen(true), 600);
-      return () => clearTimeout(timer);
-    }
+    if (forceOpen || !storageKey || localStorage.getItem(storageKey)) return;
+    const timer = setTimeout(() => setOpen(true), 600);
+    return () => clearTimeout(timer);
   }, [storageKey, forceOpen]);
 
   function dismiss() {

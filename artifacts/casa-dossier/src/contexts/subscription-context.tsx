@@ -78,6 +78,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       throw new Error((err as any).error ?? "Checkout failed");
     }
     const { url } = await res.json();
+    if (typeof url !== "string" || !url.startsWith("https://") || !/\.stripe\.com\//.test(url)) {
+      throw new Error("Invalid redirect URL");
+    }
     window.location.href = url;
   }, [authFetch]);
 
@@ -89,6 +92,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     });
     if (!res.ok) throw new Error("Portal session failed");
     const { url } = await res.json();
+    if (typeof url !== "string" || !url.startsWith("https://") || !/\.stripe\.com\//.test(url)) {
+      throw new Error("Invalid redirect URL");
+    }
     window.location.href = url;
   }, [authFetch]);
 

@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPropertySummary,
+  getGetPropertySummaryQueryKey,
   useUpdateProperty,
   useListMarketplaceJobs,
   getGetPropertyQueryKey,
@@ -270,7 +271,7 @@ export default function Dashboard() {
 
   const { data: summary, isLoading: summaryLoading } = useGetPropertySummary(
     activePropertyId ?? "",
-    { query: { enabled: !!activePropertyId } }
+    { query: { enabled: !!activePropertyId, queryKey: getGetPropertySummaryQueryKey(activePropertyId ?? "") } }
   );
 
   const isLoading = propLoading || (!!activePropertyId && summaryLoading);
