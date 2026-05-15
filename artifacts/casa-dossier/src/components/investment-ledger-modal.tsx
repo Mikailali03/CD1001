@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/react";
 import {
   Dialog,
   DialogContent,
@@ -142,19 +143,34 @@ export function InvestmentLedgerModal({
   onOpenChange: (v: boolean) => void;
   propertyId: string;
 }) {
+  const { getToken } = useAuth();
   const [range, setRange] = useState<RangeKey>("this_year");
   const [data, setData] = useState<LedgerData | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !propertyId) return;
+    let cancelled = false;
     setLoading(true);
-    fetch(`${BASE}/api/properties/${propertyId}/ledger?range=${range}`)
-      .then((r) => r.json())
-      .then((d) => setData(d))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
-  }, [open, propertyId, range]);
+    (async () => {
+      try {
+        const token = await getToken();
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const r = await fetch(
+          `${BASE}/api/properties/${propertyId}/ledger?range=${range}`,
+          { headers },
+        );
+        const d = await r.json();
+        if (!cancelled) setData(d);
+      } catch {
+        if (!cancelled) setData(null);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, propertyId, range, getToken]);
 
   const pieData = (data?.byCategory ?? [])
     .filter((c) => c.actual > 0)
