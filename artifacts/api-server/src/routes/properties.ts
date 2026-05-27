@@ -117,7 +117,12 @@ router.get("/properties/:propertyId/summary", requireAuth(), async (req, res) =>
   const assetsByCategory = Object.entries(categoryMap).map(([category, count]) => ({ category, count }));
 
   const assetScores = assets.map((a) => calcAssetScore(a));
-  const { score: healthScore, grade: healthGrade, assetAgeScore, overdueScore } = calcHealthScore(assetScores, overdueTaskCount);
+  const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+  const recentCompletedCount = tasks.filter((t) => {
+    const ca = t.task.completedAt;
+    return ca != null && new Date(ca) >= fifteenDaysAgo;
+  }).length;
+  const { score: healthScore, grade: healthGrade, assetAgeScore, overdueScore } = calcHealthScore(assetScores, overdueTaskCount, recentCompletedCount);
   const criticalAssets = assetScores.filter((s) => s.score < 40);
 
   const allRecentRecords = await db

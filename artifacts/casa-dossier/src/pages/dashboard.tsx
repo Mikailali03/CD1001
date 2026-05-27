@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
+import homeHeroBadge from "@assets/home_hero_badge_1779907339353.png";
 
 // ── Grade config ───────────────────────────────────────────────────────────────
 const GRADE_CONFIG = {
@@ -72,8 +73,14 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
             style={{ transition: "stroke-dasharray 1s ease" }} />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-          <span className="text-lg font-black tabular-nums" style={{ color: cfg.color }}>{score}</span>
-          <span className="text-[9px] text-muted-foreground font-medium">/ 100</span>
+          {score >= 100 ? (
+            <img src={homeHeroBadge} alt="Home Hero" className="w-10 h-10 object-contain" />
+          ) : (
+            <>
+              <span className="text-lg font-black tabular-nums" style={{ color: cfg.color }}>{score}</span>
+              <span className="text-[9px] text-muted-foreground font-medium">/ 100</span>
+            </>
+          )}
         </div>
       </div>
       <div className="min-w-0 flex-1">

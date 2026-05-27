@@ -22,6 +22,7 @@ import {
   ClipboardList,
   ShieldCheck,
 } from "lucide-react";
+import homeHeroBadge from "@assets/home_hero_badge_1779907339353.png";
 
 // ------------------------------------------------------------------
 // Helpers
@@ -485,33 +486,44 @@ export function HealthScoreBadge({ propertyId, onClick }: HealthScoreBadgeProps)
           transform={`rotate(-90 ${cx} ${cy})`}
           style={{ transition: "stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1)" }}
         />
-        {/* Score label */}
-        <text
-          x={cx}
-          y={cy - 6}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize="17"
-          fontWeight="700"
-          fill={color}
-          style={{ fontFamily: "inherit" }}
-        >
-          {healthScore}
-        </text>
-        {/* Grade label */}
-        <text
-          x={cx}
-          y={cy + 12}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fontSize="12"
-          fontWeight="600"
-          fill={color}
-          opacity="0.75"
-          style={{ fontFamily: "inherit" }}
-        >
-          {healthGrade}
-        </text>
+        {/* Score / badge label */}
+        {healthScore >= 100 ? (
+          <image
+            href={homeHeroBadge}
+            x={cx - 28}
+            y={cy - 28}
+            width={56}
+            height={56}
+          />
+        ) : (
+          <>
+            <text
+              x={cx}
+              y={cy - 6}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="17"
+              fontWeight="700"
+              fill={color}
+              style={{ fontFamily: "inherit" }}
+            >
+              {healthScore}
+            </text>
+            <text
+              x={cx}
+              y={cy + 12}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="12"
+              fontWeight="600"
+              fill={color}
+              opacity="0.75"
+              style={{ fontFamily: "inherit" }}
+            >
+              {healthGrade}
+            </text>
+          </>
+        )}
       </svg>
     </button>
   );

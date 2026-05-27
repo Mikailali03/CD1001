@@ -63,7 +63,8 @@ const NON_CRITICAL_WEIGHT = 0.1;
 
 export function calcHealthScore(
   assetScores: AssetHealthScore[],
-  overdueCount: number
+  overdueCount: number,
+  recentCompletedCount = 0
 ): { score: number; grade: "A" | "B" | "C" | "D" | "F"; assetAgeScore: number; overdueScore: number } {
   let assetAgeScore: number;
 
@@ -85,7 +86,9 @@ export function calcHealthScore(
   }
 
   const overdueScore = calcOverdueScore(overdueCount);
-  const score = Math.round(assetAgeScore * 0.5 + overdueScore * 0.5);
+  const rawScore = Math.round(assetAgeScore * 0.5 + overdueScore * 0.5);
+  // +1 per maintenance task completed in the last 15 days, capped at 100
+  const score = Math.min(100, rawScore + recentCompletedCount);
 
   const grade =
     score >= 90 ? "A"

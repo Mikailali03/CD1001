@@ -76,8 +76,13 @@ router.get("/dashboard", requireAuth(), async (req, res) => {
   const upcomingTasks = tasks.filter((t) => t.nextDueDate >= today && !t.completedAt).slice(0, 8);
 
   const assetScores = assets.map((a) => calcAssetScore(a));
+  const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+  const recentCompletedCount = tasks.filter((t) => {
+    const ca = t.completedAt;
+    return ca != null && new Date(ca) >= fifteenDaysAgo;
+  }).length;
   const { score: homeHealthScore, grade: homeHealthGrade, assetAgeScore, overdueScore } =
-    calcHealthScore(assetScores, overdueTaskCount);
+    calcHealthScore(assetScores, overdueTaskCount, recentCompletedCount);
   const criticalAssets = assetScores.filter((s) => s.score < 40);
 
   const categoryMap: Record<string, { total: number; verified: number }> = {};
