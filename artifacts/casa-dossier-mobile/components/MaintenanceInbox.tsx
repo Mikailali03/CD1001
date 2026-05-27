@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getListMaintenanceTasksQueryKey } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
 import { differenceInCalendarDays } from "date-fns";
@@ -381,6 +382,7 @@ export function MaintenanceInbox({ propertyId, insetBottom = 0 }: MaintenanceInb
     }
     setActiveTask(null);
     await queryClient.invalidateQueries({ queryKey: ["maintenance-inbox", propertyId] });
+    queryClient.invalidateQueries({ queryKey: getListMaintenanceTasksQueryKey(activeTask.assetId) });
     queryClient.invalidateQueries({
       predicate: (q) =>
         q.queryKey.some((k) => typeof k === "string" && (k.includes("summary") || k.includes("properties"))),
