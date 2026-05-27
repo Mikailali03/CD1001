@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import {
   View,
   Text,
+  ScrollView,
   FlatList,
   RefreshControl,
   TouchableOpacity,
@@ -16,77 +17,257 @@ import {
   useGetPropertySummary,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
-import { HealthScoreRing } from "@/components/HealthScoreRing";
-import { EmptyState } from "@/components/EmptyState";
 import * as Haptics from "expo-haptics";
+import { format } from "date-fns";
 
-type TaskItem = {
-  id: string;
-  name?: string;
-  taskName?: string;
-  dueDate?: string | null;
-  nextDueDate?: string | null;
-  assetName?: string;
-  status?: string;
-};
+// ── Grade config (matches web exactly) ────────────────────────────────────────
+const GRADE_CONFIG = {
+  A: { color: "#3d7a5f", bg: "#3d7a5f12", label: "Excellent", cta: "Your home is in great shape!" },
+  B: { color: "#4b7fb5", bg: "#4b7fb512", label: "Good",      cta: "A few quick tasks will get you to A." },
+  C: { color: "#c8853a", bg: "#c8853a12", label: "Fair",      cta: "Several items need attention." },
+  D: { color: "#b85a2a", bg: "#b85a2a12", label: "Poor",      cta: "Significant backlog detected." },
+  F: { color: "#c0392b", bg: "#c0392b0e", label: "Critical",  cta: "Immediate action recommended." },
+} as const;
 
-function TaskCard({ task, colors }: { task: TaskItem; colors: ReturnType<typeof useColors> }) {
-  const name = task.name ?? task.taskName ?? "Maintenance Task";
-  const due = task.dueDate ?? task.nextDueDate;
-  const dueLabel = due
-    ? new Date(due).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : "No date set";
+type Grade = keyof typeof GRADE_CONFIG;
 
-  const isOverdue = due ? new Date(due) < new Date() : false;
+// ── Health Score Widget (matches web's HealthScoreWidget) ─────────────────────
+function HealthScoreWidget({ score, grade, overdueCount }: { score: number; grade: Grade; overdueCount: number }) {
+  const cfg = GRADE_CONFIG[grade];
+  const radius = 26, stroke = 5;
+  const circ = 2 * Math.PI * radius;
+  const dash = (score / 100) * circ;
 
   return (
-    <View style={[taskStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[taskStyles.dot, { backgroundColor: isOverdue ? colors.destructive : colors.warning }]} />
-      <View style={taskStyles.content}>
-        <Text style={[taskStyles.name, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
-          {name}
-        </Text>
-        <Text style={[taskStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          {task.assetName ? `${task.assetName} · ` : ""}Due {dueLabel}
-        </Text>
+    <View style={[hStyles.wrap, { borderColor: cfg.color + "44", backgroundColor: "rgba(255,255,255,0.9)" }]}>
+      {/* SVG ring */}
+      <View style={hStyles.ringWrap}>
+        <Svg width={66} height={66} style={{ transform: [{ rotate: "-90deg" }] }}>
+          <Circle cx={33} cy={33} r={radius} fill="none" stroke={cfg.bg} strokeWidth={stroke} />
+          <Circle
+            cx={33} cy={33} r={radius} fill="none"
+            stroke={cfg.color} strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${circ}`}
+          />
+        </Svg>
+        <View style={StyleSheet.absoluteFill}>
+          <View style={hStyles.ringCenter}>
+            <Text style={[hStyles.score, { color: cfg.color, fontFamily: "Inter_700Bold" }]}>{score}</Text>
+            <Text style={[hStyles.scoreLabel, { color: "#9CA3AF", fontFamily: "Inter_400Regular" }]}>/100</Text>
+          </View>
+        </View>
       </View>
-      <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+
+      {/* Grade info */}
+      <View style={hStyles.info}>
+        <View style={hStyles.gradeRow}>
+          <Text style={[hStyles.gradeText, { color: cfg.color, fontFamily: "Inter_700Bold" }]}>Grade {grade}</Text>
+          <View style={[hStyles.gradePill, { backgroundColor: cfg.bg }]}>
+            <Text style={[hStyles.gradePillText, { color: cfg.color, fontFamily: "Inter_700Bold" }]}>{cfg.label}</Text>
+          </View>
+        </View>
+        <Text style={[hStyles.ctaText, { color: "#6B7A8E", fontFamily: "Inter_400Regular" }]}>{cfg.cta}</Text>
+        {overdueCount > 0 && (
+          <View style={hStyles.overdueRow}>
+            <Feather name="trending-up" size={11} color={cfg.color} />
+            <Text style={[hStyles.overdueText, { color: cfg.color, fontFamily: "Inter_600SemiBold" }]}>
+              See improvement plan
+            </Text>
+          </View>
+        )}
+      </View>
+      <Feather name="chevron-right" size={16} color="#9CA3AF" />
     </View>
   );
 }
 
-const taskStyles = StyleSheet.create({
-  card: {
+const hStyles = StyleSheet.create({
+  wrap: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    gap: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-    gap: 10,
+    borderWidth: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
   },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  content: { flex: 1 },
-  name: { fontSize: 14 },
-  meta: { fontSize: 12, marginTop: 2 },
+  ringWrap: { width: 66, height: 66, position: "relative" },
+  ringCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 0 },
+  score: { fontSize: 18, lineHeight: 20 },
+  scoreLabel: { fontSize: 9 },
+  info: { flex: 1, gap: 3 },
+  gradeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  gradeText: { fontSize: 13 },
+  gradePill: { borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 },
+  gradePillText: { fontSize: 10 },
+  ctaText: { fontSize: 11 },
+  overdueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  overdueText: { fontSize: 11 },
 });
 
+// ── Minimal inline SVG components ─────────────────────────────────────────────
+function Svg({ width, height, style, children }: any) {
+  const { Svg: RNSvg } = require("react-native-svg");
+  return <RNSvg width={width} height={height} style={style}>{children}</RNSvg>;
+}
+function Circle(props: any) {
+  const { Circle: RNCircle } = require("react-native-svg");
+  return <RNCircle {...props} />;
+}
+
+// ── Stat Card ─────────────────────────────────────────────────────────────────
+function StatCard({
+  title, value, icon, valueColor, sub, colors,
+}: {
+  title: string; value: string | number; icon: keyof typeof Feather.glyphMap;
+  valueColor?: string; sub?: string; colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={statStyles.header}>
+        <Text style={[statStyles.title, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{title}</Text>
+        <Feather name={icon} size={14} color={colors.mutedForeground} />
+      </View>
+      <Text style={[statStyles.value, { color: valueColor ?? colors.foreground, fontFamily: "Inter_700Bold" }]}>
+        {value}
+      </Text>
+      {sub ? (
+        <Text style={[statStyles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{sub}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+const statStyles = StyleSheet.create({
+  card: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 14, gap: 4 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  title: { fontSize: 11, lineHeight: 14 },
+  value: { fontSize: 24 },
+  sub: { fontSize: 11, marginTop: 2 },
+});
+
+// ── Investment Ledger Card ────────────────────────────────────────────────────
+function LedgerCard({ colors }: { colors: ReturnType<typeof useColors> }) {
+  return (
+    <View style={[ledgerStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={ledgerStyles.top}>
+        <View style={[ledgerStyles.iconBox, { backgroundColor: colors.primary + "1A" }]}>
+          <Feather name="file-text" size={18} color={colors.primary} />
+        </View>
+        <View style={ledgerStyles.topText}>
+          <Text style={[ledgerStyles.topTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+            Investment Ledger
+          </Text>
+          <Text style={[ledgerStyles.topSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            Spending by category · expected vs actual
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+      </View>
+      <View style={[ledgerStyles.footer, { borderTopColor: colors.border, backgroundColor: colors.muted + "33" }]}>
+        {[
+          { icon: "dollar-sign" as const, label: "Track spend", sub: "by system" },
+          { icon: "trending-up" as const, label: "Compare", sub: "est. vs actual" },
+          { icon: "file-text" as const, label: "Full ledger", sub: "all records" },
+        ].map(({ icon, label, sub }) => (
+          <View key={label} style={[ledgerStyles.cell, { borderLeftColor: colors.border }]}>
+            <Feather name={icon} size={12} color={colors.primary} />
+            <Text style={[ledgerStyles.cellLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{label}</Text>
+            <Text style={[ledgerStyles.cellSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{sub}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const ledgerStyles = StyleSheet.create({
+  wrap: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  top: { flexDirection: "row", alignItems: "center", padding: 16, gap: 12 },
+  iconBox: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  topText: { flex: 1, gap: 2 },
+  topTitle: { fontSize: 14 },
+  topSub: { fontSize: 11 },
+  footer: { flexDirection: "row", borderTopWidth: 1 },
+  cell: { flex: 1, alignItems: "center", gap: 2, paddingVertical: 12, paddingHorizontal: 8, borderLeftWidth: StyleSheet.hairlineWidth },
+  cellLabel: { fontSize: 11 },
+  cellSub: { fontSize: 10 },
+});
+
+// ── Recent Activity Row ────────────────────────────────────────────────────────
+function ActivityRow({
+  description, assetName, companyName, date, colors,
+}: {
+  description: string; assetName?: string; companyName?: string; date: string;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={[actStyles.row, { borderBottomColor: colors.border }]}>
+      <View style={[actStyles.icon, { backgroundColor: colors.muted }]}>
+        <Feather name="file-text" size={13} color={colors.primary} />
+      </View>
+      <View style={actStyles.content}>
+        <Text style={[actStyles.desc, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={2}>
+          {description}
+        </Text>
+        <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+          {assetName ? `${assetName} · ` : ""}
+          {companyName ?? "Service"}
+          {" · "}{format(new Date(date), "MMM d, yyyy")}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const actStyles = StyleSheet.create({
+  row: { flexDirection: "row", gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  icon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  content: { flex: 1, gap: 3 },
+  desc: { fontSize: 13, lineHeight: 18 },
+  meta: { fontSize: 11 },
+});
+
+// ── Section header ─────────────────────────────────────────────────────────────
+function SectionHeader({ title, colors }: { title: string; colors: ReturnType<typeof useColors> }) {
+  return (
+    <Text style={[secStyles.title, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+      {title}
+    </Text>
+  );
+}
+const secStyles = StyleSheet.create({ title: { fontSize: 14, marginBottom: 10 } });
+
+// ── Skeleton ──────────────────────────────────────────────────────────────────
+function Skeleton({ height, width, borderRadius, colors }: {
+  height: number; width?: number | string; borderRadius?: number;
+  colors: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={{
+      height, width: (width ?? "100%") as any,
+      borderRadius: borderRadius ?? 8,
+      backgroundColor: colors.muted,
+    }} />
+  );
+}
+
+// ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: properties = [], isLoading: propsLoading, refetch: refetchProps } =
-    useListProperties();
-
+  const { data: properties = [], isLoading: propsLoading, refetch: refetchProps } = useListProperties();
   const selectedProperty = properties[selectedIdx];
 
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } =
-    useGetPropertySummary(
-      selectedProperty?.id ?? "",
-      { query: { enabled: !!selectedProperty?.id } }
-    );
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetPropertySummary(
+    selectedProperty?.id ?? "",
+    { query: { enabled: !!selectedProperty?.id } }
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -98,269 +279,232 @@ export default function HomeScreen() {
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const isLoading = propsLoading;
 
-  const healthScore: number = (summary as { healthScore?: number } | undefined)?.healthScore ?? 0;
-  const totalAssets: number = (summary as { totalAssets?: number } | undefined)?.totalAssets ?? 0;
-  const upcomingTasks: TaskItem[] = (summary as { upcomingTasks?: TaskItem[] } | undefined)?.upcomingTasks ?? [];
-  const overdueCount: number = upcomingTasks.filter((t) => {
-    const d = t.dueDate ?? t.nextDueDate;
-    return d && new Date(d) < new Date();
-  }).length;
-
-  const address = selectedProperty
-    ? [selectedProperty.address, selectedProperty.city, selectedProperty.state]
-        .filter(Boolean)
-        .join(", ")
+  // Extract data
+  const s = summary as any;
+  const healthScore: number = s?.healthScore ?? 0;
+  const healthGrade: Grade = (s?.healthGrade as Grade) ?? "C";
+  const totalAssets: number = s?.totalAssets ?? 0;
+  const verifiedAssets: number = s?.verifiedAssets ?? 0;
+  const overdueCount: number = s?.overdueTaskCount ?? 0;
+  const assetsByCategory: { category: string; count: number }[] = s?.assetsByCategory ?? [];
+  const recentRecords: any[] = s?.recentRecords ?? [];
+  const location = selectedProperty
+    ? [selectedProperty.city, selectedProperty.state].filter(Boolean).join(", ")
     : "";
+  const sp = selectedProperty as any;
+  const bedrooms = sp?.bedrooms;
+  const bathrooms = sp?.bathrooms;
+  const sqft = sp?.sqft;
 
   if (isLoading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.background, paddingTop: topPad }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
+      <View style={[{ flex: 1, backgroundColor: colors.background, paddingTop: topPad + 20, paddingHorizontal: 20, gap: 16 }]}>
+        <Skeleton height={28} width="60%" colors={colors} />
+        <Skeleton height={90} borderRadius={12} colors={colors} />
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Skeleton height={80} width="31%" borderRadius={12} colors={colors} />
+          <Skeleton height={80} width="31%" borderRadius={12} colors={colors} />
+          <Skeleton height={80} width="31%" borderRadius={12} colors={colors} />
+        </View>
+        <Skeleton height={100} borderRadius={12} colors={colors} />
       </View>
     );
   }
 
   if (properties.length === 0) {
     return (
-      <View style={[styles.root, { backgroundColor: colors.background, paddingTop: topPad }]}>
-        <View style={styles.header}>
-          <Text style={[styles.logo, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Casa Dossier</Text>
+      <View style={[{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }]}>
+        <View style={[{ backgroundColor: colors.muted, borderRadius: 20, padding: 24, marginBottom: 20 }]}>
+          <Feather name="home" size={48} color={colors.mutedForeground} style={{ opacity: 0.4 }} />
         </View>
-        <EmptyState
-          icon="home"
-          title="No Properties Yet"
-          description="Add your first property in the web app to get started."
-        />
+        <Text style={{ fontSize: 20, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 }}>
+          No property selected
+        </Text>
+        <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" }}>
+          Add your home in the web app to start tracking health scores, assets, and maintenance.
+        </Text>
       </View>
     );
   }
 
   return (
-    <FlatList
+    <ScrollView
       style={{ backgroundColor: colors.background }}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.primary}
-        />
-      }
-      ListHeaderComponent={
-        <View style={{ paddingTop: topPad }}>
-          {/* Header */}
-          <View style={[styles.header, { paddingHorizontal: 20 }]}>
-            <Text style={[styles.logo, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              Casa Dossier
+      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={{ paddingTop: topPad + 8, paddingHorizontal: 20 }}>
+
+        {/* Property selector chips */}
+        {properties.length > 1 && (
+          <FlatList
+            horizontal
+            data={properties}
+            keyExtractor={(p) => p.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingBottom: 14 }}
+            renderItem={({ item, index }) => (
+              <TouchableOpacity
+                style={[chipStyles.chip, {
+                  backgroundColor: index === selectedIdx ? colors.primary : colors.card,
+                  borderColor: index === selectedIdx ? colors.primary : colors.border,
+                }]}
+                onPress={() => { setSelectedIdx(index); Haptics.selectionAsync(); }}
+              >
+                <Feather name="home" size={12} color={index === selectedIdx ? colors.primaryForeground : colors.mutedForeground} />
+                <Text style={[chipStyles.chipText, {
+                  color: index === selectedIdx ? colors.primaryForeground : colors.foreground,
+                  fontFamily: "Inter_500Medium",
+                }]} numberOfLines={1}>
+                  {item.name ?? item.address ?? "Property"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          />
+        )}
+
+        {/* Property header */}
+        <View style={{ marginBottom: 14, gap: 4 }}>
+          <Text style={[propStyles.name, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+            {(selectedProperty as any)?.name ?? (selectedProperty as any)?.address ?? "My Home"}
+          </Text>
+          {location ? (
+            <View style={propStyles.row}>
+              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
+              <Text style={[propStyles.location, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {location}
+              </Text>
+            </View>
+          ) : null}
+          {(bedrooms || bathrooms || sqft) ? (
+            <View style={propStyles.row}>
+              {bedrooms ? (
+                <View style={propStyles.specItem}>
+                  <Feather name="layout" size={12} color={colors.mutedForeground} />
+                  <Text style={[propStyles.spec, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {bedrooms} bd
+                  </Text>
+                </View>
+              ) : null}
+              {bathrooms ? (
+                <View style={propStyles.specItem}>
+                  <Feather name="droplet" size={12} color={colors.mutedForeground} />
+                  <Text style={[propStyles.spec, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {bathrooms} ba
+                  </Text>
+                </View>
+              ) : null}
+              {sqft ? (
+                <View style={propStyles.specItem}>
+                  <Feather name="maximize" size={12} color={colors.mutedForeground} />
+                  <Text style={[propStyles.spec, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    {Number(sqft).toLocaleString()} sqft
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
+        {/* Health score widget */}
+        {summaryLoading ? (
+          <Skeleton height={86} borderRadius={12} colors={colors} />
+        ) : (
+          <HealthScoreWidget score={healthScore} grade={healthGrade} overdueCount={overdueCount} />
+        )}
+
+        {/* 3 stat cards */}
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
+          <StatCard
+            title={"Tracked\nAssets"}
+            value={totalAssets}
+            icon="package"
+            sub={`${verifiedAssets} of ${totalAssets} verified`}
+            colors={colors}
+          />
+          <StatCard
+            title={"Overdue\nTasks"}
+            value={overdueCount}
+            icon="alert-circle"
+            valueColor={overdueCount > 0 ? colors.destructive : colors.foreground}
+            sub={overdueCount > 0 ? "See improvement plan" : "All clear"}
+            colors={colors}
+          />
+          <View style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={statStyles.header}>
+              <Text style={[statStyles.title, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                {"By\nSystem"}
+              </Text>
+            </View>
+            {assetsByCategory.slice(0, 2).map((cat) => (
+              <View key={cat.category} style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
+                <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>
+                  {cat.category} {cat.count}
+                </Text>
+              </View>
+            ))}
+            {assetsByCategory.length === 0 && (
+              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                —
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* Investment Ledger card */}
+        <View style={{ marginBottom: 20 }}>
+          <LedgerCard colors={colors} />
+        </View>
+
+        {/* Recent Service Activity */}
+        {recentRecords.length > 0 && (
+          <View style={[sectionStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SectionHeader title="Recent Service Activity" colors={colors} />
+            {recentRecords.slice(0, 5).map((record: any) => (
+              <ActivityRow
+                key={record.id}
+                description={record.description}
+                assetName={record.assetName}
+                companyName={record.companyName ?? record.technicianName}
+                date={record.date}
+                colors={colors}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* No activity empty state */}
+        {!summaryLoading && recentRecords.length === 0 && (
+          <View style={[sectionStyles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 32 }]}>
+            <Feather name="file-text" size={36} color={colors.mutedForeground} style={{ opacity: 0.25, marginBottom: 10 }} />
+            <Text style={{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_500Medium" }}>
+              No service records yet
+            </Text>
+            <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, maxWidth: 220 }}>
+              Service history will appear here as you log work done on your home's systems.
             </Text>
           </View>
-
-          {/* Property selector chips */}
-          {properties.length > 1 && (
-            <FlatList
-              horizontal
-              data={properties}
-              keyExtractor={(p) => p.id}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 20, gap: 8, paddingBottom: 12 }}
-              renderItem={({ item, index }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: index === selectedIdx ? colors.primary : colors.muted,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => {
-                    setSelectedIdx(index);
-                    Haptics.selectionAsync();
-                  }}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      {
-                        color: index === selectedIdx ? colors.primaryForeground : colors.foreground,
-                        fontFamily: "Inter_500Medium",
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.address ?? "Property"}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
-          )}
-
-          {/* Property health card */}
-          <View style={{ paddingHorizontal: 20 }}>
-            <View
-              style={[
-                styles.healthCard,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <View style={styles.healthTop}>
-                <View style={styles.healthLeft}>
-                  <Text
-                    style={[styles.address, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
-                    numberOfLines={2}
-                  >
-                    {address || "My Home"}
-                  </Text>
-                  <Text
-                    style={[styles.healthLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
-                  >
-                    Property Health Score
-                  </Text>
-                </View>
-                {summaryLoading ? (
-                  <ActivityIndicator color={colors.primary} />
-                ) : (
-                  <HealthScoreRing score={healthScore} size={90} />
-                )}
-              </View>
-
-              {/* Stats row */}
-              <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
-                <View style={styles.stat}>
-                  <Text style={[styles.statNum, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                    {totalAssets}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Assets
-                  </Text>
-                </View>
-                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.stat}>
-                  <Text
-                    style={[
-                      styles.statNum,
-                      {
-                        color: upcomingTasks.length > 0 ? colors.warning : colors.success,
-                        fontFamily: "Inter_700Bold",
-                      },
-                    ]}
-                  >
-                    {upcomingTasks.length}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Upcoming
-                  </Text>
-                </View>
-                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-                <View style={styles.stat}>
-                  <Text
-                    style={[
-                      styles.statNum,
-                      {
-                        color: overdueCount > 0 ? colors.destructive : colors.success,
-                        fontFamily: "Inter_700Bold",
-                      },
-                    ]}
-                  >
-                    {overdueCount}
-                  </Text>
-                  <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Overdue
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Tasks header */}
-          {upcomingTasks.length > 0 && (
-            <View style={[styles.sectionHeader, { paddingHorizontal: 20 }]}>
-              <Text style={[styles.sectionTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                Upcoming Tasks
-              </Text>
-            </View>
-          )}
-        </View>
-      }
-      data={upcomingTasks}
-      keyExtractor={(t) => t.id}
-      renderItem={({ item }) => (
-        <View style={{ paddingHorizontal: 20 }}>
-          <TaskCard task={item} colors={colors} />
-        </View>
-      )}
-      ListEmptyComponent={
-        summaryLoading ? null : (
-          <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-            <View
-              style={[styles.emptyTasksCard, { backgroundColor: colors.accent, borderColor: colors.border }]}
-            >
-              <Feather name="check-circle" size={20} color={colors.accentForeground} />
-              <Text
-                style={[styles.emptyTasksText, { color: colors.accentForeground, fontFamily: "Inter_500Medium" }]}
-              >
-                All caught up — no upcoming tasks
-              </Text>
-            </View>
-          </View>
-        )
-      }
-    />
+        )}
+      </View>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingBottom: 16,
-    paddingTop: 8,
-  },
-  logo: { fontSize: 22 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    maxWidth: 180,
-  },
+const chipStyles = StyleSheet.create({
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1 },
   chipText: { fontSize: 13 },
-  healthCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: "hidden",
-    marginBottom: 20,
-  },
-  healthTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 20,
-    gap: 12,
-  },
-  healthLeft: { flex: 1, gap: 4 },
-  address: { fontSize: 16, lineHeight: 22 },
-  healthLabel: { fontSize: 12 },
-  statsRow: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    paddingVertical: 14,
-  },
-  stat: { flex: 1, alignItems: "center", gap: 2 },
-  statNum: { fontSize: 22 },
-  statLabel: { fontSize: 11 },
-  statDivider: { width: 1, height: "80%" },
-  sectionHeader: { paddingTop: 4, paddingBottom: 12 },
-  sectionTitle: { fontSize: 16 },
-  emptyTasksCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  emptyTasksText: { fontSize: 14 },
+});
+
+const propStyles = StyleSheet.create({
+  name: { fontSize: 24 },
+  row: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  location: { fontSize: 13 },
+  specItem: { flexDirection: "row", alignItems: "center", gap: 3, marginRight: 10 },
+  spec: { fontSize: 12 },
+});
+
+const sectionStyles = StyleSheet.create({
+  card: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 16 },
 });

@@ -59,6 +59,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
-    "@clerk/expo": "^3.2.16"
+    "@clerk/expo": "^3.2.16",
+    "date-fns": "^3.6.0"
   }
 }
