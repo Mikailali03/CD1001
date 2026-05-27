@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import {
   View,
   Text,
@@ -367,11 +368,23 @@ function ActivityRow({
         <Text style={[actStyles.desc, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={2}>
           {description}
         </Text>
-        <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-          {assetName ? `${assetName} · ` : ""}
-          {companyName ?? "Service"}
-          {" · "}{format(new Date(date), "MMM d, yyyy")}
-        </Text>
+        <View style={actStyles.metaRow}>
+          {assetName ? (
+            <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {assetName} · 
+            </Text>
+          ) : null}
+          {companyName === "CasaService" ? (
+            <CasaServiceBadge />
+          ) : (
+            <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {companyName ?? "Service"}
+            </Text>
+          )}
+          <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            {" · "}{format(new Date(date), "MMM d, yyyy")}
+          </Text>
+        </View>
       </View>
     </View>
   );
@@ -382,6 +395,7 @@ const actStyles = StyleSheet.create({
   icon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 2 },
   content: { flex: 1, gap: 3 },
   desc: { fontSize: 13, lineHeight: 18 },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 2 },
   meta: { fontSize: 11 },
 });
 

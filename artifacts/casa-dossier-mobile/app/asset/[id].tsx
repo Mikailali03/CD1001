@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import {
   View,
   Text,
@@ -279,9 +280,13 @@ function RecordRow({ record, colors }: { record: ServiceRecord; colors: ReturnTy
             </Text>
           )}
           {record.companyName && (
-            <Text style={[recordStyles.tech, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {record.technicianName ? ` (${record.companyName})` : `· ${record.companyName}`}
-            </Text>
+            record.companyName === "CasaService" ? (
+              <CasaServiceBadge />
+            ) : (
+              <Text style={[recordStyles.tech, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {record.technicianName ? ` (${record.companyName})` : `· ${record.companyName}`}
+              </Text>
+            )
           )}
           {record.cost != null && record.cost > 0 && (
             <Text style={[recordStyles.cost, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
