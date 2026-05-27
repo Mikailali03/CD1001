@@ -362,13 +362,14 @@ function MarkCompleteModal({
 
   const diff = differenceInCalendarDays(new Date(task.nextDueDate), new Date());
   const isOverdue = diff < 0;
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const insets = useSafeAreaInsets();
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <View style={[modalStyles.root, { backgroundColor: colors.background }]}>
+    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <View style={[modalStyles.root, { backgroundColor: colors.background }]}>
           {/* Header */}
-          <View style={[modalStyles.header, { borderBottomColor: colors.border }]}>
+          <View style={[modalStyles.header, { borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
             <View style={{ flex: 1, gap: 4 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <View style={[modalStyles.urgencyBadge, {
@@ -503,8 +504,7 @@ function MarkCompleteModal({
               }
             </TouchableOpacity>
           </View>
-        </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -529,7 +529,7 @@ const modalStyles = StyleSheet.create({
   toggleRow: { flexDirection: "row", gap: 10 },
   toggle: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 10 },
   toggleText: { fontSize: 13 },
-  footer: { flexDirection: "row", gap: 10, padding: 16, paddingBottom: 32, borderTopWidth: 1 },
+  footer: { flexDirection: "row", gap: 10, padding: 16, paddingBottom: 20, borderTopWidth: 1 },
   cancelBtn: { flex: 1, alignItems: "center", justifyContent: "center", height: 46, borderRadius: 12, borderWidth: 1 },
   completeBtn: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 46, borderRadius: 12, backgroundColor: "#059669" },
 });
