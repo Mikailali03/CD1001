@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { useProperty } from "@/contexts/property-context";
+import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import {
   BarChart,
   Bar,
@@ -15,6 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import {
   TrendingUp,
   AlertTriangle,
@@ -24,6 +26,8 @@ import {
   ArrowRight,
   Building2,
   CheckCircle2,
+  Lock,
+  Sparkles,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -142,7 +146,9 @@ function SummaryCard({ icon, label, value, sub, highlight }: {
 export default function CapitalOutlook() {
   const { activePropertyId } = useProperty();
   const authFetch = useAuthFetch();
+  const { subscription, openUpgradeModal } = useSubscription();
   const currentYear = new Date().getFullYear();
+  const locked = !isBasicPlus(subscription?.tier);
 
   const { data, isLoading, error } = useQuery<CapitalOutlookData>({
     queryKey: ["capital-outlook", activePropertyId],
@@ -152,8 +158,45 @@ export default function CapitalOutlook() {
       if (!res.ok) throw new Error("Failed to load capital outlook");
       return res.json();
     },
-    enabled: !!activePropertyId,
+    enabled: !!activePropertyId && !locked,
   });
+
+  if (locked) {
+    return (
+      <div className="p-6 max-w-7xl mx-auto flex flex-col items-center justify-center py-20 gap-6 text-center">
+        <div className="bg-amber-100 dark:bg-amber-950 p-5 rounded-full">
+          <Lock className="h-10 w-10 text-amber-600" />
+        </div>
+        <div className="max-w-md">
+          <h2 className="text-xl font-bold mb-2">Capital Outlook</h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            See a 10-year projection of replacement costs and plan capital investments — available on the <strong>Basic</strong> plan and above.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 w-full max-w-xs">
+          <Button onClick={openUpgradeModal} className="gap-2">
+            <Sparkles className="h-4 w-4" />
+            Upgrade to Basic — $9.99/mo
+          </Button>
+        </div>
+        <div className="relative w-full max-w-2xl mt-4 rounded-xl overflow-hidden border">
+          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm z-10 flex items-center justify-center">
+            <Badge className="text-xs font-semibold px-3 py-1.5 bg-amber-500 text-white">
+              <Lock className="h-3 w-3 mr-1.5" />
+              Upgrade to unlock
+            </Badge>
+          </div>
+          <div className="p-6 space-y-3 opacity-40 pointer-events-none select-none">
+            <div className="h-8 bg-muted rounded-xl w-48" />
+            <div className="grid grid-cols-3 gap-3">
+              {[0, 1, 2].map((i) => <div key={i} className="h-24 bg-muted rounded-xl" />)}
+            </div>
+            <div className="h-48 bg-muted rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!activePropertyId) {
     return (

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/react";
+import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import {
   Dialog,
   DialogContent,
@@ -12,9 +13,10 @@ import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
 import {
   TrendingUp, TrendingDown, Minus, Receipt, DollarSign,
-  Wrench, Calendar,
+  Wrench, Calendar, Lock, Sparkles,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -144,6 +146,8 @@ export function InvestmentLedgerModal({
   propertyId: string;
 }) {
   const { getToken } = useAuth();
+  const { subscription, openUpgradeModal } = useSubscription();
+  const locked = !isBasicPlus(subscription?.tier);
   const [range, setRange] = useState<RangeKey>("this_year");
   const [data, setData] = useState<LedgerData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -178,6 +182,38 @@ export function InvestmentLedgerModal({
 
   const hasSpend = (data?.totals.actual ?? 0) > 0;
   const records = data?.records.filter((r) => r.cost && Number(r.cost) > 0) ?? [];
+
+  if (locked) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <div className="flex flex-col items-center text-center py-6 gap-4">
+            <div className="bg-amber-100 dark:bg-amber-950 p-4 rounded-full">
+              <Lock className="h-8 w-8 text-amber-600" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg font-bold mb-1">Investment Ledger</DialogTitle>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Track your maintenance spend vs expectations — available on the <strong>Basic</strong> plan and above.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 w-full">
+              <Button
+                onClick={() => { onOpenChange(false); openUpgradeModal(); }}
+                className="w-full gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Upgrade to Basic — $9.99/mo
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                Maybe later
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

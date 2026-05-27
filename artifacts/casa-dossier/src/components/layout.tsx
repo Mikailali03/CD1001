@@ -100,6 +100,11 @@ const TIER_CONFIG = {
     icon: <Shield className="h-3 w-3" />,
     className: "bg-muted text-muted-foreground border-border hover:bg-muted/80",
   },
+  basic: {
+    label: "Basic",
+    icon: <Star className="h-3 w-3" />,
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100/80 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
+  },
   managed: {
     label: "Managed",
     icon: <Star className="h-3 w-3" />,

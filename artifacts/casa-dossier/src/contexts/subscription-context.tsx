@@ -4,13 +4,29 @@ import { useAuthFetch } from "@/hooks/use-auth-fetch";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-export type SubscriptionTier = "essential" | "managed" | "concierge";
+export type SubscriptionTier = "essential" | "basic" | "managed" | "concierge";
+
+export const TIER_RANK: Record<SubscriptionTier, number> = {
+  essential: 0,
+  basic: 1,
+  managed: 2,
+  concierge: 3,
+};
+
+export function isBasicPlus(tier: SubscriptionTier | undefined | null): boolean {
+  return TIER_RANK[tier ?? "essential"] >= TIER_RANK["basic"];
+}
+
+export function isManagedPlus(tier: SubscriptionTier | undefined | null): boolean {
+  return TIER_RANK[tier ?? "essential"] >= TIER_RANK["managed"];
+}
 
 export type SubscriptionData = {
   tier: SubscriptionTier;
   propertyLimit: number;
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
+  aiScansUsed: number;
 };
 
 type SubscriptionContextValue = {
@@ -20,7 +36,7 @@ type SubscriptionContextValue = {
   openUpgradeModal: () => void;
   closeUpgradeModal: () => void;
   upgradeTo: (tier: SubscriptionTier) => Promise<void>;
-  startCheckout: (tier: "managed" | "concierge") => Promise<void>;
+  startCheckout: (tier: "basic" | "managed" | "concierge") => Promise<void>;
   openBillingPortal: () => Promise<void>;
   syncAfterCheckout: (sessionId: string) => Promise<void>;
 };
@@ -55,7 +71,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const openUpgradeModal = useCallback(() => setUpgradeModalOpen(true), []);
   const closeUpgradeModal = useCallback(() => setUpgradeModalOpen(false), []);
 
-  // Internal tier change (e.g. downgrade to Essential)
   const upgradeTo = useCallback(async (tier: SubscriptionTier) => {
     const res = await authFetch(`${BASE}/api/subscription/upgrade`, {
       method: "POST",
@@ -66,8 +81,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     queryClient.invalidateQueries({ queryKey: ["subscription"] });
   }, [queryClient, authFetch]);
 
-  // Stripe Checkout for paid tiers
-  const startCheckout = useCallback(async (tier: "managed" | "concierge") => {
+  const startCheckout = useCallback(async (tier: "basic" | "managed" | "concierge") => {
     const res = await authFetch(`${BASE}/api/stripe/checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -84,7 +98,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     window.location.href = url;
   }, [authFetch]);
 
-  // Stripe billing portal (for existing subscribers)
   const openBillingPortal = useCallback(async () => {
     const res = await authFetch(`${BASE}/api/stripe/portal`, {
       method: "POST",
@@ -98,7 +111,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     window.location.href = url;
   }, [authFetch]);
 
-  // Called after Stripe redirects back on success
   const syncAfterCheckout = useCallback(async (sessionId: string) => {
     const res = await authFetch(`${BASE}/api/stripe/sync`, {
       method: "POST",

@@ -8,7 +8,7 @@ import { logger } from "../lib/logger.js";
 
 const router = Router();
 
-type SubscriptionTier = "essential" | "managed" | "concierge";
+type SubscriptionTier = "essential" | "basic" | "managed" | "concierge";
 
 async function getOrCreateSubscription(userId: string) {
   const existing = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId)).limit(1);
@@ -18,7 +18,7 @@ async function getOrCreateSubscription(userId: string) {
 }
 
 // Find a Stripe price ID for the given tier by searching products in Stripe directly
-async function getPriceIdForTier(tier: "managed" | "concierge"): Promise<string | null> {
+async function getPriceIdForTier(tier: "basic" | "managed" | "concierge"): Promise<string | null> {
   try {
     const stripe = getUncachableStripeClient();
     const products = await stripe.products.search({
@@ -80,10 +80,10 @@ router.get("/stripe/plans", async (_req, res) => {
 
 // POST /api/stripe/checkout — creates a Stripe Checkout session for a paid tier
 router.post("/stripe/checkout", requireAuth(), async (req, res) => {
-  const { tier } = req.body as { tier: "managed" | "concierge" };
+  const { tier } = req.body as { tier: "basic" | "managed" | "concierge" };
 
-  if (!tier || !["managed", "concierge"].includes(tier)) {
-    return res.status(400).json({ error: "Invalid tier. Must be 'managed' or 'concierge'." });
+  if (!tier || !["basic", "managed", "concierge"].includes(tier)) {
+    return res.status(400).json({ error: "Invalid tier. Must be 'basic', 'managed', or 'concierge'." });
   }
 
   const priceId = await getPriceIdForTier(tier);

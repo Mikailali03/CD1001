@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { assetsTable, maintenanceTasksTable } from "@workspace/db";
+import { assetsTable, maintenanceTasksTable, subscriptionsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
@@ -73,6 +73,12 @@ router.post("/assets/:assetId/generate-tasks", requireAuth(), async (req, res) =
 
   const asset = await getOwnedAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
+
+  // Essential tier: only 1 free AI scan total
+  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, req.userId)).limit(1);
+  if (sub && sub.tier === "essential" && (sub.aiScansUsed ?? 0) >= 1) {
+    return res.status(403).json({ error: "Free tier allows 1 AI scan. Upgrade to Basic for unlimited scans." });
+  }
 
   const ageYears = asset.installDate
     ? Math.floor((Date.now() - new Date(asset.installDate).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
@@ -157,6 +163,14 @@ Field rules:
     .update(assetsTable)
     .set({ status: "verified", updatedAt: new Date() })
     .where(eq(assetsTable.id, assetId));
+
+  // Increment AI scan counter for essential tier users
+  if (sub && sub.tier === "essential") {
+    await db
+      .update(subscriptionsTable)
+      .set({ aiScansUsed: (sub.aiScansUsed ?? 0) + 1, updatedAt: new Date() })
+      .where(eq(subscriptionsTable.userId, req.userId));
+  }
 
   res.json({ tasks: inserted, taskCount: inserted.length });
 });

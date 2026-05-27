@@ -18,6 +18,9 @@ router.get("/subscription", requireAuth(), async (req, res) => {
   res.json({
     tier: sub.tier,
     propertyLimit: TIER_PROPERTY_LIMITS[sub.tier] ?? 1,
+    stripeCustomerId: sub.stripeCustomerId ?? null,
+    stripeSubscriptionId: sub.stripeSubscriptionId ?? null,
+    aiScansUsed: sub.aiScansUsed ?? 0,
   });
 });
 

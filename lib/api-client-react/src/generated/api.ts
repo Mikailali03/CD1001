@@ -1828,6 +1828,90 @@ export const useUpdateMaintenanceTask = <
 };
 
 /**
+ * @summary Delete a maintenance task
+ */
+export const getDeleteMaintenanceTaskUrl = (taskId: string) => {
+  return `/api/maintenance/${taskId}`;
+};
+
+export const deleteMaintenanceTask = async (
+  taskId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteMaintenanceTaskUrl(taskId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteMaintenanceTaskMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMaintenanceTask>>,
+    TError,
+    { taskId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteMaintenanceTask>>,
+  TError,
+  { taskId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteMaintenanceTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteMaintenanceTask>>,
+    { taskId: string }
+  > = (props) => {
+    const { taskId } = props ?? {};
+
+    return deleteMaintenanceTask(taskId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteMaintenanceTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteMaintenanceTask>>
+>;
+
+export type DeleteMaintenanceTaskMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a maintenance task
+ */
+export const useDeleteMaintenanceTask = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteMaintenanceTask>>,
+    TError,
+    { taskId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteMaintenanceTask>>,
+  TError,
+  { taskId: string },
+  TContext
+> => {
+  return useMutation(getDeleteMaintenanceTaskMutationOptions(options));
+};
+
+/**
  * @summary List DIY maintenance guides
  */
 export const getListGuidesUrl = (params?: ListGuidesParams) => {

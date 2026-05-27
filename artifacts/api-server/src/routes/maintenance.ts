@@ -128,6 +128,22 @@ router.patch("/maintenance/:taskId", requireAuth(), async (req, res) => {
   res.json(task);
 });
 
+router.delete("/maintenance/:taskId", requireAuth(), async (req, res) => {
+  const { taskId } = z.object({ taskId: z.string() }).parse(req.params);
+
+  const [existing] = await db
+    .select()
+    .from(maintenanceTasksTable)
+    .where(eq(maintenanceTasksTable.id, taskId));
+  if (!existing) return res.status(404).json({ error: "Task not found" });
+
+  const asset = await getAccessibleAsset(existing.assetId, req.userId);
+  if (!asset) return res.status(403).json({ error: "Forbidden" });
+
+  await db.delete(maintenanceTasksTable).where(eq(maintenanceTasksTable.id, taskId));
+  res.status(204).send();
+});
+
 router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => {
   const { taskId } = CompleteTaskParams.parse(req.params);
   const body = CompleteTaskBody.parse(req.body);

@@ -4,7 +4,7 @@ import { subscriptionsTable, TIER_PROPERTY_LIMITS } from '@workspace/db';
 import { eq } from 'drizzle-orm';
 import { logger } from './lib/logger.js';
 
-type SubscriptionTier = 'essential' | 'managed' | 'concierge';
+type SubscriptionTier = 'essential' | 'basic' | 'managed' | 'concierge';
 
 const PRICE_TO_TIER: Record<string, SubscriptionTier> = {};
 

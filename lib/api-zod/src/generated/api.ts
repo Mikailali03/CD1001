@@ -567,6 +567,13 @@ export const UpdateMaintenanceTaskResponse = zod.object({
 });
 
 /**
+ * @summary Delete a maintenance task
+ */
+export const DeleteMaintenanceTaskParams = zod.object({
+  taskId: zod.coerce.string(),
+});
+
+/**
  * @summary List DIY maintenance guides
  */
 export const ListGuidesQueryParams = zod.object({

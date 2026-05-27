@@ -38,7 +38,9 @@ import {
   Wrench,
   AlertCircle,
   ZapIcon,
+  Lock,
 } from "lucide-react";
+import { useSubscription } from "@/contexts/subscription-context";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -181,6 +183,8 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
   const queryClient = useQueryClient();
   const authFetch = useAuthFetch();
   const { toast } = useToast();
+  const { subscription, openUpgradeModal } = useSubscription();
+  const aiScanLocked = subscription?.tier === "essential" && (subscription?.aiScansUsed ?? 0) >= 1;
 
   const [step, setStep] = useState<Step>("method");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -359,30 +363,49 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
             <div className="px-6 py-6 space-y-3">
               {/* AI Lens option */}
               <button
-                onClick={() => setStep("lens")}
-                className="w-full text-left rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all p-4 group"
+                onClick={aiScanLocked ? () => openUpgradeModal() : () => setStep("lens")}
+                className={`w-full text-left rounded-xl border-2 transition-all p-4 group ${
+                  aiScanLocked
+                    ? "border-muted bg-muted/30 opacity-70 cursor-pointer"
+                    : "border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40"
+                }`}
               >
                 <div className="flex items-start gap-4">
-                  <div className="bg-primary/15 rounded-xl p-3 shrink-0">
-                    <Scan className="h-6 w-6 text-primary" />
+                  <div className={`rounded-xl p-3 shrink-0 ${aiScanLocked ? "bg-muted" : "bg-primary/15"}`}>
+                    {aiScanLocked ? (
+                      <Lock className="h-6 w-6 text-muted-foreground" />
+                    ) : (
+                      <Scan className="h-6 w-6 text-primary" />
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="font-semibold text-sm">AI Lens</p>
-                      <Badge className="bg-primary/15 text-primary border-0 text-[10px] font-semibold px-1.5 py-0">RECOMMENDED</Badge>
+                      {aiScanLocked ? (
+                        <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-400 text-[10px] font-semibold px-1.5 py-0">
+                          <Lock className="h-2.5 w-2.5 mr-0.5" />
+                          Upgrade to Basic
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-primary/15 text-primary border-0 text-[10px] font-semibold px-1.5 py-0">RECOMMENDED</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                      Take a photo of the spec plate or label. AI extracts brand, model, serial number, and manufacture date instantly.
+                      {aiScanLocked
+                        ? "You've used your free AI scan. Upgrade to Basic for unlimited AI scans."
+                        : "Take a photo of the spec plate or label. AI extracts brand, model, serial number, and manufacture date instantly."}
                     </p>
-                    <div className="flex flex-wrap gap-1.5 mt-2.5">
-                      {["Auto-fills all fields", "Works on any label", "Estimates replacement cost"].map((t) => (
-                        <span key={t} className="inline-flex items-center gap-1 text-[10px] text-primary font-medium">
-                          <CheckCircle2 className="h-3 w-3" />{t}
-                        </span>
-                      ))}
-                    </div>
+                    {!aiScanLocked && (
+                      <div className="flex flex-wrap gap-1.5 mt-2.5">
+                        {["Auto-fills all fields", "Works on any label", "Estimates replacement cost"].map((t) => (
+                          <span key={t} className="inline-flex items-center gap-1 text-[10px] text-primary font-medium">
+                            <CheckCircle2 className="h-3 w-3" />{t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors shrink-0 mt-1" />
+                  <ArrowRight className={`h-4 w-4 shrink-0 mt-1 transition-colors ${aiScanLocked ? "text-muted-foreground" : "text-muted-foreground group-hover:text-primary"}`} />
                 </div>
               </button>
 
