@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import {
   useListProperties,
   useGetPropertySummary,
@@ -149,9 +150,13 @@ const statStyles = StyleSheet.create({
 });
 
 // ── Investment Ledger Card ────────────────────────────────────────────────────
-function LedgerCard({ colors }: { colors: ReturnType<typeof useColors> }) {
+function LedgerCard({ colors, onPress }: { colors: ReturnType<typeof useColors>; onPress: () => void }) {
   return (
-    <View style={[ledgerStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.75}
+      style={[ledgerStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}
+    >
       <View style={ledgerStyles.top}>
         <View style={[ledgerStyles.iconBox, { backgroundColor: colors.primary + "1A" }]}>
           <Feather name="file-text" size={18} color={colors.primary} />
@@ -179,7 +184,7 @@ function LedgerCard({ colors }: { colors: ReturnType<typeof useColors> }) {
           </View>
         ))}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -258,6 +263,7 @@ function Skeleton({ height, width, borderRadius, colors }: {
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -455,7 +461,13 @@ export default function HomeScreen() {
 
         {/* Investment Ledger card */}
         <View style={{ marginBottom: 20 }}>
-          <LedgerCard colors={colors} />
+          <LedgerCard
+            colors={colors}
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push("/investment-ledger");
+            }}
+          />
         </View>
 
         {/* Recent Service Activity */}

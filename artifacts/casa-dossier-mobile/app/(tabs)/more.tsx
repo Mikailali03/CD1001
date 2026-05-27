@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useUser, useClerk } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "expo-haptics";
@@ -59,6 +60,7 @@ function NavRow({ item, colors }: { item: RowItem; colors: ReturnType<typeof use
 export default function MoreScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useUser();
   const { signOut } = useClerk();
 
@@ -94,8 +96,11 @@ export default function MoreScreen() {
     {
       icon: "trending-up",
       label: "Capital Outlook",
-      sublabel: "Track home value & investments",
-      onPress: () => {},
+      sublabel: "10-year replacement cost projections",
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/capital-outlook");
+      },
     },
     {
       icon: "settings",
