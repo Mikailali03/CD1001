@@ -7,13 +7,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import {
   AlertTriangle,
   CalendarClock,
   CheckCircle2,
   ShieldAlert,
   Wrench,
+  Lock,
+  Sparkles,
+  TrendingUp,
+  ClipboardList,
+  ShieldCheck,
 } from "lucide-react";
 
 // ------------------------------------------------------------------
@@ -103,8 +110,11 @@ export function PropertyHealthModal({
   open,
   onClose,
 }: PropertyHealthModalProps) {
+  const { subscription, openUpgradeModal } = useSubscription();
+  const locked = !isBasicPlus(subscription?.tier);
+
   const { data: summary, isLoading } = useGetPropertySummary(propertyId, {
-    query: { queryKey: getGetPropertySummaryQueryKey(propertyId), enabled: open },
+    query: { queryKey: getGetPropertySummaryQueryKey(propertyId), enabled: open && !locked },
   });
 
   const today = new Date();
@@ -135,11 +145,90 @@ export function PropertyHealthModal({
       <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold leading-tight">
-            {propertyName} — Health Report
+            {propertyName} — Home Improvement Plan
           </DialogTitle>
         </DialogHeader>
 
-        {isLoading ? (
+        {locked ? (
+          <div className="relative">
+            {/* Blurred fake content underneath */}
+            <div className="blur-sm pointer-events-none select-none space-y-6 pt-1 opacity-60" aria-hidden>
+              <div className={`flex items-center gap-4 rounded-xl border p-4 bg-blue-50 border-blue-200`}>
+                <div className="text-center min-w-[56px]">
+                  <p className="text-3xl font-bold leading-none text-blue-700">82</p>
+                  <p className="text-xs font-medium mt-0.5 text-blue-700">/ 100</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-sm text-blue-700">Good (B)</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">4 assets tracked · 2 overdue</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-3">
+                  <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">Assets Needing Attention</span>
+                  <Badge variant="secondary" className="ml-auto text-xs">2</Badge>
+                </div>
+                {[1, 2].map((i) => (
+                  <div key={i} className="rounded-lg border p-3 bg-amber-50 border-amber-200 h-14" />
+                ))}
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 mb-3">
+                  <CalendarClock className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-semibold">Maintenance in the Next 30 Days</span>
+                  <Badge variant="secondary" className="ml-auto text-xs">3</Badge>
+                </div>
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="h-12 rounded-lg border bg-muted/40" />
+                ))}
+              </div>
+            </div>
+
+            {/* Upgrade overlay */}
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <div className="bg-background/95 backdrop-blur-sm rounded-2xl border shadow-xl p-6 w-full max-w-sm text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="bg-primary/10 rounded-full p-4">
+                    <Lock className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-base font-bold">Unlock Your Home Improvement Plan</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Get a full picture of your home's health — asset condition scores, upcoming maintenance, recently completed work, and a prioritized action plan — all in one place.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <span className="leading-snug text-center">Asset health scores</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <ClipboardList className="h-4 w-4 text-primary" />
+                    <span className="leading-snug text-center">30-day task plan</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <TrendingUp className="h-4 w-4 text-primary" />
+                    <span className="leading-snug text-center">Investment tracking</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => { onClose(); openUpgradeModal(); }}
+                    className="w-full gap-2"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Upgrade to Basic — $9.99/mo
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={onClose} className="text-muted-foreground">
+                    Maybe later
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : isLoading ? (
           <div className="space-y-3 py-2">
             <Skeleton className="h-16 w-full rounded-xl" />
             <Skeleton className="h-24 w-full rounded-xl" />
