@@ -19,11 +19,18 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   ArrowLeft, ShieldCheck, AlertTriangle, ShieldAlert,
   Calendar, Wrench, CheckCircle2, Clock, Hammer,
   AlertCircle, FileText, DollarSign, Plus, X,
   Loader2, UserCheck, UserRound, ImagePlus, Receipt,
-  CheckCheck, Upload, Pencil, Archive, RefreshCw,
+  CheckCheck, Upload, Pencil, Archive, RefreshCw, Trash2,
 } from "lucide-react";
 import { format, differenceInCalendarDays } from "date-fns";
 import { EditAssetSheet } from "@/components/edit-asset-sheet";
@@ -166,6 +173,324 @@ function StepList({ description }: { description: string }) {
   }
   return (
     <p className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed">{description}</p>
+  );
+}
+
+// ── Shared task interval options ──────────────────────────────────────────────
+const INTERVAL_OPTIONS = [
+  { value: "30", label: "Monthly (30 days)" },
+  { value: "60", label: "Every 2 months" },
+  { value: "90", label: "Quarterly (90 days)" },
+  { value: "180", label: "Every 6 months" },
+  { value: "365", label: "Annually (365 days)" },
+];
+
+// ── Edit Task Modal ───────────────────────────────────────────────────────────
+function EditTaskModal({
+  task,
+  assetId,
+  open,
+  onClose,
+}: {
+  task: any;
+  assetId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const [title, setTitle] = useState<string>(task.title ?? "");
+  const [description, setDescription] = useState<string>(task.description ?? "");
+  const [intervalDays, setIntervalDays] = useState<string>(String(task.intervalDays ?? 90));
+  const [nextDueDate, setNextDueDate] = useState<string>(task.nextDueDate ?? "");
+  const [estimatedCost, setEstimatedCost] = useState<string>(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
+  const [isDiy, setIsDiy] = useState<boolean>(task.isDiy ?? true);
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
+
+  async function handleSave() {
+    if (!title.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await authFetch(`${BASE}/api/maintenance/${task.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          intervalDays: parseInt(intervalDays),
+          nextDueDate,
+          estimatedCost: estimatedCost ? parseFloat(estimatedCost) : undefined,
+          isDiy,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Task updated" });
+      queryClient.invalidateQueries({ queryKey: ["tasks", assetId] });
+      onClose();
+    } catch {
+      toast({ title: "Could not update task", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-md p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh]">
+        <DialogTitle className="sr-only">Edit Task</DialogTitle>
+        <DialogDescription className="sr-only">Edit maintenance task details</DialogDescription>
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b shrink-0">
+          <p className="text-base font-bold flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-muted-foreground" />
+            Edit Task
+          </p>
+          <button onClick={onClose} className="rounded-md p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3.5">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Task Title <span className="text-destructive">*</span></Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="text-sm h-8" autoFocus />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Description (optional)</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} className="resize-none h-16 text-sm" placeholder="How-to notes…" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Recurrence</Label>
+              <Select value={intervalDays} onValueChange={setIntervalDays}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Next Due Date</Label>
+              <Input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} className="text-sm h-8" />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold flex items-center gap-1"><DollarSign className="h-3 w-3" />Est. Cost (optional)</Label>
+            <Input type="number" min={0} step="0.01" placeholder="0.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} className="text-sm h-8" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Type</Label>
+            <div className="flex gap-2">
+              <button onClick={() => setIsDiy(true)} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                <Hammer className="h-3.5 w-3.5" />DIY
+              </button>
+              <button onClick={() => setIsDiy(false)} className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors flex-1 justify-center ${!isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                <UserCheck className="h-3.5 w-3.5" />Hire a Pro
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="border-t px-5 py-3.5 flex gap-2 shrink-0 bg-background">
+          <Button variant="outline" size="sm" className="flex-1 h-9 text-sm" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button size="sm" className="flex-1 h-9 text-sm gap-1.5" onClick={handleSave} disabled={busy}>
+            {busy ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><CheckCircle2 className="h-4 w-4" />Save Changes</>}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Completed Task Row (with edit/delete) ─────────────────────────────────────
+function CompletedTaskRow({ task, assetId }: { task: any; assetId: string }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
+
+  async function handleDelete() {
+    setDeleteBusy(true);
+    try {
+      const res = await authFetch(`${BASE}/api/maintenance/${task.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Task deleted" });
+      queryClient.invalidateQueries({ queryKey: ["tasks", assetId] });
+      setHidden(true);
+    } catch {
+      toast({ title: "Could not delete task", variant: "destructive" });
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  if (hidden) return null;
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground group">
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+        <span className="flex-1 line-clamp-1">{task.title}</span>
+        {task.completedAt && (
+          <span className="shrink-0 text-[10px]">{format(new Date(task.completedAt), "MMM d")}</span>
+        )}
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => setEditOpen(true)} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground" title="Edit">
+            <Pencil className="h-3 w-3" />
+          </button>
+          <button onClick={() => setDeleteConfirm(true)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Delete">
+            <Trash2 className="h-3 w-3" />
+          </button>
+        </div>
+      </div>
+      {deleteConfirm && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-2.5 py-1.5">
+          <p className="text-[11px] text-destructive font-medium">Delete "{task.title}"?</p>
+          <div className="flex gap-1.5">
+            <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2" onClick={() => setDeleteConfirm(false)} disabled={deleteBusy}>Cancel</Button>
+            <Button variant="destructive" size="sm" className="h-6 text-[11px] px-2 gap-1" onClick={handleDelete} disabled={deleteBusy}>
+              {deleteBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}Delete
+            </Button>
+          </div>
+        </div>
+      )}
+      <EditTaskModal open={editOpen} onClose={() => setEditOpen(false)} task={task} assetId={assetId} />
+    </>
+  );
+}
+
+// ── Add Task Inline Form ───────────────────────────────────────────────────────
+function AddTaskInlineForm({ assetId, onSuccess }: { assetId: string; onSuccess: () => void }) {
+  const today = new Date().toLocaleDateString("en-CA");
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [intervalDays, setIntervalDays] = useState("90");
+  const [nextDueDate, setNextDueDate] = useState(today);
+  const [estimatedCost, setEstimatedCost] = useState("");
+  const [isDiy, setIsDiy] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
+
+  function reset() {
+    setTitle(""); setDescription(""); setIntervalDays("90");
+    setNextDueDate(today); setEstimatedCost(""); setIsDiy(true);
+  }
+
+  async function handleSubmit() {
+    if (!title.trim()) {
+      toast({ title: "Title is required", variant: "destructive" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await authFetch(`${BASE}/api/assets/${assetId}/maintenance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || undefined,
+          intervalDays: parseInt(intervalDays),
+          nextDueDate,
+          estimatedCost: estimatedCost ? parseFloat(estimatedCost) : undefined,
+          isDiy,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Task added" });
+      queryClient.invalidateQueries({ queryKey: ["tasks", assetId] });
+      reset();
+      setOpen(false);
+      onSuccess();
+    } catch {
+      toast({ title: "Could not create task", variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="pt-3 border-t mt-3">
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-2 text-sm font-semibold text-primary hover:text-primary/80 transition-colors w-full group"
+        >
+          <div className="h-6 w-6 rounded-full border-2 border-dashed border-primary/40 group-hover:border-primary flex items-center justify-center transition-colors">
+            <Plus className="h-3.5 w-3.5" />
+          </div>
+          Add Maintenance Task
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border-2 border-primary/20 bg-primary/3 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-primary/10 bg-primary/5">
+        <p className="text-sm font-bold flex items-center gap-1.5">
+          <Wrench className="h-3.5 w-3.5 text-primary" />
+          New Maintenance Task
+        </p>
+        <button onClick={() => { setOpen(false); reset(); }} className="text-muted-foreground hover:text-foreground transition-colors">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">Task Title <span className="text-destructive">*</span></Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Clean condenser coils" className="text-sm h-8 bg-background" autoFocus />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-semibold">Description (optional)</Label>
+          <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Step-by-step instructions…" className="resize-none h-14 text-sm bg-background" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Recurrence</Label>
+            <Select value={intervalDays} onValueChange={setIntervalDays}>
+              <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {INTERVAL_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold flex items-center gap-1"><Calendar className="h-3 w-3" />Due Date</Label>
+            <Input type="date" value={nextDueDate} onChange={(e) => setNextDueDate(e.target.value)} className="text-sm h-8 bg-background" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold flex items-center gap-1"><DollarSign className="h-3 w-3" />Est. Cost</Label>
+            <Input type="number" min={0} step="0.01" placeholder="0.00" value={estimatedCost} onChange={(e) => setEstimatedCost(e.target.value)} className="text-sm h-8 bg-background" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold">Type</Label>
+            <div className="flex gap-1.5 h-8">
+              <button onClick={() => setIsDiy(true)} className={`flex items-center gap-1 text-xs px-2 rounded-md border font-medium flex-1 justify-center transition-colors ${isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                <Hammer className="h-3 w-3" />DIY
+              </button>
+              <button onClick={() => setIsDiy(false)} className={`flex items-center gap-1 text-xs px-2 rounded-md border font-medium flex-1 justify-center transition-colors ${!isDiy ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}>
+                <UserCheck className="h-3 w-3" />Pro
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-2 pt-0.5">
+          <Button variant="outline" size="sm" className="flex-1 h-8 text-xs" onClick={() => { setOpen(false); reset(); }} disabled={busy}>Cancel</Button>
+          <Button size="sm" className="flex-1 h-8 text-xs gap-1.5" onClick={handleSubmit} disabled={busy}>
+            {busy ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Saving…</> : <><Plus className="h-3.5 w-3.5" />Add Task</>}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -437,7 +762,28 @@ function MarkCompleteForm({
   const isSoon = diff >= 0 && diff <= 14;
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [done, setDone] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const authFetch = useAuthFetch();
+
+  async function handleDelete() {
+    setDeleteBusy(true);
+    try {
+      const res = await authFetch(`${BASE}/api/maintenance/${task.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed");
+      toast({ title: "Task deleted" });
+      queryClient.invalidateQueries({ queryKey: ["tasks", assetId] });
+      onDismiss();
+    } catch {
+      toast({ title: "Could not delete task", variant: "destructive" });
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   if (done) {
     return (
@@ -450,47 +796,83 @@ function MarkCompleteForm({
 
   return (
     <>
-      {/* Clickable task row */}
-      <button
-        onClick={() => setModalOpen(true)}
-        className={`w-full text-left rounded-xl border px-3.5 py-3 space-y-1.5 transition-colors hover:bg-muted/50 ${
-          isOverdue ? "border-destructive/25 bg-destructive/3 hover:bg-destructive/5" : "border-border"
-        }`}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <p className="font-semibold text-sm leading-tight flex-1">{task.title}</p>
-          <div className="flex gap-1 shrink-0 items-center">
-            {task.isDiy && (
-              <Badge variant="secondary" className="text-[9px] gap-0.5 px-1.5 h-4">
-                <Hammer className="h-2.5 w-2.5" />DIY
-              </Badge>
+      <div className={`rounded-xl border overflow-hidden ${isOverdue ? "border-destructive/25 bg-destructive/3" : "border-border"}`}>
+        {/* Main row */}
+        <div className="flex items-start gap-2 px-3.5 py-3">
+          {/* Clickable left area */}
+          <button
+            onClick={() => setModalOpen(true)}
+            className="flex-1 text-left min-w-0 space-y-1.5 hover:opacity-80 transition-opacity"
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="font-semibold text-sm leading-tight">{task.title}</p>
+              {task.isDiy && (
+                <Badge variant="secondary" className="text-[9px] gap-0.5 px-1.5 h-4">
+                  <Hammer className="h-2.5 w-2.5" />DIY
+                </Badge>
+              )}
+              {task.estimatedCost && Number(task.estimatedCost) > 0 && (
+                <Badge variant="outline" className="text-[9px] px-1.5 h-4 gap-0.5">
+                  <DollarSign className="h-2.5 w-2.5" />{Number(task.estimatedCost).toLocaleString()}
+                </Badge>
+              )}
+            </div>
+            {task.description && (
+              <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{task.description}</p>
             )}
-            {task.estimatedCost && Number(task.estimatedCost) > 0 && (
-              <Badge variant="outline" className="text-[9px] px-1.5 h-4 gap-0.5">
-                <DollarSign className="h-2.5 w-2.5" />{Number(task.estimatedCost).toLocaleString()}
-              </Badge>
-            )}
-            <span className="ml-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-600 border border-emerald-200 bg-emerald-50 rounded-lg px-2 h-6 shrink-0">
+            <div className={`flex items-center gap-1.5 text-xs font-medium ${isOverdue ? "text-destructive" : isSoon ? "text-amber-600" : "text-muted-foreground"}`}>
+              {isOverdue ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
+              {isOverdue
+                ? `${Math.abs(diff)}d overdue · was due ${format(new Date(task.nextDueDate), "MMM d, yyyy")}`
+                : diff === 0 ? "Due today"
+                : diff === 1 ? "Due tomorrow"
+                : `Due ${format(new Date(task.nextDueDate), "MMM d, yyyy")}`}
+              {task.intervalDays && <span className="text-muted-foreground font-normal">· every {task.intervalDays}d</span>}
+            </div>
+          </button>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setEditOpen(true)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              title="Edit task"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              title="Delete task"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-2 h-6 transition-colors"
+            >
               <CheckCircle2 className="h-3 w-3" />
               Mark Done
-            </span>
+            </button>
           </div>
         </div>
-        {task.description && (
-          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{task.description}</p>
+
+        {/* Delete confirm bar */}
+        {deleteConfirm && (
+          <div className="border-t bg-destructive/5 px-3.5 py-2.5 flex items-center justify-between gap-3">
+            <p className="text-xs text-destructive font-medium">Delete this task? This can't be undone.</p>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setDeleteConfirm(false)} disabled={deleteBusy}>
+                Cancel
+              </Button>
+              <Button variant="destructive" size="sm" className="h-7 text-xs gap-1.5" onClick={handleDelete} disabled={deleteBusy}>
+                {deleteBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                Delete
+              </Button>
+            </div>
+          </div>
         )}
-        <div className={`flex items-center gap-1.5 text-xs font-medium ${isOverdue ? "text-destructive" : isSoon ? "text-amber-600" : "text-muted-foreground"}`}>
-          {isOverdue ? <AlertCircle className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-          {isOverdue
-            ? `${Math.abs(diff)}d overdue · was due ${format(new Date(task.nextDueDate), "MMM d, yyyy")}`
-            : diff === 0 ? "Due today"
-            : diff === 1 ? "Due tomorrow"
-            : `Due ${format(new Date(task.nextDueDate), "MMM d, yyyy")}`}
-          {task.intervalDays && (
-            <span className="text-muted-foreground font-normal">· every {task.intervalDays}d</span>
-          )}
-        </div>
-      </button>
+      </div>
 
       <MaintenanceTaskModal
         open={modalOpen}
@@ -502,6 +884,13 @@ function MarkCompleteForm({
           setModalOpen(false);
           setTimeout(onDismiss, 900);
         }}
+      />
+
+      <EditTaskModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        task={task}
+        assetId={assetId}
       />
     </>
   );
@@ -932,16 +1321,15 @@ export default function AssetDetail() {
                   {completedTasks.length} Completed
                 </p>
                 {completedTasks.slice(0, 3).map((t: any) => (
-                  <div key={t.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                    <span className="flex-1 line-clamp-1">{t.title}</span>
-                    {t.completedAt && (
-                      <span className="shrink-0 text-[10px]">{format(new Date(t.completedAt), "MMM d")}</span>
-                    )}
-                  </div>
+                  <CompletedTaskRow key={t.id} task={t} assetId={assetId!} />
                 ))}
               </div>
             )}
+
+            <AddTaskInlineForm
+              assetId={assetId!}
+              onSuccess={() => {}}
+            />
           </CardContent>
         </Card>
 
