@@ -21,6 +21,7 @@ import {
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MaintenanceInbox } from "@/components/MaintenanceInbox";
+import { HealthScoreModal } from "@/components/HealthScoreModal";
 import * as Haptics from "expo-haptics";
 import { format } from "date-fns";
 
@@ -415,13 +416,14 @@ export default function HomeScreen() {
   const router = useRouter();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [healthModalOpen, setHealthModalOpen] = useState(false);
 
   const { data: properties = [], isLoading: propsLoading, refetch: refetchProps } = useListProperties();
   const selectedProperty = properties[selectedIdx];
 
   const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetPropertySummary(
     selectedProperty?.id ?? "",
-    { query: { enabled: !!selectedProperty?.id } }
+    { query: { enabled: !!selectedProperty?.id, queryKey: ["property-summary", selectedProperty?.id] } }
   );
 
   const onRefresh = async () => {
@@ -443,6 +445,8 @@ export default function HomeScreen() {
   const overdueCount: number = s?.overdueTaskCount ?? 0;
   const assetsByCategory: { category: string; count: number }[] = s?.assetsByCategory ?? [];
   const recentRecords: any[] = s?.recentRecords ?? [];
+  const overdueTasks: any[] = s?.overdueTasks ?? [];
+  const assetScores: any[] = s?.assetScores ?? [];
   const location = selectedProperty
     ? [selectedProperty.city, selectedProperty.state].filter(Boolean).join(", ")
     : "";
@@ -483,6 +487,17 @@ export default function HomeScreen() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <HealthScoreModal
+      visible={healthModalOpen}
+      onClose={() => setHealthModalOpen(false)}
+      healthScore={healthScore}
+      healthGrade={healthGrade}
+      overdueTaskCount={overdueCount}
+      overdueTasks={overdueTasks}
+      assetScores={assetScores}
+      propertyId={selectedProperty?.id ?? ""}
+    />
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
@@ -594,7 +609,12 @@ export default function HomeScreen() {
         {summaryLoading ? (
           <Skeleton height={86} borderRadius={12} colors={colors} />
         ) : (
-          <HealthScoreWidget score={healthScore} grade={healthGrade} overdueCount={overdueCount} />
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setHealthModalOpen(true); }}
+            activeOpacity={0.88}
+          >
+            <HealthScoreWidget score={healthScore} grade={healthGrade} overdueCount={overdueCount} />
+          </TouchableOpacity>
         )}
 
         {/* 3 stat cards */}
@@ -678,6 +698,7 @@ export default function HomeScreen() {
         )}
       </View>
     </ScrollView>
+    </View>
   );
 }
 
