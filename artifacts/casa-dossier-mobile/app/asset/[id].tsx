@@ -360,14 +360,13 @@ function MarkCompleteModal({
 
   const insets = useSafeAreaInsets();
 
-  if (!task) return null;
+  if (!visible || !task) return null;
 
   const diff = differenceInCalendarDays(new Date(task.nextDueDate), new Date());
   const isOverdue = diff < 0;
 
   return (
-    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <View style={[modalStyles.root, { backgroundColor: colors.background }]}>
+    <View style={[StyleSheet.absoluteFillObject, { backgroundColor: colors.background, zIndex: 50 }]}>
           {/* Header */}
           <View style={[modalStyles.header, { borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
             <View style={{ flex: 1, gap: 4 }}>
@@ -504,8 +503,7 @@ function MarkCompleteModal({
               }
             </TouchableOpacity>
           </View>
-      </View>
-    </Modal>
+    </View>
   );
 }
 
