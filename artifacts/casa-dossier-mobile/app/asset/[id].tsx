@@ -772,13 +772,13 @@ function EditAssetModal({
     const ok = await patch({
       name: name.trim(),
       category,
-      brand: brand.trim() || null,
-      model: model.trim() || null,
-      serialNumber: serialNumber.trim() || null,
-      installDate: installDate ? `${installDate}-01` : null,
-      replacementCost: replacementCost ? parseFloat(replacementCost) : null,
-      warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : null,
-      notes: notes.trim() || null,
+      brand: brand.trim() || undefined,
+      model: model.trim() || undefined,
+      serialNumber: serialNumber.trim() || undefined,
+      installDate: installDate ? `${installDate}-01` : undefined,
+      replacementCost: replacementCost ? parseFloat(replacementCost) : undefined,
+      warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : undefined,
+      notes: notes.trim() || undefined,
     });
     if (ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
