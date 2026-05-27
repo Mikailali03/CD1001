@@ -48,6 +48,7 @@ function AuthGate() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="sign-in" />
+      <Stack.Screen name="asset/[id]" options={{ animation: "slide_from_right" }} />
     </Stack>
   );
 }

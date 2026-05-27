@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useListProperties, useListAssets } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { AssetCard, CATEGORY_CONFIG, calcAssetScore } from "@/components/AssetCard";
@@ -117,6 +118,7 @@ function Skeleton({ colors }: { colors: ReturnType<typeof useColors> }) {
 export default function AssetsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: properties = [] } = useListProperties();
@@ -263,6 +265,10 @@ export default function AssetsScreen() {
                 installDate={item.asset.installDate}
                 warrantyExpiry={item.asset.warrantyExpiry}
                 status={item.asset.status}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  router.push(`/asset/${item.asset.id}`);
+                }}
               />
             );
           }}
