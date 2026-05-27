@@ -85,13 +85,19 @@ export default function MoreScreen() {
       icon: "book-open",
       label: "DIY Guides",
       sublabel: "Step-by-step home maintenance",
-      onPress: () => {},
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/diy-guides");
+      },
     },
     {
-      icon: "search",
+      icon: "user-check",
       label: "Find a Pro",
       sublabel: "Hire trusted local technicians",
-      onPress: () => {},
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/find-a-pro");
+      },
     },
     {
       icon: "trending-up",
@@ -111,8 +117,11 @@ export default function MoreScreen() {
     {
       icon: "star",
       label: "Upgrade Plan",
-      sublabel: "Unlock all features",
-      onPress: () => {},
+      sublabel: "View plans & unlock features",
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/upgrade");
+      },
     },
   ];
 
