@@ -48,7 +48,7 @@ const URGENCY_ICON: Record<string, keyof typeof Feather.glyphMap> = {
   low:       "clock",
 };
 
-function ActiveServiceRequests({ colors }: { colors: ReturnType<typeof useColors> }) {
+function ActiveServiceRequests({ colors, onJobPress }: { colors: ReturnType<typeof useColors>; onJobPress: (id: string) => void }) {
   const { data: jobs } = useListMarketplaceJobs();
   const activeJobs = (jobs ?? []).filter(
     (j: MarketplaceJob) => j.status === "open" || j.status === "claimed"
@@ -89,8 +89,10 @@ function ActiveServiceRequests({ colors }: { colors: ReturnType<typeof useColors
           const scheduledAt = (job as any).scheduledAt;
 
           return (
-            <View
+            <TouchableOpacity
               key={job.id}
+              activeOpacity={0.72}
+              onPress={() => { Haptics.selectionAsync(); onJobPress(job.id); }}
               style={[
                 activeStyles.card,
                 {
@@ -145,7 +147,7 @@ function ActiveServiceRequests({ colors }: { colors: ReturnType<typeof useColors
                   )}
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
@@ -560,7 +562,10 @@ export default function HomeScreen() {
         </View>
 
         {/* Active service requests */}
-        <ActiveServiceRequests colors={colors} />
+        <ActiveServiceRequests
+          colors={colors}
+          onJobPress={(id) => router.push(`/job/${id}`)}
+        />
 
         {/* Health score widget */}
         {summaryLoading ? (

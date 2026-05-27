@@ -51,6 +51,7 @@ function AuthGate() {
       <Stack.Screen name="asset/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="capital-outlook" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="investment-ledger" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="job/[id]" options={{ animation: "slide_from_right" }} />
     </Stack>
   );
 }
