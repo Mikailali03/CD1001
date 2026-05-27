@@ -58,14 +58,31 @@ export function calcOverdueScore(overdueCount: number): number {
   return Math.max(0, 100 - overdueCount * 15);
 }
 
+const CRITICAL_THRESHOLD = 40;
+const NON_CRITICAL_WEIGHT = 0.1;
+
 export function calcHealthScore(
   assetScores: AssetHealthScore[],
   overdueCount: number
 ): { score: number; grade: "A" | "B" | "C" | "D" | "F"; assetAgeScore: number; overdueScore: number } {
-  const assetAgeScore =
-    assetScores.length === 0
-      ? 100
-      : Math.round(assetScores.reduce((sum, s) => sum + s.score, 0) / assetScores.length);
+  let assetAgeScore: number;
+
+  if (assetScores.length === 0) {
+    assetAgeScore = 100;
+  } else {
+    const critical = assetScores.filter((s) => s.score < CRITICAL_THRESHOLD);
+    if (critical.length === 0) {
+      // No critical assets — treat asset condition as perfect
+      assetAgeScore = 100;
+    } else {
+      // Weighted average: critical assets at weight 1.0, non-critical at 0.1
+      const totalWeight = critical.length * 1.0 + (assetScores.length - critical.length) * NON_CRITICAL_WEIGHT;
+      const weightedSum =
+        critical.reduce((sum, s) => sum + s.score * 1.0, 0) +
+        assetScores.filter((s) => s.score >= CRITICAL_THRESHOLD).reduce((sum, s) => sum + s.score * NON_CRITICAL_WEIGHT, 0);
+      assetAgeScore = Math.round(weightedSum / totalWeight);
+    }
+  }
 
   const overdueScore = calcOverdueScore(overdueCount);
   const score = Math.round(assetAgeScore * 0.5 + overdueScore * 0.5);
