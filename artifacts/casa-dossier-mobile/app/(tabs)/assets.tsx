@@ -198,6 +198,17 @@ export default function AssetsScreen() {
               </Text>
             )}
           </View>
+          {/* Add asset FAB */}
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push({ pathname: "/add-asset", params: { propertyId } });
+            }}
+            style={[headerStyles.fab, { backgroundColor: colors.primary }]}
+            activeOpacity={0.85}
+          >
+            <Feather name="plus" size={22} color="#fff" />
+          </TouchableOpacity>
         </View>
 
         {/* Summary pills */}
@@ -232,8 +243,19 @@ export default function AssetsScreen() {
           </View>
           <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>No assets tracked yet</Text>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center", marginTop: 4, fontFamily: "Inter_400Regular" }}>
-            Add your first asset in the web app to start tracking health scores and maintenance.
+            Add your first home system or appliance to start tracking health scores and maintenance.
           </Text>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              router.push({ pathname: "/add-asset", params: { propertyId } });
+            }}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 18 }}
+            activeOpacity={0.85}
+          >
+            <Feather name="plus" size={16} color="#fff" />
+            <Text style={{ fontSize: 14, color: "#fff", fontFamily: "Inter_600SemiBold" }}>Add First Asset</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -284,4 +306,5 @@ const headerStyles = StyleSheet.create({
   title: { fontSize: 28 },
   sub: { fontSize: 13, marginTop: 2 },
   pillsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
+  fab: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginTop: 2 },
 });
