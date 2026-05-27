@@ -1,4 +1,5 @@
-import { useSignIn, useSignUp } from "@clerk/expo";
+import { useSignIn, useSignUp, useSSO } from "@clerk/expo";
+import * as WebBrowser from "expo-web-browser";
 import React, { useState } from "react";
 import {
   View,
@@ -16,6 +17,8 @@ import { Feather } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "expo-haptics";
 
+WebBrowser.maybeCompleteAuthSession();
+
 export default function SignInScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -26,10 +29,30 @@ export default function SignInScreen() {
   const [lastName, setLastName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [ssoLoading, setSsoLoading] = useState<"google" | "apple" | null>(null);
   const [showPassword, setShowPassword] = useState(false);
 
   const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
+  const { startSSOFlow } = useSSO();
+
+  const handleSSOSignIn = async (strategy: "oauth_google" | "oauth_apple") => {
+    setError("");
+    setSsoLoading(strategy === "oauth_google" ? "google" : "apple");
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      const { createdSessionId, setActive } = await startSSOFlow({ strategy });
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId });
+      }
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message: string }[] };
+      setError(clerkErr.errors?.[0]?.message ?? "Sign in failed. Please try again.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setSsoLoading(null);
+    }
+  };
 
   const handleAuth = async () => {
     if (!signInLoaded || !signUpLoaded) return;
@@ -93,10 +116,54 @@ export default function SignInScreen() {
           Your Home's Complete History
         </Text>
 
-        {/* Form card */}
+        {/* SSO Buttons */}
+        <View style={styles.ssoGroup}>
+          <TouchableOpacity
+            style={[styles.ssoBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => handleSSOSignIn("oauth_google")}
+            disabled={!!ssoLoading || loading}
+            activeOpacity={0.75}
+          >
+            {ssoLoading === "google" ? (
+              <ActivityIndicator color={colors.foreground} size="small" />
+            ) : (
+              <GoogleIcon />
+            )}
+            <Text style={[styles.ssoBtnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+              Continue with Google
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.ssoBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            onPress={() => handleSSOSignIn("oauth_apple")}
+            disabled={!!ssoLoading || loading}
+            activeOpacity={0.75}
+          >
+            {ssoLoading === "apple" ? (
+              <ActivityIndicator color={colors.primaryForeground} size="small" />
+            ) : (
+              <AppleIcon color={colors.primaryForeground} />
+            )}
+            <Text style={[styles.ssoBtnText, { color: colors.primaryForeground, fontFamily: "Inter_500Medium" }]}>
+              Continue with Apple
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Divider */}
+        <View style={styles.dividerRow}>
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          <Text style={[styles.dividerText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+            or
+          </Text>
+          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+        </View>
+
+        {/* Email/password form card */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            {mode === "signin" ? "Welcome back" : "Create account"}
+            {mode === "signin" ? "Sign in with email" : "Create account"}
           </Text>
 
           {mode === "signup" && (
@@ -154,7 +221,7 @@ export default function SignInScreen() {
           </View>
 
           {error !== "" && (
-            <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "15" }]}>
+            <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "18" }]}>
               <Feather name="alert-circle" size={14} color={colors.destructive} />
               <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
                 {error}
@@ -163,9 +230,9 @@ export default function SignInScreen() {
           )}
 
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.primary }, loading && { opacity: 0.7 }]}
+            style={[styles.submitBtn, { backgroundColor: colors.primary }, (loading || !!ssoLoading) && { opacity: 0.7 }]}
             onPress={handleAuth}
-            disabled={loading}
+            disabled={loading || !!ssoLoading}
             activeOpacity={0.85}
           >
             {loading ? (
@@ -199,6 +266,37 @@ export default function SignInScreen() {
   );
 }
 
+function GoogleIcon() {
+  return (
+    <View style={iconStyles.wrap}>
+      <Text style={iconStyles.g}>G</Text>
+    </View>
+  );
+}
+
+function AppleIcon({ color }: { color: string }) {
+  return (
+    <View style={iconStyles.wrap}>
+      <Text style={[iconStyles.apple, { color }]}></Text>
+    </View>
+  );
+}
+
+const iconStyles = StyleSheet.create({
+  wrap: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
+  g: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#4285F4",
+    fontFamily: "System",
+  },
+  apple: {
+    fontSize: 17,
+    lineHeight: 20,
+    fontFamily: "System",
+  },
+});
+
 const styles = StyleSheet.create({
   root: { flex: 1 },
   scroll: { paddingHorizontal: 24, alignItems: "center" },
@@ -211,16 +309,41 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   appName: { fontSize: 28, marginBottom: 4 },
-  tagline: { fontSize: 14, marginBottom: 32 },
+  tagline: { fontSize: 14, marginBottom: 28 },
+  ssoGroup: {
+    width: "100%",
+    maxWidth: 400,
+    gap: 10,
+  },
+  ssoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    height: 50,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  ssoBtnText: { fontSize: 15 },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    maxWidth: 400,
+    marginVertical: 20,
+    gap: 12,
+  },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontSize: 13 },
   card: {
     width: "100%",
     maxWidth: 400,
     borderRadius: 16,
     borderWidth: 1,
-    padding: 24,
+    padding: 20,
     gap: 12,
   },
-  cardTitle: { fontSize: 20, marginBottom: 4 },
+  cardTitle: { fontSize: 16, marginBottom: 2 },
   nameRow: { flexDirection: "row", gap: 10 },
   halfInput: { flex: 1 },
   input: {
@@ -252,7 +375,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 4,
+    marginTop: 2,
   },
   submitText: { fontSize: 16 },
   toggleRow: {
