@@ -1,6 +1,7 @@
 import { useSignIn, useSignUp, useSSO } from "@clerk/expo";
 import * as WebBrowser from "expo-web-browser";
-import React, { useState } from "react";
+import * as AuthSession from "expo-auth-session";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -19,7 +20,19 @@ import * as Haptics from "expo-haptics";
 
 WebBrowser.maybeCompleteAuthSession();
 
+function useWarmUpBrowser() {
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    void WebBrowser.warmUpAsync();
+    return () => {
+      void WebBrowser.coolDownAsync();
+    };
+  }, []);
+}
+
 export default function SignInScreen() {
+  useWarmUpBrowser();
+
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -36,23 +49,30 @@ export default function SignInScreen() {
   const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
   const { startSSOFlow } = useSSO();
 
-  const handleSSOSignIn = async (strategy: "oauth_google" | "oauth_apple") => {
-    setError("");
-    setSsoLoading(strategy === "oauth_google" ? "google" : "apple");
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      const { createdSessionId, setActive } = await startSSOFlow({ strategy });
-      if (createdSessionId && setActive) {
-        await setActive({ session: createdSessionId });
+  const handleSSOSignIn = useCallback(
+    async (strategy: "oauth_google" | "oauth_apple") => {
+      setError("");
+      setSsoLoading(strategy === "oauth_google" ? "google" : "apple");
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      try {
+        const { createdSessionId, setActive } = await startSSOFlow({
+          strategy,
+          redirectUrl: AuthSession.makeRedirectUri(),
+        });
+        if (createdSessionId && setActive) {
+          await setActive({ session: createdSessionId });
+        }
+      } catch (err: unknown) {
+        const clerkErr = err as { errors?: { message: string }[] };
+        const msg = clerkErr.errors?.[0]?.message ?? "Sign in failed. Please try again.";
+        setError(msg);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } finally {
+        setSsoLoading(null);
       }
-    } catch (err: unknown) {
-      const clerkErr = err as { errors?: { message: string }[] };
-      setError(clerkErr.errors?.[0]?.message ?? "Sign in failed. Please try again.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } finally {
-      setSsoLoading(null);
-    }
-  };
+    },
+    [startSSOFlow],
+  );
 
   const handleAuth = async () => {
     if (!signInLoaded || !signUpLoaded) return;
@@ -92,6 +112,7 @@ export default function SignInScreen() {
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+  const anyLoading = loading || !!ssoLoading;
 
   return (
     <KeyboardAvoidingView
@@ -99,7 +120,10 @@ export default function SignInScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingTop: topPad + 40, paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingTop: topPad + 40, paddingBottom: insets.bottom + 40 },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -112,16 +136,22 @@ export default function SignInScreen() {
         <Text style={[styles.appName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           Casa Dossier
         </Text>
-        <Text style={[styles.tagline, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+        <Text
+          style={[styles.tagline, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+        >
           Your Home's Complete History
         </Text>
 
         {/* SSO Buttons */}
-        <View style={styles.ssoGroup}>
+        <View style={[styles.ssoGroup, { width: "100%", maxWidth: 400 }]}>
           <TouchableOpacity
-            style={[styles.ssoBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.ssoBtn,
+              { backgroundColor: colors.card, borderColor: colors.border },
+              anyLoading && { opacity: 0.65 },
+            ]}
             onPress={() => handleSSOSignIn("oauth_google")}
-            disabled={!!ssoLoading || loading}
+            disabled={anyLoading}
             activeOpacity={0.75}
           >
             {ssoLoading === "google" ? (
@@ -129,15 +159,24 @@ export default function SignInScreen() {
             ) : (
               <GoogleIcon />
             )}
-            <Text style={[styles.ssoBtnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+            <Text
+              style={[
+                styles.ssoBtnText,
+                { color: colors.foreground, fontFamily: "Inter_500Medium" },
+              ]}
+            >
               Continue with Google
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.ssoBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            style={[
+              styles.ssoBtn,
+              { backgroundColor: colors.primary, borderColor: colors.primary },
+              anyLoading && { opacity: 0.65 },
+            ]}
             onPress={() => handleSSOSignIn("oauth_apple")}
-            disabled={!!ssoLoading || loading}
+            disabled={anyLoading}
             activeOpacity={0.75}
           >
             {ssoLoading === "apple" ? (
@@ -145,7 +184,12 @@ export default function SignInScreen() {
             ) : (
               <AppleIcon color={colors.primaryForeground} />
             )}
-            <Text style={[styles.ssoBtnText, { color: colors.primaryForeground, fontFamily: "Inter_500Medium" }]}>
+            <Text
+              style={[
+                styles.ssoBtnText,
+                { color: colors.primaryForeground, fontFamily: "Inter_500Medium" },
+              ]}
+            >
               Continue with Apple
             </Text>
           </TouchableOpacity>
@@ -154,22 +198,43 @@ export default function SignInScreen() {
         {/* Divider */}
         <View style={styles.dividerRow}>
           <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[styles.dividerText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text
+            style={[
+              styles.dividerText,
+              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+            ]}
+          >
             or
           </Text>
           <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
         </View>
 
         {/* Email/password form card */}
-        <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.card, borderColor: colors.border, width: "100%", maxWidth: 400 },
+          ]}
+        >
+          <Text
+            style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+          >
             {mode === "signin" ? "Sign in with email" : "Create account"}
           </Text>
 
           {mode === "signup" && (
             <View style={styles.nameRow}>
               <TextInput
-                style={[styles.input, styles.halfInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[
+                  styles.input,
+                  styles.halfInput,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    color: colors.foreground,
+                    fontFamily: "Inter_400Regular",
+                  },
+                ]}
                 placeholder="First name"
                 placeholderTextColor={colors.mutedForeground}
                 value={firstName}
@@ -177,7 +242,16 @@ export default function SignInScreen() {
                 autoCapitalize="words"
               />
               <TextInput
-                style={[styles.input, styles.halfInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                style={[
+                  styles.input,
+                  styles.halfInput,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    color: colors.foreground,
+                    fontFamily: "Inter_400Regular",
+                  },
+                ]}
                 placeholder="Last name"
                 placeholderTextColor={colors.mutedForeground}
                 value={lastName}
@@ -188,7 +262,15 @@ export default function SignInScreen() {
           )}
 
           <TextInput
-            style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.background,
+                borderColor: colors.border,
+                color: colors.foreground,
+                fontFamily: "Inter_400Regular",
+              },
+            ]}
             placeholder="Email address"
             placeholderTextColor={colors.mutedForeground}
             value={email}
@@ -200,7 +282,16 @@ export default function SignInScreen() {
 
           <View style={styles.passwordWrap}>
             <TextInput
-              style={[styles.input, styles.passwordInput, { backgroundColor: colors.background, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+              style={[
+                styles.input,
+                styles.passwordInput,
+                {
+                  backgroundColor: colors.background,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                  fontFamily: "Inter_400Regular",
+                },
+              ]}
               placeholder="Password"
               placeholderTextColor={colors.mutedForeground}
               value={password}
@@ -208,10 +299,7 @@ export default function SignInScreen() {
               secureTextEntry={!showPassword}
               autoCapitalize="none"
             />
-            <TouchableOpacity
-              style={styles.eyeBtn}
-              onPress={() => setShowPassword((v) => !v)}
-            >
+            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
               <Feather
                 name={showPassword ? "eye-off" : "eye"}
                 size={18}
@@ -223,22 +311,36 @@ export default function SignInScreen() {
           {error !== "" && (
             <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "18" }]}>
               <Feather name="alert-circle" size={14} color={colors.destructive} />
-              <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+              <Text
+                style={[
+                  styles.errorText,
+                  { color: colors.destructive, fontFamily: "Inter_400Regular" },
+                ]}
+              >
                 {error}
               </Text>
             </View>
           )}
 
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.primary }, (loading || !!ssoLoading) && { opacity: 0.7 }]}
+            style={[
+              styles.submitBtn,
+              { backgroundColor: colors.primary },
+              anyLoading && { opacity: 0.7 },
+            ]}
             onPress={handleAuth}
-            disabled={loading || !!ssoLoading}
+            disabled={anyLoading}
             activeOpacity={0.85}
           >
             {loading ? (
               <ActivityIndicator color={colors.primaryForeground} />
             ) : (
-              <Text style={[styles.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+              <Text
+                style={[
+                  styles.submitText,
+                  { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
                 {mode === "signin" ? "Sign In" : "Create Account"}
               </Text>
             )}
@@ -247,7 +349,12 @@ export default function SignInScreen() {
 
         {/* Toggle */}
         <View style={styles.toggleRow}>
-          <Text style={[styles.toggleText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+          <Text
+            style={[
+              styles.toggleText,
+              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+            ]}
+          >
             {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
           </Text>
           <TouchableOpacity
@@ -256,7 +363,12 @@ export default function SignInScreen() {
               setError("");
             }}
           >
-            <Text style={[styles.toggleLink, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+            <Text
+              style={[
+                styles.toggleLink,
+                { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+              ]}
+            >
               {mode === "signin" ? "Sign Up" : "Sign In"}
             </Text>
           </TouchableOpacity>
@@ -284,17 +396,8 @@ function AppleIcon({ color }: { color: string }) {
 
 const iconStyles = StyleSheet.create({
   wrap: { width: 20, height: 20, alignItems: "center", justifyContent: "center" },
-  g: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#4285F4",
-    fontFamily: "System",
-  },
-  apple: {
-    fontSize: 17,
-    lineHeight: 20,
-    fontFamily: "System",
-  },
+  g: { fontSize: 15, fontWeight: "700", color: "#4285F4", fontFamily: "System" },
+  apple: { fontSize: 17, lineHeight: 20, fontFamily: "System" },
 });
 
 const styles = StyleSheet.create({
@@ -310,11 +413,7 @@ const styles = StyleSheet.create({
   },
   appName: { fontSize: 28, marginBottom: 4 },
   tagline: { fontSize: 14, marginBottom: 28 },
-  ssoGroup: {
-    width: "100%",
-    maxWidth: 400,
-    gap: 10,
-  },
+  ssoGroup: { gap: 10 },
   ssoBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -336,8 +435,6 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 13 },
   card: {
-    width: "100%",
-    maxWidth: 400,
     borderRadius: 16,
     borderWidth: 1,
     padding: 20,
