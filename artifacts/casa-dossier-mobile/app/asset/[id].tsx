@@ -358,12 +358,12 @@ function MarkCompleteModal({
     }
   }
 
+  const insets = useSafeAreaInsets();
+
   if (!task) return null;
 
   const diff = differenceInCalendarDays(new Date(task.nextDueDate), new Date());
   const isOverdue = diff < 0;
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
