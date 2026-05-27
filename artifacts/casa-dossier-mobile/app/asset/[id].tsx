@@ -23,6 +23,7 @@ import {
   useCreateServiceRecord,
   getListServiceRecordsQueryKey,
   getListMaintenanceTasksQueryKey,
+  getGetAssetQueryKey,
 } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
@@ -696,6 +697,388 @@ const logStyles = StyleSheet.create({
   saveBtn: { flex: 2, alignItems: "center", paddingVertical: 10, borderRadius: 8 },
 });
 
+// ── Edit Asset Modal ────────────────────────────────────────────────────────────
+const EDIT_CATEGORIES = ["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"] as const;
+type EditCategory = typeof EDIT_CATEGORIES[number];
+const EDIT_CATEGORY_EMOJIS: Record<EditCategory, string> = {
+  HVAC: "❄️", Plumbing: "🔧", Electrical: "⚡",
+  Roof: "🏠", Appliance: "🫙", Structural: "🏗️", Other: "📦",
+};
+
+function EditAssetModal({
+  asset, visible, onClose, onSaved, colors,
+}: {
+  asset: Asset | null;
+  visible: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const { getToken } = useAuth();
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const baseUrl = domain ? `https://${domain}` : "";
+
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState<EditCategory>("HVAC");
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [serialNumber, setSerialNumber] = useState("");
+  const [installDate, setInstallDate] = useState("");
+  const [replacementCost, setReplacementCost] = useState("");
+  const [warrantyExpiry, setWarrantyExpiry] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [retireConfirm, setRetireConfirm] = useState(false);
+
+  const isRetired = !!(asset as any)?.retiredAt;
+
+  // Populate form whenever asset changes
+  React.useEffect(() => {
+    if (!asset) return;
+    setName(asset.name ?? "");
+    setCategory((asset.category as EditCategory) ?? "HVAC");
+    setBrand(asset.brand ?? "");
+    setModel(asset.model ?? "");
+    setSerialNumber(asset.serialNumber ?? "");
+    setInstallDate(asset.installDate ? asset.installDate.substring(0, 7) : "");
+    setReplacementCost(asset.replacementCost != null ? String(Number(asset.replacementCost)) : "");
+    setWarrantyExpiry(asset.warrantyExpiry ? asset.warrantyExpiry.substring(0, 7) : "");
+    setNotes((asset as any).notes ?? "");
+  }, [asset?.id, visible]);
+
+  async function patch(body: object) {
+    if (!asset) return false;
+    setBusy(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${baseUrl}/api/assets/${asset.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Failed");
+      return true;
+    } catch {
+      Alert.alert("Error", "Could not save changes. Please try again.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSave() {
+    if (!name.trim()) { Alert.alert("Name required", "Please enter an asset name."); return; }
+    const ok = await patch({
+      name: name.trim(),
+      category,
+      brand: brand.trim() || null,
+      model: model.trim() || null,
+      serialNumber: serialNumber.trim() || null,
+      installDate: installDate ? `${installDate}-01` : null,
+      replacementCost: replacementCost ? parseFloat(replacementCost) : null,
+      warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : null,
+      notes: notes.trim() || null,
+    });
+    if (ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSaved();
+      onClose();
+    }
+  }
+
+  async function handleRetire() {
+    const ok = await patch({ retiredAt: new Date().toISOString() });
+    if (ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSaved();
+      onClose();
+    }
+  }
+
+  async function handleRestore() {
+    const ok = await patch({ retiredAt: null });
+    if (ok) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      onSaved();
+      onClose();
+    }
+  }
+
+  if (!asset) return null;
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <View style={[editStyles.root, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <View style={[editStyles.header, { borderBottomColor: colors.border }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[editStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                {EDIT_CATEGORY_EMOJIS[category]} {isRetired ? "Retired Asset" : "Edit Asset"}
+              </Text>
+              <Text style={[editStyles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                {isRetired
+                  ? "Restore to active list or update details."
+                  : "Changes are saved when you tap Save."}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={editStyles.closeBtn} activeOpacity={0.7}>
+              <Feather name="x" size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Retired banner */}
+          {isRetired && (
+            <View style={[editStyles.retiredBanner, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
+              <Feather name="archive" size={14} color="#d97706" />
+              <Text style={[editStyles.retiredText, { color: "#92400e", fontFamily: "Inter_400Regular" }]}>
+                Retired — removed from active inventory but service history is preserved.
+              </Text>
+            </View>
+          )}
+
+          {/* Form */}
+          <ScrollView
+            contentContainerStyle={[editStyles.body, { paddingBottom: 120 }]}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Name */}
+            <View style={editStyles.field}>
+              <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                Asset Name <Text style={{ color: colors.destructive }}>*</Text>
+              </Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="e.g. Carrier Central AC Unit"
+                placeholderTextColor={colors.mutedForeground}
+                style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+              />
+            </View>
+
+            {/* Category */}
+            <View style={editStyles.field}>
+              <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Category</Text>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); setCategoryOpen((o) => !o); }}
+                style={[editStyles.input, editStyles.pickerRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+                activeOpacity={0.7}
+              >
+                <Text style={{ fontSize: 15 }}>{EDIT_CATEGORY_EMOJIS[category]}</Text>
+                <Text style={[editStyles.pickerText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{category}</Text>
+                <Feather name={categoryOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              {categoryOpen && (
+                <View style={[editStyles.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  {EDIT_CATEGORIES.map((c) => (
+                    <TouchableOpacity
+                      key={c}
+                      onPress={() => { Haptics.selectionAsync(); setCategory(c); setCategoryOpen(false); }}
+                      style={[editStyles.dropdownItem, { borderBottomColor: colors.border, backgroundColor: c === category ? colors.primary + "12" : "transparent" }]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 16 }}>{EDIT_CATEGORY_EMOJIS[c]}</Text>
+                      <Text style={[editStyles.dropdownText, { color: colors.foreground, fontFamily: c === category ? "Inter_600SemiBold" : "Inter_400Regular" }]}>{c}</Text>
+                      {c === category && <Feather name="check" size={14} color={colors.primary} />}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Brand + Model */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={[editStyles.field, { flex: 1 }]}>
+                <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Brand / Make</Text>
+                <TextInput
+                  value={brand}
+                  onChangeText={setBrand}
+                  placeholder="e.g. Carrier"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+                />
+              </View>
+              <View style={[editStyles.field, { flex: 1 }]}>
+                <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Model</Text>
+                <TextInput
+                  value={model}
+                  onChangeText={setModel}
+                  placeholder="e.g. 24ACC636A"
+                  placeholderTextColor={colors.mutedForeground}
+                  style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+                />
+              </View>
+            </View>
+
+            {/* Serial Number */}
+            <View style={editStyles.field}>
+              <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Serial Number</Text>
+              <TextInput
+                value={serialNumber}
+                onChangeText={setSerialNumber}
+                placeholder="Found on the unit's label"
+                placeholderTextColor={colors.mutedForeground}
+                style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+              />
+            </View>
+
+            {/* Install Date + Replacement Cost */}
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <View style={[editStyles.field, { flex: 1 }]}>
+                <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Install Date</Text>
+                <TextInput
+                  value={installDate}
+                  onChangeText={setInstallDate}
+                  placeholder="YYYY-MM"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="numbers-and-punctuation"
+                  style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+                />
+              </View>
+              <View style={[editStyles.field, { flex: 1 }]}>
+                <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Replacement $</Text>
+                <TextInput
+                  value={replacementCost}
+                  onChangeText={setReplacementCost}
+                  placeholder="e.g. 4500"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="decimal-pad"
+                  style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+                />
+              </View>
+            </View>
+
+            {/* Warranty */}
+            <View style={editStyles.field}>
+              <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Warranty Expiry (optional)</Text>
+              <TextInput
+                value={warrantyExpiry}
+                onChangeText={setWarrantyExpiry}
+                placeholder="YYYY-MM"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="numbers-and-punctuation"
+                style={[editStyles.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+              />
+            </View>
+
+            {/* Notes */}
+            <View style={editStyles.field}>
+              <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Notes</Text>
+              <TextInput
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Any additional notes about this asset…"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                numberOfLines={3}
+                style={[editStyles.input, editStyles.textArea, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
+              />
+            </View>
+          </ScrollView>
+
+          {/* Footer actions */}
+          <View style={[editStyles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+            {/* Save button */}
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={!name.trim() || busy}
+              style={[editStyles.saveBtn, { backgroundColor: colors.primary, opacity: (!name.trim() || busy) ? 0.5 : 1 }]}
+              activeOpacity={0.85}
+            >
+              {busy
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <><Feather name="save" size={16} color="#fff" /><Text style={[editStyles.saveBtnText, { fontFamily: "Inter_700Bold" }]}>Save Changes</Text></>
+              }
+            </TouchableOpacity>
+
+            {/* Retire / Restore */}
+            {!retireConfirm ? (
+              isRetired ? (
+                <TouchableOpacity
+                  onPress={handleRestore}
+                  disabled={busy}
+                  style={[editStyles.retireBtn, { borderColor: "#3d7a5f50", backgroundColor: "#f0fdf4" }]}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="refresh-cw" size={14} color="#3d7a5f" />
+                  <Text style={[editStyles.retireBtnText, { color: "#3d7a5f", fontFamily: "Inter_500Medium" }]}>Restore to Active Assets</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  onPress={() => setRetireConfirm(true)}
+                  disabled={busy}
+                  style={[editStyles.retireBtn, { borderColor: colors.border, backgroundColor: "transparent" }]}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="archive" size={14} color={colors.mutedForeground} />
+                  <Text style={[editStyles.retireBtnText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Retire this Asset</Text>
+                </TouchableOpacity>
+              )
+            ) : (
+              <View style={[editStyles.confirmBox, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
+                <Text style={[{ fontSize: 13, color: "#92400e", fontFamily: "Inter_600SemiBold", marginBottom: 4 }]}>
+                  Retire "{asset.name}"?
+                </Text>
+                <Text style={[{ fontSize: 12, color: "#92400e", fontFamily: "Inter_400Regular", lineHeight: 17, marginBottom: 10 }]}>
+                  It'll be removed from active inventory. All history is preserved — you can restore it anytime.
+                </Text>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setRetireConfirm(false)}
+                    style={[editStyles.confirmCancel, { borderColor: "#fde68a" }]}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[{ fontSize: 13, color: "#92400e", fontFamily: "Inter_500Medium" }]}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleRetire}
+                    disabled={busy}
+                    style={editStyles.confirmRetire}
+                    activeOpacity={0.85}
+                  >
+                    <Feather name="archive" size={13} color="#fff" />
+                    <Text style={[{ fontSize: 13, color: "#fff", fontFamily: "Inter_600SemiBold" }]}>Yes, Retire</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const editStyles = StyleSheet.create({
+  root: { flex: 1 },
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1 },
+  title: { fontSize: 17 },
+  sub: { fontSize: 12, marginTop: 2 },
+  closeBtn: { padding: 4, marginTop: 2 },
+  retiredBanner: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingHorizontal: 20, paddingVertical: 10, borderBottomWidth: 1 },
+  retiredText: { fontSize: 12, flex: 1, lineHeight: 17 },
+  body: { padding: 20 },
+  field: { marginBottom: 14 },
+  label: { fontSize: 12, marginBottom: 6 },
+  input: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 11, fontSize: 14 },
+  textArea: { minHeight: 80, textAlignVertical: "top" },
+  pickerRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  pickerText: { flex: 1, fontSize: 14 },
+  dropdown: { borderRadius: 12, borderWidth: 1, overflow: "hidden", marginTop: 4 },
+  dropdownItem: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  dropdownText: { flex: 1, fontSize: 14 },
+  footer: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32, gap: 10 },
+  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 14 },
+  saveBtnText: { color: "#fff", fontSize: 15 },
+  retireBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingVertical: 11 },
+  retireBtnText: { fontSize: 13 },
+  confirmBox: { borderRadius: 12, borderWidth: 1, padding: 14 },
+  confirmCancel: { flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 8, borderWidth: 1 },
+  confirmRetire: { flex: 2, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 8, backgroundColor: "#d97706" },
+});
+
 // ── Main asset detail screen ───────────────────────────────────────────────────
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -704,6 +1087,7 @@ export default function AssetDetailScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [activeTask, setActiveTask] = useState<MaintenanceTask | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data: asset, isLoading: assetLoading } = useGetAsset(id!);
   const { data: tasks = [], refetch: refetchTasks } = useListMaintenanceTasks(id!);
@@ -755,7 +1139,13 @@ export default function AssetDetailScreen() {
             {a.name}
           </Text>
         </View>
-        <View style={{ width: 36 }} />
+        <TouchableOpacity
+          onPress={() => { Haptics.selectionAsync(); setEditOpen(true); }}
+          style={detailStyles.backBtn}
+          activeOpacity={0.7}
+        >
+          <Feather name="edit-2" size={18} color={colors.foreground} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -923,6 +1313,21 @@ export default function AssetDetailScreen() {
           refetchRecords();
           queryClient.invalidateQueries({ queryKey: getListMaintenanceTasksQueryKey(a.id) });
           queryClient.invalidateQueries({ queryKey: getListServiceRecordsQueryKey(a.id) });
+        }}
+      />
+
+      {/* Edit Asset Modal */}
+      <EditAssetModal
+        asset={a}
+        visible={editOpen}
+        onClose={() => setEditOpen(false)}
+        colors={colors}
+        onSaved={() => {
+          queryClient.invalidateQueries({ queryKey: getGetAssetQueryKey(a.id) });
+          queryClient.invalidateQueries({
+            predicate: (q) =>
+              q.queryKey.some((k) => typeof k === "string" && (k.includes("assets") || k.includes("summary"))),
+          });
         }}
       />
     </View>
