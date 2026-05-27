@@ -6,11 +6,11 @@ import {
   StyleSheet,
   ActivityIndicator,
   Modal,
-  ScrollView,
   TextInput,
-  Pressable,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/expo";
 import { Feather } from "@expo/vector-icons";
@@ -87,7 +87,8 @@ interface CompleteSheetProps {
   insetBottom: number;
 }
 
-function CompleteSheet({ task, visible, onClose, onConfirm, colors, insetBottom }: CompleteSheetProps) {
+function CompleteSheet({ task, visible, onClose, onConfirm, colors }: Omit<CompleteSheetProps, "insetBottom">) {
+  const insets = useSafeAreaInsets();
   const [notes, setNotes] = useState("");
   const [cost, setCost] = useState(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
   const [isDiy, setIsDiy] = useState(task.isDiy ?? true);
@@ -112,14 +113,10 @@ function CompleteSheet({ task, visible, onClose, onConfirm, colors, insetBottom 
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={cs.backdrop}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <View style={[cs.sheet, { backgroundColor: colors.background, paddingBottom: insetBottom + 16 }]}>
-          <View style={[cs.handle, { backgroundColor: colors.border }]} />
-
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
+      <View style={[cs.fullScreen, { backgroundColor: colors.background }]}>
           {/* Header */}
-          <View style={[cs.header, { borderBottomColor: colors.border }]}>
+          <View style={[cs.header, { borderBottomColor: colors.border, paddingTop: insets.top + 12 }]}>
             <View style={{ flex: 1 }}>
               <Text style={[cs.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]} numberOfLines={1}>
                 {task.title}
@@ -133,7 +130,7 @@ function CompleteSheet({ task, visible, onClose, onConfirm, colors, insetBottom 
             </TouchableOpacity>
           </View>
 
-          <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareScrollViewCompat contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: insets.bottom + 24 }}>
             {/* Notes */}
             <View style={{ gap: 6 }}>
               <Text style={[cs.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Notes (optional)</Text>
@@ -233,17 +230,14 @@ function CompleteSheet({ task, visible, onClose, onConfirm, colors, insetBottom 
                 {busy ? "Saving…" : "Mark Complete"}
               </Text>
             </TouchableOpacity>
-          </ScrollView>
-        </View>
+          </KeyboardAwareScrollViewCompat>
       </View>
     </Modal>
   );
 }
 
 const cs = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
-  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "88%" },
-  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 10, marginBottom: 4 },
+  fullScreen: { flex: 1 },
   header: {
     flexDirection: "row", alignItems: "center", gap: 12,
     paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
@@ -500,7 +494,6 @@ export function MaintenanceInbox({ propertyId, insetBottom = 0 }: MaintenanceInb
           onClose={() => setActiveTask(null)}
           onConfirm={markDone}
           colors={colors}
-          insetBottom={insetBottom}
         />
       )}
     </View>
