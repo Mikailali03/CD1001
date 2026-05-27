@@ -20,6 +20,7 @@ import {
   type MarketplaceJob,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { MaintenanceInbox } from "@/components/MaintenanceInbox";
 import * as Haptics from "expo-haptics";
 import { format } from "date-fns";
 
@@ -578,6 +579,16 @@ export default function HomeScreen() {
           colors={colors}
           onJobPress={(id) => router.push(`/job/${id}`)}
         />
+
+        {/* Maintenance inbox */}
+        {selectedProperty && (
+          <View style={{ marginBottom: 16 }}>
+            <MaintenanceInbox
+              propertyId={selectedProperty.id}
+              insetBottom={insets.bottom}
+            />
+          </View>
+        )}
 
         {/* Health score widget */}
         {summaryLoading ? (
