@@ -33,7 +33,12 @@ import {
   UserRound,
   X,
   Calendar,
+  Lock,
+  Sparkles,
+  ShieldCheck,
+  ClipboardList,
 } from "lucide-react";
+import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import { format, addDays } from "date-fns";
 import { getSpecsForCategory } from "@/lib/maintenance-specs";
 import type { MaintenanceSpec } from "@/lib/maintenance-specs";
@@ -510,6 +515,8 @@ export function HealthScoreModal({
   const queryClient = useQueryClient();
   const authFetch = useAuthFetch();
   const { toast } = useToast();
+  const { subscription, openUpgradeModal } = useSubscription();
+  const locked = !isBasicPlus(subscription?.tier);
 
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   // Key = `${assetId}:${spec.title}` for spec completions
@@ -635,74 +642,145 @@ export function HealthScoreModal({
           )}
         </DialogHeader>
 
-        <ScrollArea className="flex-1 overflow-y-auto">
-          <div className="px-6 py-4 space-y-6">
-
-            {/* ── Section 1: Overdue tasks ── */}
-            {overdueTaskCount > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <CalendarClock className="h-4 w-4 text-destructive" />
-                  <h3 className="text-sm font-semibold">Fix First — Overdue Tasks</h3>
-                  <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded-full font-bold ml-auto">
-                    {remainingOverdue} remaining
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {overdueTasks.map((t) => (
-                    <TaskItem key={t.id} task={t} done={completedIds.has(t.id)} onMarkDone={handleMarkDone} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {overdueTaskCount > 0 && recommendedByAsset.length > 0 && <Separator />}
-
-            {/* ── Section 2: Manufacturer-spec DIY tasks ── */}
-            {recommendedByAsset.length > 0 && (
-              <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <Hammer className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-semibold">Recommended by Manufacturers</h3>
-                  <Badge variant="secondary" className="text-[10px] font-bold ml-auto">DIY First</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                  These tasks come from manufacturer maintenance specs for your tracked assets. Completing them adds a service record and starts the recurring schedule.
-                </p>
-                <div className="space-y-2">
-                  {recommendedByAsset.map(({ spec, asset }, i) => (
-                    <SpecItem
-                      key={`${asset.assetId}-${i}`}
-                      spec={spec}
-                      assetId={asset.assetId}
-                      assetName={asset.assetName}
-                      done={completedSpecKeys.has(`${asset.assetId}:${spec.title}`)}
-                      onMarkDone={handleMarkSpecDone}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {overdueTaskCount === 0 && recommendedByAsset.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <CheckCircle2 className="h-12 w-12 text-emerald-500 mb-3 opacity-70" />
-                <p className="font-semibold">Great shape!</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  No immediate action needed. Check back after adding more assets or maintenance schedules.
-                </p>
+        {locked ? (
+          /* ── Locked: blurred preview + upgrade overlay ── */
+          <div className="relative flex-1">
+            {/* Blurred fake content */}
+            <div className="blur-sm pointer-events-none select-none opacity-50 px-6 py-4 space-y-4" aria-hidden>
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarClock className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-semibold">Fix First — Overdue Tasks</span>
+                <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded-full font-bold ml-auto">3 remaining</span>
               </div>
-            )}
-          </div>
-        </ScrollArea>
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-14 rounded-lg border border-destructive/25 bg-destructive/5" />
+              ))}
+              <Separator />
+              <div className="flex items-center gap-2 mb-3">
+                <Hammer className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold">Recommended by Manufacturers</span>
+                <Badge variant="secondary" className="text-[10px] font-bold ml-auto">DIY First</Badge>
+              </div>
+              {[1, 2].map((i) => (
+                <div key={i} className="h-20 rounded-lg border bg-card" />
+              ))}
+            </div>
 
-        {/* ── Footer ── */}
-        <div className="border-t px-6 py-4 flex items-center justify-between gap-3 bg-muted/30">
-          <p className="text-xs text-muted-foreground leading-snug">
-            Completing tasks builds your home's documented history.
-          </p>
-          <Button size="sm" onClick={() => onOpenChange(false)} variant="outline">Close</Button>
-        </div>
+            {/* Upgrade overlay */}
+            <div className="absolute inset-0 flex items-center justify-center p-6">
+              <div className="bg-background/95 backdrop-blur-sm rounded-2xl border shadow-xl p-6 w-full max-w-sm text-center space-y-4">
+                <div className="flex justify-center">
+                  <div className="bg-primary/10 rounded-full p-4">
+                    <Lock className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-base font-bold">Unlock Your Home Improvement Plan</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    See overdue tasks, manufacturer-recommended maintenance, and a personalized action plan to protect your home's value.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <CalendarClock className="h-4 w-4 text-primary" />
+                    <span className="leading-snug text-center">Overdue task alerts</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <ClipboardList className="h-4 w-4 text-primary" />
+                    <span className="leading-snug text-center">Manufacturer specs</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1.5 p-2 rounded-lg bg-muted/50">
+                    <ShieldCheck className="h-4 w-4 text-primary" />
+                    <span className="leading-snug text-center">Score improvement tips</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Button
+                    onClick={() => { onOpenChange(false); openUpgradeModal(); }}
+                    className="w-full gap-2"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    Upgrade to Basic — $9.99/mo
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} className="text-muted-foreground">
+                    Maybe later
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ScrollArea className="flex-1 overflow-y-auto">
+              <div className="px-6 py-4 space-y-6">
+
+                {/* ── Section 1: Overdue tasks ── */}
+                {overdueTaskCount > 0 && (
+                  <section>
+                    <div className="flex items-center gap-2 mb-3">
+                      <CalendarClock className="h-4 w-4 text-destructive" />
+                      <h3 className="text-sm font-semibold">Fix First — Overdue Tasks</h3>
+                      <span className="text-xs bg-destructive text-destructive-foreground px-1.5 py-0.5 rounded-full font-bold ml-auto">
+                        {remainingOverdue} remaining
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {overdueTasks.map((t) => (
+                        <TaskItem key={t.id} task={t} done={completedIds.has(t.id)} onMarkDone={handleMarkDone} />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {overdueTaskCount > 0 && recommendedByAsset.length > 0 && <Separator />}
+
+                {/* ── Section 2: Manufacturer-spec DIY tasks ── */}
+                {recommendedByAsset.length > 0 && (
+                  <section>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Hammer className="h-4 w-4 text-primary" />
+                      <h3 className="text-sm font-semibold">Recommended by Manufacturers</h3>
+                      <Badge variant="secondary" className="text-[10px] font-bold ml-auto">DIY First</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                      These tasks come from manufacturer maintenance specs for your tracked assets. Completing them adds a service record and starts the recurring schedule.
+                    </p>
+                    <div className="space-y-2">
+                      {recommendedByAsset.map(({ spec, asset }, i) => (
+                        <SpecItem
+                          key={`${asset.assetId}-${i}`}
+                          spec={spec}
+                          assetId={asset.assetId}
+                          assetName={asset.assetName}
+                          done={completedSpecKeys.has(`${asset.assetId}:${spec.title}`)}
+                          onMarkDone={handleMarkSpecDone}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {overdueTaskCount === 0 && recommendedByAsset.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <CheckCircle2 className="h-12 w-12 text-emerald-500 mb-3 opacity-70" />
+                    <p className="font-semibold">Great shape!</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      No immediate action needed. Check back after adding more assets or maintenance schedules.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </ScrollArea>
+
+            {/* ── Footer ── */}
+            <div className="border-t px-6 py-4 flex items-center justify-between gap-3 bg-muted/30">
+              <p className="text-xs text-muted-foreground leading-snug">
+                Completing tasks builds your home's documented history.
+              </p>
+              <Button size="sm" onClick={() => onOpenChange(false)} variant="outline">Close</Button>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );
