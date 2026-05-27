@@ -520,9 +520,21 @@ export default function HomeScreen() {
 
         {/* Property header */}
         <View style={{ marginBottom: 14, gap: 4 }}>
-          <Text style={[propStyles.name, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            {(selectedProperty as any)?.name ?? (selectedProperty as any)?.address ?? "My Home"}
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text style={[propStyles.name, { color: colors.foreground, fontFamily: "Inter_700Bold", flex: 1 }]} numberOfLines={1}>
+              {(selectedProperty as any)?.name ?? (selectedProperty as any)?.address ?? "My Home"}
+            </Text>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); router.push("/properties"); }}
+              style={[propStyles.viewAllBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+              activeOpacity={0.7}
+            >
+              <Text style={[propStyles.viewAllText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                All Properties
+              </Text>
+              <Feather name="chevron-right" size={12} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
           {location ? (
             <View style={propStyles.row}>
               <Feather name="map-pin" size={13} color={colors.mutedForeground} />
@@ -664,11 +676,16 @@ const chipStyles = StyleSheet.create({
 });
 
 const propStyles = StyleSheet.create({
-  name: { fontSize: 24 },
+  name: { fontSize: 22 },
   row: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
   location: { fontSize: 13 },
   specItem: { flexDirection: "row", alignItems: "center", gap: 3, marginRight: 10 },
   spec: { fontSize: 12 },
+  viewAllBtn: {
+    flexDirection: "row", alignItems: "center", gap: 3,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, borderWidth: 1,
+  },
+  viewAllText: { fontSize: 12 },
 });
 
 const sectionStyles = StyleSheet.create({
