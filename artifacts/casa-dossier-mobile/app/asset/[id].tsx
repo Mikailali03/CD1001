@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { CasaServiceBadge } from "@/components/CasaServiceBadge";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import {
   View,
   Text,
@@ -364,7 +365,7 @@ function MarkCompleteModal({
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
         <View style={[modalStyles.root, { backgroundColor: colors.background }]}>
           {/* Header */}
           <View style={[modalStyles.header, { borderBottomColor: colors.border }]}>
@@ -394,7 +395,7 @@ function MarkCompleteModal({
           </View>
 
           {/* Body */}
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={modalStyles.body} keyboardShouldPersistTaps="handled">
+          <KeyboardAwareScrollViewCompat style={{ flex: 1 }} contentContainerStyle={modalStyles.body}>
             {/* Task description / steps */}
             {task.description ? (
               <View style={{ marginBottom: 20 }}>
@@ -481,7 +482,7 @@ function MarkCompleteModal({
                 </View>
               </View>
             )}
-          </ScrollView>
+          </KeyboardAwareScrollViewCompat>
 
           {/* Footer */}
           <View style={[modalStyles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
