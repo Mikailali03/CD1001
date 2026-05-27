@@ -58,6 +58,8 @@ function AuthGate() {
       <Stack.Screen name="guide/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="find-a-pro" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="upgrade" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="report" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="transfer" options={{ animation: "slide_from_right" }} />
     </Stack>
   );
 }

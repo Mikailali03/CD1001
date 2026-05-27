@@ -109,6 +109,24 @@ export default function MoreScreen() {
       },
     },
     {
+      icon: "file-text",
+      label: "Generate Report",
+      sublabel: "Official property dossier & history",
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/report");
+      },
+    },
+    {
+      icon: "arrow-right-circle",
+      label: "Digital Deed Transfer",
+      sublabel: "Securely transfer your home's history",
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/transfer");
+      },
+    },
+    {
       icon: "settings",
       label: "Settings",
       sublabel: "Notifications, preferences",
