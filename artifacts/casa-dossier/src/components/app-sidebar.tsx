@@ -20,11 +20,13 @@ import {
   Settings,
   ShieldCheck,
   TrendingUp,
+  Images,
 } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "My Assets", href: "/assets", icon: Package },
+  { name: "Digital Locker", href: "/locker", icon: Images },
   { name: "Capital Outlook", href: "/capital-outlook", icon: TrendingUp },
   { name: "Find a Pro", href: "/marketplace", icon: UserSearch },
   { name: "DIY Guides", href: "/guides", icon: BookOpen },

@@ -1157,6 +1157,113 @@ export const GetStorageObjectParams = zod.object({
 });
 
 /**
+ * @summary List all folders for the current user
+ */
+export const ListLockerFoldersResponseItem = zod.object({
+  id: zod.string(),
+  userId: zod.string(),
+  name: zod.string(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+export const ListLockerFoldersResponse = zod.array(
+  ListLockerFoldersResponseItem,
+);
+
+/**
+ * @summary Create a new folder
+ */
+export const CreateLockerFolderBody = zod.object({
+  name: zod.string(),
+});
+
+/**
+ * @summary Rename a folder
+ */
+export const UpdateLockerFolderParams = zod.object({
+  folderId: zod.coerce.string(),
+});
+
+export const UpdateLockerFolderBody = zod.object({
+  name: zod.string().optional(),
+});
+
+export const UpdateLockerFolderResponse = zod.object({
+  id: zod.string(),
+  userId: zod.string(),
+  name: zod.string(),
+  createdAt: zod.coerce.date(),
+  updatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a folder (files become unorganized)
+ */
+export const DeleteLockerFolderParams = zod.object({
+  folderId: zod.coerce.string(),
+});
+
+/**
+ * @summary List files, optionally filtered by folder
+ */
+export const ListLockerFilesQueryParams = zod.object({
+  folderId: zod.coerce.string().optional(),
+});
+
+export const ListLockerFilesResponseItem = zod.object({
+  id: zod.string(),
+  userId: zod.string(),
+  folderId: zod.string().nullish(),
+  name: zod.string(),
+  objectPath: zod.string(),
+  contentType: zod.string(),
+  size: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+export const ListLockerFilesResponse = zod.array(ListLockerFilesResponseItem);
+
+/**
+ * @summary Save file metadata after a successful presigned upload
+ */
+export const CreateLockerFileBody = zod.object({
+  name: zod.string(),
+  objectPath: zod.string(),
+  contentType: zod.string(),
+  size: zod.number().optional(),
+  folderId: zod.string().optional(),
+});
+
+/**
+ * @summary Update file name or move to a different folder
+ */
+export const UpdateLockerFileParams = zod.object({
+  fileId: zod.coerce.string(),
+});
+
+export const UpdateLockerFileBody = zod.object({
+  name: zod.string().optional(),
+  folderId: zod.string().nullish(),
+});
+
+export const UpdateLockerFileResponse = zod.object({
+  id: zod.string(),
+  userId: zod.string(),
+  folderId: zod.string().nullish(),
+  name: zod.string(),
+  objectPath: zod.string(),
+  contentType: zod.string(),
+  size: zod.number().nullish(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a file record
+ */
+export const DeleteLockerFileParams = zod.object({
+  fileId: zod.coerce.string(),
+});
+
+/**
  * @summary Platform-wide stats for admin dashboard
  */
 export const GetAdminStatsResponse = zod.object({

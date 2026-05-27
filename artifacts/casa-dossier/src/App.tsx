@@ -26,6 +26,7 @@ import Guides from "@/pages/guides";
 import GuideDetail from "@/pages/guide-detail";
 import Marketplace from "@/pages/marketplace";
 import CapitalOutlook from "@/pages/capital-outlook";
+import DigitalLocker from "@/pages/digital-locker";
 import Settings from "@/pages/settings";
 import ClaimTransfer from "@/pages/claim";
 import PropertyReport from "@/pages/report";
@@ -218,6 +219,7 @@ function AppRoutes() {
         <Route path="/intake" component={IntakeForm} />
         <Route path="/guides" component={Guides} />
         <Route path="/guides/:id" component={GuideDetail} />
+        <Route path="/locker" component={DigitalLocker} />
         <Route path="/capital-outlook" component={CapitalOutlook} />
         <Route path="/marketplace" component={Marketplace} />
         <Route path="/settings" component={Settings} />

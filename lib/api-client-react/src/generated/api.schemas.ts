@@ -870,6 +870,46 @@ export interface AdminAnalytics {
   subscriptionsByTier: AdminAnalyticsBucket[];
 }
 
+export interface LockerFolder {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateLockerFolderBody {
+  name: string;
+}
+
+export interface UpdateLockerFolderBody {
+  name?: string;
+}
+
+export interface LockerFile {
+  id: string;
+  userId: string;
+  folderId?: string | null;
+  name: string;
+  objectPath: string;
+  contentType: string;
+  size?: number | null;
+  createdAt: string;
+}
+
+export interface CreateLockerFileBody {
+  name: string;
+  objectPath: string;
+  contentType: string;
+  size?: number;
+  folderId?: string;
+}
+
+export interface UpdateLockerFileBody {
+  name?: string;
+  folderId?: string | null;
+}
+
 export type ListAssetsParams = {
   category?: string;
 };
@@ -887,6 +927,10 @@ export type ScheduleMarketplaceJob200 = {
 export type CompleteMarketplaceJob200 = {
   ok?: boolean;
   serviceRecordId?: string;
+};
+
+export type ListLockerFilesParams = {
+  folderId?: string;
 };
 
 export type ListAdminUsersParams = {

@@ -30,6 +30,8 @@ tags:
     description: Technician portal endpoints
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: locker
+    description: Digital locker — photo and file storage
   - name: admin
     description: Admin-only platform management endpoints
 
@@ -859,6 +861,153 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+
+  # ─── Digital Locker ─────────────────────────────────────────────────────────
+  /locker/folders:
+    get:
+      operationId: listLockerFolders
+      tags: [locker]
+      summary: List all folders for the current user
+      responses:
+        "200":
+          description: List of folders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LockerFolder"
+    post:
+      operationId: createLockerFolder
+      tags: [locker]
+      summary: Create a new folder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLockerFolderBody"
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockerFolder"
+
+  /locker/folders/{folderId}:
+    patch:
+      operationId: updateLockerFolder
+      tags: [locker]
+      summary: Rename a folder
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLockerFolderBody"
+      responses:
+        "200":
+          description: Updated folder
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockerFolder"
+    delete:
+      operationId: deleteLockerFolder
+      tags: [locker]
+      summary: Delete a folder (files become unorganized)
+      parameters:
+        - name: folderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /locker/files:
+    get:
+      operationId: listLockerFiles
+      tags: [locker]
+      summary: List files, optionally filtered by folder
+      parameters:
+        - name: folderId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LockerFile"
+    post:
+      operationId: createLockerFile
+      tags: [locker]
+      summary: Save file metadata after a successful presigned upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLockerFileBody"
+      responses:
+        "201":
+          description: Created file record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockerFile"
+
+  /locker/files/{fileId}:
+    patch:
+      operationId: updateLockerFile
+      tags: [locker]
+      summary: Update file name or move to a different folder
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLockerFileBody"
+      responses:
+        "200":
+          description: Updated file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LockerFile"
+    delete:
+      operationId: deleteLockerFile
+      tags: [locker]
+      summary: Delete a file record
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
 
   # ─── Admin ──────────────────────────────────────────────────────────────────
   /admin/stats:
@@ -2350,3 +2499,82 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AdminAnalyticsBucket"
+
+    # ── Locker ────────────────────────────────────────────────────────────────
+    LockerFolder:
+      type: object
+      required: [id, userId, name, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateLockerFolderBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    UpdateLockerFolderBody:
+      type: object
+      properties:
+        name:
+          type: string
+
+    LockerFile:
+      type: object
+      required: [id, userId, name, objectPath, contentType, createdAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        folderId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        objectPath:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateLockerFileBody:
+      type: object
+      required: [name, objectPath, contentType]
+      properties:
+        name:
+          type: string
+        objectPath:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+        folderId:
+          type: string
+
+    UpdateLockerFileBody:
+      type: object
+      properties:
+        name:
+          type: string
+        folderId:
+          type: string
+          nullable: true

@@ -30,6 +30,8 @@ import type {
   CompleteJobBody,
   CompleteMarketplaceJob200,
   CreateAssetBody,
+  CreateLockerFileBody,
+  CreateLockerFolderBody,
   CreateMaintenanceTaskBody,
   CreateMarketplaceJobBody,
   CreatePropertyBody,
@@ -46,6 +48,9 @@ import type {
   ListAdminUsersParams,
   ListAssetsParams,
   ListGuidesParams,
+  ListLockerFilesParams,
+  LockerFile,
+  LockerFolder,
   MaintenanceTask,
   MarketplaceJob,
   Property,
@@ -57,6 +62,8 @@ import type {
   TechJobSummary,
   UpdateAdminUserBody,
   UpdateAssetBody,
+  UpdateLockerFileBody,
+  UpdateLockerFolderBody,
   UpdateMaintenanceTaskBody,
   UpdatePropertyBody,
   UploadUrlRequest,
@@ -3558,6 +3565,689 @@ export function useGetStorageObject<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all folders for the current user
+ */
+export const getListLockerFoldersUrl = () => {
+  return `/api/locker/folders`;
+};
+
+export const listLockerFolders = async (
+  options?: RequestInit,
+): Promise<LockerFolder[]> => {
+  return customFetch<LockerFolder[]>(getListLockerFoldersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLockerFoldersQueryKey = () => {
+  return [`/api/locker/folders`] as const;
+};
+
+export const getListLockerFoldersQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLockerFolders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listLockerFolders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListLockerFoldersQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listLockerFolders>>
+  > = ({ signal }) => listLockerFolders({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLockerFolders>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLockerFoldersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLockerFolders>>
+>;
+export type ListLockerFoldersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all folders for the current user
+ */
+
+export function useListLockerFolders<
+  TData = Awaited<ReturnType<typeof listLockerFolders>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listLockerFolders>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLockerFoldersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new folder
+ */
+export const getCreateLockerFolderUrl = () => {
+  return `/api/locker/folders`;
+};
+
+export const createLockerFolder = async (
+  createLockerFolderBody: CreateLockerFolderBody,
+  options?: RequestInit,
+): Promise<LockerFolder> => {
+  return customFetch<LockerFolder>(getCreateLockerFolderUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createLockerFolderBody),
+  });
+};
+
+export const getCreateLockerFolderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLockerFolder>>,
+    TError,
+    { data: BodyType<CreateLockerFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createLockerFolder>>,
+  TError,
+  { data: BodyType<CreateLockerFolderBody> },
+  TContext
+> => {
+  const mutationKey = ["createLockerFolder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createLockerFolder>>,
+    { data: BodyType<CreateLockerFolderBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createLockerFolder(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateLockerFolderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createLockerFolder>>
+>;
+export type CreateLockerFolderMutationBody = BodyType<CreateLockerFolderBody>;
+export type CreateLockerFolderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new folder
+ */
+export const useCreateLockerFolder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLockerFolder>>,
+    TError,
+    { data: BodyType<CreateLockerFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createLockerFolder>>,
+  TError,
+  { data: BodyType<CreateLockerFolderBody> },
+  TContext
+> => {
+  return useMutation(getCreateLockerFolderMutationOptions(options));
+};
+
+/**
+ * @summary Rename a folder
+ */
+export const getUpdateLockerFolderUrl = (folderId: string) => {
+  return `/api/locker/folders/${folderId}`;
+};
+
+export const updateLockerFolder = async (
+  folderId: string,
+  updateLockerFolderBody: UpdateLockerFolderBody,
+  options?: RequestInit,
+): Promise<LockerFolder> => {
+  return customFetch<LockerFolder>(getUpdateLockerFolderUrl(folderId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLockerFolderBody),
+  });
+};
+
+export const getUpdateLockerFolderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLockerFolder>>,
+    TError,
+    { folderId: string; data: BodyType<UpdateLockerFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateLockerFolder>>,
+  TError,
+  { folderId: string; data: BodyType<UpdateLockerFolderBody> },
+  TContext
+> => {
+  const mutationKey = ["updateLockerFolder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateLockerFolder>>,
+    { folderId: string; data: BodyType<UpdateLockerFolderBody> }
+  > = (props) => {
+    const { folderId, data } = props ?? {};
+
+    return updateLockerFolder(folderId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateLockerFolderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateLockerFolder>>
+>;
+export type UpdateLockerFolderMutationBody = BodyType<UpdateLockerFolderBody>;
+export type UpdateLockerFolderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Rename a folder
+ */
+export const useUpdateLockerFolder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLockerFolder>>,
+    TError,
+    { folderId: string; data: BodyType<UpdateLockerFolderBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateLockerFolder>>,
+  TError,
+  { folderId: string; data: BodyType<UpdateLockerFolderBody> },
+  TContext
+> => {
+  return useMutation(getUpdateLockerFolderMutationOptions(options));
+};
+
+/**
+ * @summary Delete a folder (files become unorganized)
+ */
+export const getDeleteLockerFolderUrl = (folderId: string) => {
+  return `/api/locker/folders/${folderId}`;
+};
+
+export const deleteLockerFolder = async (
+  folderId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteLockerFolderUrl(folderId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteLockerFolderMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteLockerFolder>>,
+    TError,
+    { folderId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteLockerFolder>>,
+  TError,
+  { folderId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteLockerFolder"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteLockerFolder>>,
+    { folderId: string }
+  > = (props) => {
+    const { folderId } = props ?? {};
+
+    return deleteLockerFolder(folderId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteLockerFolderMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteLockerFolder>>
+>;
+
+export type DeleteLockerFolderMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a folder (files become unorganized)
+ */
+export const useDeleteLockerFolder = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteLockerFolder>>,
+    TError,
+    { folderId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteLockerFolder>>,
+  TError,
+  { folderId: string },
+  TContext
+> => {
+  return useMutation(getDeleteLockerFolderMutationOptions(options));
+};
+
+/**
+ * @summary List files, optionally filtered by folder
+ */
+export const getListLockerFilesUrl = (params?: ListLockerFilesParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/locker/files?${stringifiedParams}`
+    : `/api/locker/files`;
+};
+
+export const listLockerFiles = async (
+  params?: ListLockerFilesParams,
+  options?: RequestInit,
+): Promise<LockerFile[]> => {
+  return customFetch<LockerFile[]>(getListLockerFilesUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListLockerFilesQueryKey = (params?: ListLockerFilesParams) => {
+  return [`/api/locker/files`, ...(params ? [params] : [])] as const;
+};
+
+export const getListLockerFilesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listLockerFiles>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListLockerFilesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLockerFiles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListLockerFilesQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listLockerFiles>>> = ({
+    signal,
+  }) => listLockerFiles(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listLockerFiles>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListLockerFilesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listLockerFiles>>
+>;
+export type ListLockerFilesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List files, optionally filtered by folder
+ */
+
+export function useListLockerFiles<
+  TData = Awaited<ReturnType<typeof listLockerFiles>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListLockerFilesParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listLockerFiles>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListLockerFilesQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save file metadata after a successful presigned upload
+ */
+export const getCreateLockerFileUrl = () => {
+  return `/api/locker/files`;
+};
+
+export const createLockerFile = async (
+  createLockerFileBody: CreateLockerFileBody,
+  options?: RequestInit,
+): Promise<LockerFile> => {
+  return customFetch<LockerFile>(getCreateLockerFileUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createLockerFileBody),
+  });
+};
+
+export const getCreateLockerFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLockerFile>>,
+    TError,
+    { data: BodyType<CreateLockerFileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createLockerFile>>,
+  TError,
+  { data: BodyType<CreateLockerFileBody> },
+  TContext
+> => {
+  const mutationKey = ["createLockerFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createLockerFile>>,
+    { data: BodyType<CreateLockerFileBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createLockerFile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateLockerFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createLockerFile>>
+>;
+export type CreateLockerFileMutationBody = BodyType<CreateLockerFileBody>;
+export type CreateLockerFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Save file metadata after a successful presigned upload
+ */
+export const useCreateLockerFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createLockerFile>>,
+    TError,
+    { data: BodyType<CreateLockerFileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createLockerFile>>,
+  TError,
+  { data: BodyType<CreateLockerFileBody> },
+  TContext
+> => {
+  return useMutation(getCreateLockerFileMutationOptions(options));
+};
+
+/**
+ * @summary Update file name or move to a different folder
+ */
+export const getUpdateLockerFileUrl = (fileId: string) => {
+  return `/api/locker/files/${fileId}`;
+};
+
+export const updateLockerFile = async (
+  fileId: string,
+  updateLockerFileBody: UpdateLockerFileBody,
+  options?: RequestInit,
+): Promise<LockerFile> => {
+  return customFetch<LockerFile>(getUpdateLockerFileUrl(fileId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateLockerFileBody),
+  });
+};
+
+export const getUpdateLockerFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLockerFile>>,
+    TError,
+    { fileId: string; data: BodyType<UpdateLockerFileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateLockerFile>>,
+  TError,
+  { fileId: string; data: BodyType<UpdateLockerFileBody> },
+  TContext
+> => {
+  const mutationKey = ["updateLockerFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateLockerFile>>,
+    { fileId: string; data: BodyType<UpdateLockerFileBody> }
+  > = (props) => {
+    const { fileId, data } = props ?? {};
+
+    return updateLockerFile(fileId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateLockerFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateLockerFile>>
+>;
+export type UpdateLockerFileMutationBody = BodyType<UpdateLockerFileBody>;
+export type UpdateLockerFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update file name or move to a different folder
+ */
+export const useUpdateLockerFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateLockerFile>>,
+    TError,
+    { fileId: string; data: BodyType<UpdateLockerFileBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateLockerFile>>,
+  TError,
+  { fileId: string; data: BodyType<UpdateLockerFileBody> },
+  TContext
+> => {
+  return useMutation(getUpdateLockerFileMutationOptions(options));
+};
+
+/**
+ * @summary Delete a file record
+ */
+export const getDeleteLockerFileUrl = (fileId: string) => {
+  return `/api/locker/files/${fileId}`;
+};
+
+export const deleteLockerFile = async (
+  fileId: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteLockerFileUrl(fileId), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteLockerFileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteLockerFile>>,
+    TError,
+    { fileId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteLockerFile>>,
+  TError,
+  { fileId: string },
+  TContext
+> => {
+  const mutationKey = ["deleteLockerFile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteLockerFile>>,
+    { fileId: string }
+  > = (props) => {
+    const { fileId } = props ?? {};
+
+    return deleteLockerFile(fileId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteLockerFileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteLockerFile>>
+>;
+
+export type DeleteLockerFileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a file record
+ */
+export const useDeleteLockerFile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteLockerFile>>,
+    TError,
+    { fileId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteLockerFile>>,
+  TError,
+  { fileId: string },
+  TContext
+> => {
+  return useMutation(getDeleteLockerFileMutationOptions(options));
+};
 
 /**
  * @summary Platform-wide stats for admin dashboard
