@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -12,6 +11,7 @@ import {
   Alert,
   Clipboard,
 } from "react-native";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
@@ -161,9 +161,8 @@ export default function TransferScreen() {
         <View style={{ width: 30 }} />
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: insets.bottom + 40 }}
-        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
         {/* Explainer */}
@@ -362,7 +361,7 @@ export default function TransferScreen() {
         <Text style={[footerStyles.note, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
           The new owner must have a Casa Dossier account to accept the transfer. The link expires in 30 days.
         </Text>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }
