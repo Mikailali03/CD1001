@@ -55,7 +55,11 @@ const URGENCY_ICON: Record<string, keyof typeof Feather.glyphMap> = {
 function ActiveServiceRequests({ colors, onJobPress }: { colors: ReturnType<typeof useColors>; onJobPress: (id: string) => void }) {
   const { data: jobs } = useListMarketplaceJobs();
   const activeJobs = (jobs ?? []).filter(
-    (j: MarketplaceJob) => j.status === "open" || j.status === "claimed"
+    (j: MarketplaceJob) =>
+      j.status === "open" ||
+      j.status === "claimed" ||
+      (j.status as string) === "en_route" ||
+      (j.status as string) === "arrived"
   );
   if (!activeJobs.length) return null;
 
@@ -89,8 +93,27 @@ function ActiveServiceRequests({ colors, onJobPress }: { colors: ReturnType<type
           const urgency = job.urgency ?? "medium";
           const accentColor = URGENCY_BORDER[urgency] ?? "#d97706";
           const iconName = URGENCY_ICON[urgency] ?? "clock";
-          const isClaimed = job.status === "claimed";
+          const jobStatus = job.status as string;
           const scheduledAt = (job as any).scheduledAt;
+
+          const STATUS_LABEL: Record<string, string> = {
+            open:     "Awaiting Pro",
+            claimed:  "Pro Assigned",
+            en_route: "On the Way",
+            arrived:  "Arrived",
+          };
+          const STATUS_BG: Record<string, string> = {
+            open:     colors.muted,
+            claimed:  colors.primary + "18",
+            en_route: "#3b82f620",
+            arrived:  "#10b98120",
+          };
+          const STATUS_COLOR: Record<string, string> = {
+            open:     colors.mutedForeground,
+            claimed:  colors.primary,
+            en_route: "#3b82f6",
+            arrived:  "#10b981",
+          };
 
           return (
             <TouchableOpacity
@@ -117,13 +140,13 @@ function ActiveServiceRequests({ colors, onJobPress }: { colors: ReturnType<type
                 </Text>
                 <View style={[
                   activeStyles.statusBadge,
-                  { backgroundColor: isClaimed ? colors.primary + "18" : colors.muted },
+                  { backgroundColor: STATUS_BG[jobStatus] ?? colors.muted },
                 ]}>
                   <Text style={[
                     activeStyles.statusText,
-                    { color: isClaimed ? colors.primary : colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
+                    { color: STATUS_COLOR[jobStatus] ?? colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
                   ]}>
-                    {isClaimed ? "Pro Assigned" : "Awaiting Pro"}
+                    {STATUS_LABEL[jobStatus] ?? jobStatus}
                   </Text>
                 </View>
               </View>
@@ -136,8 +159,8 @@ function ActiveServiceRequests({ colors, onJobPress }: { colors: ReturnType<type
                 {job.description}
               </Text>
 
-              {/* Scheduled row (only if claimed) */}
-              {isClaimed && (
+              {/* Scheduled row (once a pro is assigned) */}
+              {jobStatus !== "open" && (
                 <View style={activeStyles.scheduleRow}>
                   <Feather name="calendar" size={11} color={colors.mutedForeground} />
                   {scheduledAt ? (
