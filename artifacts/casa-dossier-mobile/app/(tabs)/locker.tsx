@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   Text,
@@ -50,13 +51,14 @@ export default function LockerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<LockerFile | null>(null);
   const [activeFolderId, setActiveFolderId] = useState<FolderTabId>("all");
 
-  const { data: rawFolders = [], refetch: refetchFolders } = useListLockerFolders({ query: {} });
+  const { data: rawFolders = [] } = useListLockerFolders({ query: {} });
   const folders = rawFolders as LockerFolder[];
 
   // Pass folderId param only when filtering by a specific folder
@@ -64,7 +66,7 @@ export default function LockerScreen() {
     ? { folderId: activeFolderId }
     : {};
 
-  const { data: rawFiles = [], isLoading, refetch } = useListLockerFiles(
+  const { data: rawFiles = [], isLoading } = useListLockerFiles(
     filesParams,
     { query: {} }
   );
@@ -84,7 +86,10 @@ export default function LockerScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Promise.all([refetch(), refetchFolders()]);
+    await Promise.all([
+      queryClient.invalidateQueries(),
+      new Promise((r) => setTimeout(r, 600)),
+    ]);
     setRefreshing(false);
   };
 
@@ -166,7 +171,7 @@ export default function LockerScreen() {
         setUploadProgress(Math.round(((i + 1) / result.assets.length) * 100));
       }
 
-      await Promise.all([refetch(), refetchFolders()]);
+      await queryClient.invalidateQueries();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert("Upload Failed", "Something went wrong. Please try again.");

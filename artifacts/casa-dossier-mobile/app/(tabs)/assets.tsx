@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
   Text,
@@ -119,13 +120,14 @@ export default function AssetsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: properties = [] } = useListProperties();
   const activeProperty = properties[0];
   const propertyId = activeProperty?.id ?? "";
 
-  const { data: rawAssets = [], isLoading, refetch } = useListAssets(
+  const { data: rawAssets = [], isLoading } = useListAssets(
     propertyId,
     {},
     { query: { enabled: !!propertyId } }
@@ -136,7 +138,10 @@ export default function AssetsScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await refetch();
+    await Promise.all([
+      queryClient.invalidateQueries(),
+      new Promise((r) => setTimeout(r, 600)),
+    ]);
     setRefreshing(false);
   };
 

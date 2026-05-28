@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import {
   View,
@@ -428,14 +429,15 @@ export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [healthModalOpen, setHealthModalOpen] = useState(false);
 
-  const { data: properties = [], isLoading: propsLoading, refetch: refetchProps } = useListProperties();
+  const { data: properties = [], isLoading: propsLoading } = useListProperties();
   const selectedProperty = properties[selectedIdx];
 
-  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useGetPropertySummary(
+  const { data: summary, isLoading: summaryLoading } = useGetPropertySummary(
     selectedProperty?.id ?? "",
     { query: { enabled: !!selectedProperty?.id, queryKey: ["property-summary", selectedProperty?.id] } }
   );
@@ -443,7 +445,10 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await Promise.all([refetchProps(), refetchSummary()]);
+    await Promise.all([
+      queryClient.invalidateQueries(),
+      new Promise((r) => setTimeout(r, 600)),
+    ]);
     setRefreshing(false);
   };
 
