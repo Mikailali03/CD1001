@@ -91,13 +91,14 @@ async function syncNotifications(getToken: () => Promise<string | null>) {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const base = domain ? `https://${domain}` : "";
 
-  const { status: existing } = await Notifications.getPermissionsAsync();
-  let finalStatus = existing;
-  if (existing !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
+  type Perm = { granted: boolean; canAskAgain: boolean };
+  const existing = (await Notifications.getPermissionsAsync()) as unknown as Perm;
+  let isGranted = existing.granted;
+  if (!existing.granted && existing.canAskAgain) {
+    const asked = (await Notifications.requestPermissionsAsync()) as unknown as Perm;
+    isGranted = asked.granted;
   }
-  if (finalStatus !== "granted") return;
+  if (!isGranted) return;
 
   const authToken = await getToken();
   if (!authToken) return;
@@ -205,6 +206,7 @@ function AuthGate() {
       <Stack.Screen name="diy-guides" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="guide/[id]" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="find-a-pro" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="settings" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="upgrade" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="report" options={{ animation: "slide_from_right" }} />
       <Stack.Screen name="transfer" options={{ animation: "slide_from_right" }} />

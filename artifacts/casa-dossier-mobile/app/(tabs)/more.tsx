@@ -130,7 +130,10 @@ export default function MoreScreen() {
       icon: "settings",
       label: "Settings",
       sublabel: "Notifications, preferences",
-      onPress: () => {},
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push("/settings");
+      },
     },
     {
       icon: "star",
