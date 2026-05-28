@@ -684,35 +684,43 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
 
         {/* ── Step: Generating Tasks ── */}
         {step === "generating" && (
-          <div className="px-6 py-12 flex flex-col items-center text-center gap-5">
-            <div className="relative">
-              <div className="bg-primary/10 rounded-full p-5">
-                <Sparkles className="h-8 w-8 text-primary animate-pulse" />
-              </div>
-              <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
-                <Loader2 className="h-5 w-5 text-primary animate-spin" />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <h3 className="text-lg font-bold">AI Research Agent at work</h3>
-              <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-                Looking up the official {brand || "manufacturer"} maintenance schedule for{" "}
-                {model ? <><strong>{model}</strong> and generating</> : "your asset and generating"} step-by-step DIY instructions…
-              </p>
-            </div>
-            <div className="w-full max-w-xs space-y-2 pt-2">
-              {[
-                `Identifying ${brand || "manufacturer"} service requirements`,
-                "Generating step-by-step DIY instructions",
-                "Scheduling due dates based on install date",
-              ].map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                  {s}
+          <>
+            <div className="px-6 py-12 flex flex-col items-center text-center gap-5">
+              <div className="relative">
+                <div className="bg-primary/10 rounded-full p-5">
+                  <Sparkles className="h-8 w-8 text-primary animate-pulse" />
                 </div>
-              ))}
+                <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
+                  <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="text-lg font-bold">AI Research Agent at work</h3>
+                <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+                  Looking up the official {brand || "manufacturer"} maintenance schedule for{" "}
+                  {model ? <><strong>{model}</strong> and generating</> : "your asset and generating"} step-by-step DIY instructions…
+                </p>
+              </div>
+              <div className="w-full max-w-xs space-y-2 pt-2">
+                {[
+                  `Identifying ${brand || "manufacturer"} service requirements`,
+                  "Generating step-by-step DIY instructions",
+                  "Scheduling due dates based on install date",
+                ].map((s, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3 w-3 animate-spin shrink-0" />
+                    {s}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+            <div className="border-t px-6 py-4 flex flex-col items-center gap-1.5">
+              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => handleClose(false)}>
+                Close — I'll check back later
+              </Button>
+              <p className="text-xs text-muted-foreground">Your plan will finish generating in the background.</p>
+            </div>
+          </>
         )}
 
         {/* ── Step: Done ── */}

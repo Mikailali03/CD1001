@@ -625,29 +625,45 @@ export default function AddAssetScreen() {
 
       {/* ── Step: Generating ── */}
       {step === "generating" && (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32, gap: 24 }}>
-          <View style={[s.genIconWrap, { backgroundColor: colors.primary + "15" }]}>
-            <ActivityIndicator color={colors.primary} size="large" />
+        <View style={{ flex: 1, paddingHorizontal: 32 }}>
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 24 }}>
+            <View style={[s.genIconWrap, { backgroundColor: colors.primary + "15" }]}>
+              <ActivityIndicator color={colors.primary} size="large" />
+            </View>
+            <View style={{ alignItems: "center", gap: 8 }}>
+              <Text style={[{ fontSize: 18, color: colors.foreground, fontFamily: "Inter_700Bold", textAlign: "center" }]}>
+                {generatingStatus}
+              </Text>
+              <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 }]}>
+                We're researching manufacturer specs and building a custom maintenance schedule for your {name || "asset"}.
+              </Text>
+            </View>
+            <View style={[s.genBullets, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {[
+                { icon: "check-circle" as const, text: "Asset saved to your property" },
+                { icon: "cpu" as const, text: "Analyzing manufacturer specs" },
+                { icon: "calendar" as const, text: "Scheduling maintenance tasks" },
+              ].map(({ icon, text }) => (
+                <View key={text} style={s.genBulletRow}>
+                  <Feather name={icon} size={14} color={colors.primary} />
+                  <Text style={[{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{text}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-          <View style={{ alignItems: "center", gap: 8 }}>
-            <Text style={[{ fontSize: 18, color: colors.foreground, fontFamily: "Inter_700Bold", textAlign: "center" }]}>
-              {generatingStatus}
+          <View style={{ paddingBottom: insets.bottom + 16, alignItems: "center", gap: 6 }}>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); router.back(); }}
+              activeOpacity={0.7}
+              style={{ paddingVertical: 10, paddingHorizontal: 20 }}
+            >
+              <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                Close — I'll check back later
+              </Text>
+            </TouchableOpacity>
+            <Text style={[{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }]}>
+              Your plan will finish generating in the background.
             </Text>
-            <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 19 }]}>
-              We're researching manufacturer specs and building a custom maintenance schedule for your {name || "asset"}.
-            </Text>
-          </View>
-          <View style={[s.genBullets, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {[
-              { icon: "check-circle" as const, text: "Asset saved to your property" },
-              { icon: "cpu" as const, text: "Analyzing manufacturer specs" },
-              { icon: "calendar" as const, text: "Scheduling maintenance tasks" },
-            ].map(({ icon, text }) => (
-              <View key={text} style={s.genBulletRow}>
-                <Feather name={icon} size={14} color={colors.primary} />
-                <Text style={[{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{text}</Text>
-              </View>
-            ))}
           </View>
         </View>
       )}
