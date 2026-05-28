@@ -12,8 +12,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
 import React, { useEffect, useRef } from "react";
-import { Platform } from "react-native";
+import { Platform, AppState } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -37,28 +38,95 @@ Notifications.setNotificationHandler({
 
 const queryClient = new QueryClient();
 
-async function registerForPushNotifications(
-  getToken: () => Promise<string | null>
+// True when running inside Expo Go (not a standalone/dev build)
+const isExpoGo = Constants.appOwnership === "expo";
+
+async function scheduleLocalMaintenanceNotifications(
+  tasks: Array<{ id: string; title: string; assetName: string; nextDueDate: string }>
 ) {
+  await Notifications.cancelAllScheduledNotificationsAsync();
+
+  const now = new Date();
+
+  for (const task of tasks) {
+    const dueDate = new Date(`${task.nextDueDate}T08:00:00`);
+
+    // 3-day advance reminder
+    const reminderDate = new Date(dueDate);
+    reminderDate.setDate(reminderDate.getDate() - 3);
+    if (reminderDate > now) {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Maintenance Reminder",
+          body: `"${task.title}" on your ${task.assetName} is due in 3 days.`,
+          data: { taskId: task.id },
+          sound: true,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: reminderDate,
+        },
+      });
+    }
+
+    // On-the-day reminder
+    if (dueDate > now) {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Maintenance Due Today",
+          body: `"${task.title}" on your ${task.assetName} is due today.`,
+          data: { taskId: task.id },
+          sound: true,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: dueDate,
+        },
+      });
+    }
+  }
+}
+
+async function syncNotifications(getToken: () => Promise<string | null>) {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const base = domain ? `https://${domain}` : "";
 
-  try {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+  const { status: existing } = await Notifications.getPermissionsAsync();
+  let finalStatus = existing;
+  if (existing !== "granted") {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
+  }
+  if (finalStatus !== "granted") return;
 
-    if (existingStatus !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
+  const authToken = await getToken();
+  if (!authToken) return;
+
+  if (isExpoGo) {
+    // Remote push not supported in Expo Go SDK 53+ — use local scheduled notifications instead
+    try {
+      const res = await fetch(`${base}/api/maintenance/upcoming`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (res.ok) {
+        const { tasks } = await res.json();
+        await scheduleLocalMaintenanceNotifications(tasks);
+      }
+    } catch {
+      // Best-effort — never crash
     }
+    return;
+  }
 
-    if (finalStatus !== "granted") return;
+  // Production / dev-build: register Expo push token for server-side delivery
+  try {
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
 
-    const tokenData = await Notifications.getExpoPushTokenAsync();
-    const pushToken = tokenData.data;
-
-    const authToken = await getToken();
-    if (!authToken) return;
+    const tokenData = await Notifications.getExpoPushTokenAsync(
+      projectId ? { projectId } : undefined
+    );
 
     await fetch(`${base}/api/push-tokens`, {
       method: "POST",
@@ -66,10 +134,19 @@ async function registerForPushNotifications(
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
       },
-      body: JSON.stringify({ token: pushToken, platform: Platform.OS }),
+      body: JSON.stringify({ token: tokenData.data, platform: Platform.OS }),
     });
+
+    // Also schedule local fallbacks
+    const res = await fetch(`${base}/api/maintenance/upcoming`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (res.ok) {
+      const { tasks } = await res.json();
+      await scheduleLocalMaintenanceNotifications(tasks);
+    }
   } catch {
-    // Push registration is best-effort — never crash the app
+    // Best-effort
   }
 }
 
@@ -77,7 +154,7 @@ function AuthGate() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const pushRegistered = useRef(false);
+  const notifSynced = useRef(false);
 
   useEffect(() => {
     setAuthTokenGetter(() => getToken());
@@ -93,15 +170,26 @@ function AuthGate() {
     }
   }, [isSignedIn, isLoaded, segments]);
 
-  // Register for push notifications once after sign-in
+  // Sync notifications on sign-in
   useEffect(() => {
-    if (isSignedIn && !pushRegistered.current) {
-      pushRegistered.current = true;
-      registerForPushNotifications(getToken);
+    if (isSignedIn && !notifSynced.current) {
+      notifSynced.current = true;
+      syncNotifications(getToken);
     }
     if (!isSignedIn) {
-      pushRegistered.current = false;
+      notifSynced.current = false;
     }
+  }, [isSignedIn, getToken]);
+
+  // Re-sync when app comes back to foreground (refreshes scheduled notifications)
+  useEffect(() => {
+    if (!isSignedIn) return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        syncNotifications(getToken);
+      }
+    });
+    return () => sub.remove();
   }, [isSignedIn, getToken]);
 
   return (

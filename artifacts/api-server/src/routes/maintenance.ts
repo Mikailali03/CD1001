@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { maintenanceTasksTable, serviceRecordsTable, assetsTable } from "@workspace/db";
-import { eq, and, lte, isNull } from "drizzle-orm";
+import { eq, and, lte, gte, isNull, inArray } from "drizzle-orm";
+import { propertiesTable } from "@workspace/db";
 import { z } from "zod";
 import {
   ListMaintenanceTasksParams,
@@ -207,6 +208,45 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     .returning();
 
   res.json({ completedTask, nextTask, serviceRecord });
+});
+
+// ── User: upcoming tasks across all properties (for local push scheduling) ──
+router.get("/maintenance/upcoming", requireAuth(), async (req, res) => {
+  const sevenDaysOut = new Date();
+  sevenDaysOut.setDate(sevenDaysOut.getDate() + 7);
+  const today = new Date().toISOString().split("T")[0]!;
+  const sevenDaysLater = sevenDaysOut.toISOString().split("T")[0]!;
+
+  const userProperties = await db
+    .select({ id: propertiesTable.id })
+    .from(propertiesTable)
+    .where(eq(propertiesTable.userId, req.userId));
+
+  if (!userProperties.length) return res.json({ tasks: [] });
+
+  const propertyIds = userProperties.map((p) => p.id);
+
+  const tasks = await db
+    .select({
+      id: maintenanceTasksTable.id,
+      title: maintenanceTasksTable.title,
+      nextDueDate: maintenanceTasksTable.nextDueDate,
+      assetId: assetsTable.id,
+      assetName: assetsTable.name,
+    })
+    .from(maintenanceTasksTable)
+    .innerJoin(assetsTable, eq(maintenanceTasksTable.assetId, assetsTable.id))
+    .where(
+      and(
+        inArray(assetsTable.propertyId, propertyIds),
+        gte(maintenanceTasksTable.nextDueDate, today),
+        lte(maintenanceTasksTable.nextDueDate, sevenDaysLater),
+        isNull(maintenanceTasksTable.completedAt),
+      )
+    )
+    .orderBy(maintenanceTasksTable.nextDueDate);
+
+  res.json({ tasks });
 });
 
 export default router;
