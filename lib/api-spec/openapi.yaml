@@ -680,6 +680,58 @@ paths:
         "404":
           description: Job not found
 
+  /marketplace/jobs/{jobId}/en-route:
+    post:
+      operationId: markJobEnRoute
+      tags: [technician]
+      summary: Mark technician as on the way — only available on the day of the appointment
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status updated to en_route
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: Not the day of the appointment or wrong status
+        "404":
+          description: Job not found or not assigned to you
+
+  /marketplace/jobs/{jobId}/arrived:
+    post:
+      operationId: markJobArrived
+      tags: [technician]
+      summary: Mark technician as arrived — only available after en_route
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status updated to arrived
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        "400":
+          description: Not in en_route status
+        "404":
+          description: Job not found or not assigned to you
+
   /marketplace/jobs/{jobId}/complete:
     post:
       operationId: completeMarketplaceJob

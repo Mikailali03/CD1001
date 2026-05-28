@@ -8,7 +8,7 @@ export const marketplaceJobsTable = pgTable("marketplace_jobs", {
   assetId: text("asset_id").notNull().references(() => assetsTable.id, { onDelete: "cascade" }),
   description: text("description").notNull(),
   urgency: text("urgency").notNull().default("medium").$type<"low" | "medium" | "high" | "emergency">(),
-  status: text("status").notNull().default("open").$type<"open" | "claimed" | "completed">(),
+  status: text("status").notNull().default("open").$type<"open" | "claimed" | "en_route" | "arrived" | "completed">(),
   contactPhone: text("contact_phone"),
   technicianId: text("technician_id"),
   technicianNumber: text("technician_number"),

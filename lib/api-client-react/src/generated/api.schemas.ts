@@ -924,6 +924,14 @@ export type ScheduleMarketplaceJob200 = {
   scheduledAt?: string;
 };
 
+export type MarkJobEnRoute200 = {
+  ok?: boolean;
+};
+
+export type MarkJobArrived200 = {
+  ok?: boolean;
+};
+
 export type CompleteMarketplaceJob200 = {
   ok?: boolean;
   serviceRecordId?: string;

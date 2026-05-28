@@ -52,6 +52,8 @@ import type {
   LockerFile,
   LockerFolder,
   MaintenanceTask,
+  MarkJobArrived200,
+  MarkJobEnRoute200,
   MarketplaceJob,
   Property,
   PropertySummary,
@@ -2832,6 +2834,174 @@ export const useScheduleMarketplaceJob = <
   TContext
 > => {
   return useMutation(getScheduleMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary Mark technician as on the way — only available on the day of the appointment
+ */
+export const getMarkJobEnRouteUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/en-route`;
+};
+
+export const markJobEnRoute = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<MarkJobEnRoute200> => {
+  return customFetch<MarkJobEnRoute200>(getMarkJobEnRouteUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getMarkJobEnRouteMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markJobEnRoute>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markJobEnRoute>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  const mutationKey = ["markJobEnRoute"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markJobEnRoute>>,
+    { jobId: string }
+  > = (props) => {
+    const { jobId } = props ?? {};
+
+    return markJobEnRoute(jobId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkJobEnRouteMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markJobEnRoute>>
+>;
+
+export type MarkJobEnRouteMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark technician as on the way — only available on the day of the appointment
+ */
+export const useMarkJobEnRoute = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markJobEnRoute>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markJobEnRoute>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  return useMutation(getMarkJobEnRouteMutationOptions(options));
+};
+
+/**
+ * @summary Mark technician as arrived — only available after en_route
+ */
+export const getMarkJobArrivedUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/arrived`;
+};
+
+export const markJobArrived = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<MarkJobArrived200> => {
+  return customFetch<MarkJobArrived200>(getMarkJobArrivedUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getMarkJobArrivedMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markJobArrived>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof markJobArrived>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  const mutationKey = ["markJobArrived"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof markJobArrived>>,
+    { jobId: string }
+  > = (props) => {
+    const { jobId } = props ?? {};
+
+    return markJobArrived(jobId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type MarkJobArrivedMutationResult = NonNullable<
+  Awaited<ReturnType<typeof markJobArrived>>
+>;
+
+export type MarkJobArrivedMutationError = ErrorType<void>;
+
+/**
+ * @summary Mark technician as arrived — only available after en_route
+ */
+export const useMarkJobArrived = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof markJobArrived>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof markJobArrived>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  return useMutation(getMarkJobArrivedMutationOptions(options));
 };
 
 /**

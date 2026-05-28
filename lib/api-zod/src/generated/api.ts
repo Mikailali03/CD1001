@@ -890,6 +890,28 @@ export const ScheduleMarketplaceJobResponse = zod.object({
 });
 
 /**
+ * @summary Mark technician as on the way — only available on the day of the appointment
+ */
+export const MarkJobEnRouteParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const MarkJobEnRouteResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
+ * @summary Mark technician as arrived — only available after en_route
+ */
+export const MarkJobArrivedParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const MarkJobArrivedResponse = zod.object({
+  ok: zod.boolean().optional(),
+});
+
+/**
  * @summary Mark a claimed job as complete and write a verified service record
  */
 export const CompleteMarketplaceJobParams = zod.object({

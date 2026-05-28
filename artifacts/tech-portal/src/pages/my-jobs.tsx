@@ -4,6 +4,8 @@ import {
   useGetMarketplaceJobDetails,
   useScheduleMarketplaceJob,
   useCompleteMarketplaceJob,
+  useMarkJobEnRoute,
+  useMarkJobArrived,
   getGetMarketplaceJobDetailsQueryKey,
   useGetUserProfile,
   getGetUserProfileQueryKey,
@@ -40,6 +42,8 @@ import {
   Briefcase,
   ClipboardCheck,
   DollarSign,
+  Navigation,
+  CircleDot,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -117,6 +121,34 @@ export default function MyJobsPage() {
     },
   });
 
+  const enRouteMutation = useMarkJobEnRoute({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["listAssignedJobs"] });
+        queryClient.invalidateQueries({ queryKey: getGetMarketplaceJobDetailsQueryKey(selectedJobId ?? "") });
+        toast({ title: "Status updated", description: "The homeowner has been notified you're on the way." });
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.error ?? "Could not update status.";
+        toast({ title: "Error", description: msg, variant: "destructive" });
+      },
+    },
+  });
+
+  const arrivedMutation = useMarkJobArrived({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["listAssignedJobs"] });
+        queryClient.invalidateQueries({ queryKey: getGetMarketplaceJobDetailsQueryKey(selectedJobId ?? "") });
+        toast({ title: "Arrival confirmed", description: "The homeowner has been notified you've arrived." });
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.error ?? "Could not update status.";
+        toast({ title: "Error", description: msg, variant: "destructive" });
+      },
+    },
+  });
+
   function openJob(jobId: string) {
     setSelectedJobId(jobId);
     setSheetOpen(true);
@@ -149,6 +181,16 @@ export default function MyJobsPage() {
   }
 
   const jobHasSchedule = !!(jobDetail as any)?.scheduledAt;
+  const jobStatus = (jobDetail as any)?.status as string | undefined;
+
+  // Is today the scheduled day?
+  const isAppointmentDay = (() => {
+    const scheduledAt = (jobDetail as any)?.scheduledAt;
+    if (!scheduledAt) return false;
+    const d = new Date(scheduledAt);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  })();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
@@ -297,7 +339,13 @@ export default function MyJobsPage() {
                       <Badge variant="outline" className={`${uc.textColor} text-xs`}>
                         {uc.icon}<span className="ml-1">{uc.label}</span>
                       </Badge>
-                      <Badge variant="secondary" className="text-xs">Assigned to you</Badge>
+                      {jobStatus === "en_route" ? (
+                        <Badge className="text-xs bg-blue-500 hover:bg-blue-500 text-white">On the Way</Badge>
+                      ) : jobStatus === "arrived" ? (
+                        <Badge className="text-xs bg-emerald-600 hover:bg-emerald-600 text-white">Arrived</Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs">Assigned to you</Badge>
+                      )}
                     </div>
                   );
                 })()}
@@ -419,16 +467,50 @@ export default function MyJobsPage() {
                 </Button>
               </div>
 
-              {/* ── Completion section — only shown once a date is set ── */}
+              {/* ── Step-by-step: On the Way → Arrived → Complete ── */}
               {jobHasSchedule && (
                 <div className="px-6 pb-6 pt-2 border-t border-border space-y-3">
-                  {!showCompletionForm ? (
+
+                  {/* Step 1: On the Way — only for claimed jobs */}
+                  {jobStatus === "claimed" && (
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full gap-2"
+                        disabled={!isAppointmentDay || enRouteMutation.isPending}
+                        onClick={() => selectedJobId && enRouteMutation.mutate({ jobId: selectedJobId })}
+                        title={!isAppointmentDay ? "Available on the day of the appointment" : undefined}
+                      >
+                        <Navigation className="h-4 w-4" />
+                        {enRouteMutation.isPending ? "Updating…" : "I'm On the Way"}
+                      </Button>
+                      {!isAppointmentDay && (
+                        <p className="text-xs text-center text-muted-foreground">
+                          Available on {format(new Date((jobDetail as any).scheduledAt), "EEEE, MMM d")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 2: I Have Arrived — only for en_route jobs */}
+                  {jobStatus === "en_route" && (
+                    <Button
+                      className="w-full gap-2 bg-blue-600 hover:bg-blue-700"
+                      disabled={arrivedMutation.isPending}
+                      onClick={() => selectedJobId && arrivedMutation.mutate({ jobId: selectedJobId })}
+                    >
+                      <CircleDot className="h-4 w-4" />
+                      {arrivedMutation.isPending ? "Updating…" : "I Have Arrived"}
+                    </Button>
+                  )}
+
+                  {/* Step 3: Complete — only for arrived jobs */}
+                  {jobStatus === "arrived" && (!showCompletionForm ? (
                     <Button
                       className="w-full gap-2"
                       onClick={() => setShowCompletionForm(true)}
                     >
                       <ClipboardCheck className="h-4 w-4" />
-                      Mark Job Complete
+                      Log Completed Work
                     </Button>
                   ) : (
                     <div className="space-y-4">
@@ -507,9 +589,9 @@ export default function MyJobsPage() {
 
                       <p className="text-[11px] text-muted-foreground text-center">
                         This action cannot be undone. The homeowner will see this entry on their home report.
-      </p>
+                      </p>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
             </>

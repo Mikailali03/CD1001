@@ -182,7 +182,7 @@ router.get("/marketplace/jobs/assigned", requireAuth(), async (req, res) => {
     .where(
       and(
         eq(marketplaceJobsTable.technicianId, req.userId),
-        eq(marketplaceJobsTable.status, "claimed")
+        inArray(marketplaceJobsTable.status, ["claimed", "en_route", "arrived"])
       )
     )
     .orderBy(marketplaceJobsTable.acceptedAt);
@@ -297,6 +297,91 @@ router.patch("/marketplace/jobs/:jobId/schedule", requireAuth(), async (req, res
   res.json({ ok: true, scheduledAt: newDate.toISOString() });
 });
 
+// ── Technician: on the way ────────────────────────────────────────────────
+router.post("/marketplace/jobs/:jobId/en-route", requireAuth(), async (req, res) => {
+  const { jobId } = JobParams.parse(req.params);
+
+  const [job] = await db
+    .select()
+    .from(marketplaceJobsTable)
+    .where(and(eq(marketplaceJobsTable.id, jobId), eq(marketplaceJobsTable.technicianId, req.userId)));
+
+  if (!job) return res.status(404).json({ error: "Job not found or not assigned to you" });
+  if (job.status !== "claimed") return res.status(400).json({ error: "Job must be in claimed status" });
+  if (!job.scheduledAt) return res.status(400).json({ error: "No service date set" });
+
+  const scheduledDate = new Date(job.scheduledAt);
+  const today = new Date();
+  const isToday =
+    scheduledDate.getFullYear() === today.getFullYear() &&
+    scheduledDate.getMonth() === today.getMonth() &&
+    scheduledDate.getDate() === today.getDate();
+  if (!isToday) return res.status(400).json({ error: "On the Way is only available on the day of the appointment" });
+
+  await db.update(marketplaceJobsTable).set({ status: "en_route" }).where(eq(marketplaceJobsTable.id, jobId));
+
+  // Notify homeowner
+  const [assetRow] = await db
+    .select({ name: assetsTable.name, propertyId: assetsTable.propertyId })
+    .from(assetsTable)
+    .where(eq(assetsTable.id, job.assetId))
+    .limit(1);
+  if (assetRow) {
+    const [propRow] = await db
+      .select({ userId: propertiesTable.userId })
+      .from(propertiesTable)
+      .where(eq(propertiesTable.id, assetRow.propertyId))
+      .limit(1);
+    if (propRow) {
+      sendPushToUser(propRow.userId, {
+        title: "Technician On the Way",
+        body: `Your technician is heading to you now for the ${assetRow.name} service.`,
+        data: { screen: "job", jobId },
+      }).catch(() => {});
+    }
+  }
+
+  res.json({ ok: true });
+});
+
+// ── Technician: arrived ───────────────────────────────────────────────────
+router.post("/marketplace/jobs/:jobId/arrived", requireAuth(), async (req, res) => {
+  const { jobId } = JobParams.parse(req.params);
+
+  const [job] = await db
+    .select()
+    .from(marketplaceJobsTable)
+    .where(and(eq(marketplaceJobsTable.id, jobId), eq(marketplaceJobsTable.technicianId, req.userId)));
+
+  if (!job) return res.status(404).json({ error: "Job not found or not assigned to you" });
+  if (job.status !== "en_route") return res.status(400).json({ error: "Job must be in en_route status" });
+
+  await db.update(marketplaceJobsTable).set({ status: "arrived" }).where(eq(marketplaceJobsTable.id, jobId));
+
+  // Notify homeowner
+  const [assetRow] = await db
+    .select({ name: assetsTable.name, propertyId: assetsTable.propertyId })
+    .from(assetsTable)
+    .where(eq(assetsTable.id, job.assetId))
+    .limit(1);
+  if (assetRow) {
+    const [propRow] = await db
+      .select({ userId: propertiesTable.userId })
+      .from(propertiesTable)
+      .where(eq(propertiesTable.id, assetRow.propertyId))
+      .limit(1);
+    if (propRow) {
+      sendPushToUser(propRow.userId, {
+        title: "Technician Has Arrived",
+        body: `Your technician has arrived for the ${assetRow.name} service.`,
+        data: { screen: "job", jobId },
+      }).catch(() => {});
+    }
+  }
+
+  res.json({ ok: true });
+});
+
 // ── Technician: complete a job ────────────────────────────────────────────
 const CompleteBody = z.object({
   workSummary: z.string().min(1),
@@ -323,7 +408,7 @@ router.post("/marketplace/jobs/:jobId/complete", requireAuth(), async (req, res)
     );
 
   if (!row) return res.status(404).json({ error: "Job not found or not assigned to you" });
-  if (row.job.status !== "claimed") return res.status(400).json({ error: "Job must be in claimed status to complete" });
+  if (!["claimed", "en_route", "arrived"].includes(row.job.status)) return res.status(400).json({ error: "Job cannot be completed from its current status" });
   if (!row.job.scheduledAt) return res.status(400).json({ error: "A service date must be set before marking complete" });
 
   const [techProfile] = await db
