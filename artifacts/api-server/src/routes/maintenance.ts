@@ -163,7 +163,9 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     .where(eq(maintenanceTasksTable.id, taskId))
     .returning();
 
-  const nextDate = new Date();
+  const originalDueDate = new Date(existing.nextDueDate);
+  const baseDate = originalDueDate > new Date() ? originalDueDate : new Date();
+  const nextDate = new Date(baseDate);
   nextDate.setDate(nextDate.getDate() + existing.intervalDays);
   const nextDueDate = nextDate.toISOString().split("T")[0]!;
 
