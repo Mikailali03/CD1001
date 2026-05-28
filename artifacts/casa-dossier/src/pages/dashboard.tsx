@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
-import homeHeroBadge from "@assets/home_hero_badge_1779907339353.png";
+import homeHeroBadge from "@assets/home_hero_badge_1779979811101.png";
 
 // ── Grade config ───────────────────────────────────────────────────────────────
 const GRADE_CONFIG = {

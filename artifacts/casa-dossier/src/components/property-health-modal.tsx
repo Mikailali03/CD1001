@@ -22,7 +22,7 @@ import {
   ClipboardList,
   ShieldCheck,
 } from "lucide-react";
-import homeHeroBadge from "@assets/home_hero_badge_1779907339353.png";
+import homeHeroBadge from "@assets/home_hero_badge_1779979811101.png";
 
 // ------------------------------------------------------------------
 // Helpers
