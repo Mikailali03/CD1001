@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   StyleSheet,
@@ -11,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import {
   useListProperties,
@@ -20,6 +20,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
+import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Haptics from "expo-haptics";
 
 const URGENCY_OPTIONS = [
@@ -43,15 +44,21 @@ export default function FindAProTab() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const qc = useQueryClient();
+  const params = useLocalSearchParams<{ propertyId?: string; assetId?: string }>();
 
   const { data: properties = [] } = useListProperties();
-  const [propertyId, setPropertyId] = useState("");
-  const [assetId, setAssetId] = useState("");
+  const [propertyId, setPropertyId] = useState(params.propertyId ?? "");
+  const [assetId, setAssetId] = useState(params.assetId ?? "");
   const [urgency, setUrgency] = useState<"low" | "medium" | "high" | "emergency">("medium");
   const [description, setDescription] = useState("");
   const [phone, setPhone] = useState("");
   const [propertyOpen, setPropertyOpen] = useState(false);
   const [assetOpen, setAssetOpen] = useState(false);
+
+  useEffect(() => {
+    if (params.propertyId) setPropertyId(params.propertyId);
+    if (params.assetId) setAssetId(params.assetId);
+  }, [params.propertyId, params.assetId]);
 
   const { data: assets = [] } = useListAssets(propertyId, undefined, {
     query: { enabled: !!propertyId, queryKey: ["assets", propertyId] as const },
@@ -112,10 +119,9 @@ export default function FindAProTab() {
         </View>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollViewCompat
         contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 48, gap: 20 }}
         showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
       >
         {/* Property picker */}
         <View style={{ gap: 8 }}>
@@ -271,7 +277,7 @@ export default function FindAProTab() {
             {createJob.isPending ? "Posting…" : "Post Request"}
           </Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollViewCompat>
     </View>
   );
 }

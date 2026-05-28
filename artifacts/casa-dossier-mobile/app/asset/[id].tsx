@@ -1197,6 +1197,25 @@ export default function AssetDetailScreen() {
           )}
         </View>
 
+        {/* ── Request a Pro CTA ── */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => {
+            Haptics.selectionAsync();
+            router.push({
+              pathname: "/(tabs)/find-a-pro",
+              params: { propertyId: a.propertyId, assetId: a.id },
+            } as any);
+          }}
+          style={[detailStyles.requestProBtn, { backgroundColor: colors.primary }]}
+        >
+          <Feather name="user-check" size={16} color="#fff" />
+          <Text style={[detailStyles.requestProText, { fontFamily: "Inter_600SemiBold" }]}>
+            Request a Service Pro
+          </Text>
+          <Feather name="chevron-right" size={16} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+
         {/* ── Specifications ── */}
         <View style={[detailStyles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <SectionHeader title="Specifications" icon="info" colors={colors} />
@@ -1375,4 +1394,10 @@ const detailStyles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 8,
     paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  requestProBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    borderRadius: 14, paddingVertical: 14, paddingHorizontal: 18,
+    marginBottom: 16,
+  },
+  requestProText: { flex: 1, color: "#fff", fontSize: 15 },
 });
