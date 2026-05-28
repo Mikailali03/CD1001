@@ -91,12 +91,12 @@ export default function MoreScreen() {
       },
     },
     {
-      icon: "user-check",
-      label: "Find a Pro",
-      sublabel: "Hire trusted local technicians",
+      icon: "image",
+      label: "Digital Locker",
+      sublabel: "Photos & documents for your home",
       onPress: () => {
         Haptics.selectionAsync();
-        router.push("/find-a-pro");
+        router.push("/locker");
       },
     },
     {

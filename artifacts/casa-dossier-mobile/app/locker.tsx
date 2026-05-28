@@ -19,6 +19,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
+import { useRouter } from "expo-router";
 import {
   useListLockerFiles,
   useListLockerFolders,
@@ -31,7 +32,6 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const NUM_COLS = 3;
 const PHOTO_SIZE = (SCREEN_WIDTH - 32 - (NUM_COLS - 1) * 4) / NUM_COLS;
 
-// LockerFile shape from API
 type LockerFile = {
   id: string;
   userId?: string;
@@ -51,6 +51,7 @@ export default function LockerScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getToken } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -61,7 +62,6 @@ export default function LockerScreen() {
   const { data: rawFolders = [] } = useListLockerFolders({ query: {} });
   const folders = rawFolders as LockerFolder[];
 
-  // Pass folderId param only when filtering by a specific folder
   const filesParams = activeFolderId !== "all" && activeFolderId !== "unorganized"
     ? { folderId: activeFolderId }
     : {};
@@ -71,14 +71,11 @@ export default function LockerScreen() {
     { query: {} }
   );
 
-  // Filter client-side for "unorganized" (no folder assigned)
   const allFiles = rawFiles as LockerFile[];
   const photoFiles = allFiles
     .filter((f) => f.contentType.startsWith("image/"))
     .filter((f) =>
-      activeFolderId === "unorganized"
-        ? f.folderId == null
-        : true
+      activeFolderId === "unorganized" ? f.folderId == null : true
     );
 
   const { mutateAsync: createFile } = useCreateLockerFile();
@@ -97,7 +94,6 @@ export default function LockerScreen() {
   const baseUrl = domain ? `https://${domain}` : "";
 
   function photoUrl(f: LockerFile) {
-    // objectPath is like "/objects/uuid.jpg"
     return `${baseUrl}/api/storage${f.objectPath}`;
   }
 
@@ -141,7 +137,6 @@ export default function LockerScreen() {
         const contentType = asset.mimeType ?? "image/jpeg";
         const size = asset.fileSize ?? 0;
 
-        // 1. Get presigned URL
         const urlRes = await fetch(`${baseUrl}/api/storage/uploads/request-url`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -150,11 +145,9 @@ export default function LockerScreen() {
         if (!urlRes.ok) throw new Error("Failed to get upload URL");
         const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
 
-        // 2. Upload to storage
         const blob = await (await fetch(asset.uri)).blob();
         await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
 
-        // 3. Save metadata
         await createFile({
           data: {
             name,
@@ -192,7 +185,6 @@ export default function LockerScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  // Folder tabs
   const folderTabs: { id: FolderTabId; label: string; icon: keyof typeof Feather.glyphMap }[] = [
     { id: "all", label: "All Photos", icon: "image" },
     { id: "unorganized", label: "Unorganized", icon: "folder" },
@@ -210,6 +202,11 @@ export default function LockerScreen() {
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+        <View style={styles.headerNav}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+            <Feather name="chevron-left" size={24} color={colors.foreground} />
+          </TouchableOpacity>
+        </View>
         <View style={styles.headerTop}>
           <View>
             <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
@@ -385,11 +382,12 @@ export default function LockerScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   header: { paddingHorizontal: 20, borderBottomWidth: 1 },
+  headerNav: { paddingTop: 4, marginLeft: -6, marginBottom: 2 },
+  backBtn: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
   headerTop: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
-    paddingTop: 8,
     paddingBottom: 10,
   },
   title: { fontSize: 28 },

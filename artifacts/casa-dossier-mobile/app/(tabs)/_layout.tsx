@@ -19,9 +19,9 @@ function NativeTabLayout() {
         <Icon sf={{ default: "list.bullet.rectangle", selected: "list.bullet.rectangle.fill" }} />
         <Label>Assets</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="locker">
-        <Icon sf={{ default: "photo.on.rectangle", selected: "photo.on.rectangle.fill" }} />
-        <Label>Locker</Label>
+      <NativeTabs.Trigger name="find-a-pro">
+        <Icon sf={{ default: "person.badge.plus", selected: "person.badge.plus.fill" }} />
+        <Label>Find a Pro</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more">
         <Icon sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }} />
@@ -91,14 +91,14 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="locker"
+        name="find-a-pro"
         options={{
-          title: "Locker",
+          title: "Find a Pro",
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="photo.on.rectangle" tintColor={color} size={24} />
+              <SymbolView name="person.badge.plus" tintColor={color} size={24} />
             ) : (
-              <Feather name="image" size={22} color={color} />
+              <Feather name="user-check" size={22} color={color} />
             ),
         }}
       />
