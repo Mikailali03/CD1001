@@ -73,11 +73,12 @@ export default function AddAssetScreen() {
   const [taskCount, setTaskCount] = useState<number | null>(null);
   const [createdAssetId, setCreatedAssetId] = useState<string | null>(null);
   const [generatingStatus, setGeneratingStatus] = useState("Creating asset…");
+  const [planBlocked, setPlanBlocked] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
 
   function reset() {
     setStep("method"); setImageUri(null); setImageBase64(null);
-    setScanBusy(false); setScanResult(null); setScanError(null);
+    setScanBusy(false); setScanResult(null); setScanError(null); setPlanBlocked(false);
     setName(""); setCategory("HVAC"); setBrand(""); setModel("");
     setSerialNumber(""); setInstallDate(""); setReplacementCost(""); setWarrantyExpiry("");
     setSaveBusy(false); setTaskCount(null); setCreatedAssetId(null);
@@ -196,6 +197,9 @@ export default function AddAssetScreen() {
         if (taskRes.ok) {
           const td = await taskRes.json();
           setTaskCount(td.taskCount ?? 0);
+        } else if (taskRes.status === 403) {
+          setPlanBlocked(true);
+          setTaskCount(0);
         } else {
           setTaskCount(0);
         }
@@ -659,11 +663,25 @@ export default function AddAssetScreen() {
               {name || "Asset"} Added!
             </Text>
             <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }]}>
-              {(taskCount ?? 0) > 0
-                ? `${taskCount} maintenance task${taskCount !== 1 ? "s" : ""} have been scheduled based on manufacturer specs.`
-                : "Your asset is now tracked. Maintenance tasks will appear in your inbox."}
+              {planBlocked
+                ? "Asset saved. Upgrade to Basic to unlock AI maintenance plans for all your assets."
+                : (taskCount ?? 0) > 0
+                  ? `${taskCount} maintenance task${taskCount !== 1 ? "s" : ""} have been scheduled based on manufacturer specs.`
+                  : "Your asset is now tracked. Maintenance tasks will appear in your inbox."}
             </Text>
           </View>
+
+          {planBlocked && (
+            <View style={{ width: "100%", borderRadius: 14, borderWidth: 1, borderColor: "#fcd34d", backgroundColor: "#fffbeb", padding: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Feather name="zap" size={18} color="#d97706" />
+              <View style={{ flex: 1 }}>
+                <Text style={[{ fontSize: 13, color: "#92400e", fontFamily: "Inter_600SemiBold" }]}>Free AI plan used</Text>
+                <Text style={[{ fontSize: 12, color: "#b45309", fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 17 }]}>
+                  Upgrade to Basic for unlimited AI maintenance plans on all assets.
+                </Text>
+              </View>
+            </View>
+          )}
 
           <View style={{ width: "100%", gap: 10, marginTop: 8 }}>
             <TouchableOpacity

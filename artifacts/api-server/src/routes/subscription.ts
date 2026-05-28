@@ -21,6 +21,7 @@ router.get("/subscription", requireAuth(), async (req, res) => {
     stripeCustomerId: sub.stripeCustomerId ?? null,
     stripeSubscriptionId: sub.stripeSubscriptionId ?? null,
     aiScansUsed: sub.aiScansUsed ?? 0,
+    aiPlansUsed: sub.aiPlansUsed ?? 0,
   });
 });
 

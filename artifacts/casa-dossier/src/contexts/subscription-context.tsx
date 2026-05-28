@@ -27,6 +27,7 @@ export type SubscriptionData = {
   stripeCustomerId?: string | null;
   stripeSubscriptionId?: string | null;
   aiScansUsed: number;
+  aiPlansUsed: number;
 };
 
 type SubscriptionContextValue = {

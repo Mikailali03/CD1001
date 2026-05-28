@@ -185,6 +185,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
   const { toast } = useToast();
   const { subscription, openUpgradeModal } = useSubscription();
   const aiScanLocked = subscription?.tier === "essential" && (subscription?.aiScansUsed ?? 0) >= 1;
+  const aiPlanLocked = subscription?.tier === "essential" && (subscription?.aiPlansUsed ?? 0) >= 1;
 
   const [step, setStep] = useState<Step>("method");
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -206,6 +207,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
   const [saveBusy, setSaveBusy] = useState(false);
   const [taskCount, setTaskCount] = useState<number | null>(null);
   const [createdAssetId, setCreatedAssetId] = useState<string | null>(null);
+  const [planBlocked, setPlanBlocked] = useState(false);
 
   function reset() {
     setStep("method");
@@ -219,6 +221,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
     setSaveBusy(false);
     setTaskCount(null);
     setCreatedAssetId(null);
+    setPlanBlocked(false);
   }
 
   function handleClose(v: boolean) {
@@ -321,6 +324,11 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
         if (taskRes.ok) {
           const td = await taskRes.json();
           setTaskCount(td.taskCount);
+        } else if (taskRes.status === 403) {
+          setPlanBlocked(true);
+          setTaskCount(0);
+        } else {
+          setTaskCount(0);
         }
       } catch {
         setTaskCount(0);
@@ -717,11 +725,13 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
               <div className="space-y-1.5">
                 <h3 className="text-xl font-bold">{name} is in your dossier!</h3>
                 <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-                  Asset saved and your personalized maintenance schedule has been generated.
+                  {planBlocked
+                    ? "Asset saved. Upgrade to Basic to unlock AI maintenance plans."
+                    : "Asset saved and your personalized maintenance schedule has been generated."}
                 </p>
               </div>
 
-              {taskCount != null && taskCount > 0 && (
+              {taskCount != null && taskCount > 0 ? (
                 <div className="w-full rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
                   <Sparkles className="h-5 w-5 text-emerald-600 shrink-0" />
                   <div className="text-left">
@@ -733,17 +743,32 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
                     </p>
                   </div>
                 </div>
-              )}
+              ) : planBlocked ? (
+                <div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3">
+                  <Sparkles className="h-5 w-5 text-amber-600 shrink-0" />
+                  <div className="text-left flex-1">
+                    <p className="text-sm font-semibold text-amber-800">
+                      Free AI plan used
+                    </p>
+                    <p className="text-xs text-amber-700 mt-0.5">
+                      You've used your 1 free AI maintenance plan. Upgrade to Basic for unlimited plans on all assets.
+                    </p>
+                  </div>
+                  <Button size="sm" className="shrink-0 text-xs" onClick={openUpgradeModal}>
+                    Upgrade
+                  </Button>
+                </div>
+              ) : null}
 
               <div className="grid grid-cols-2 gap-2 w-full text-xs text-muted-foreground">
                 {[
                   { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: "Asset added to dossier" },
-                  { icon: <Sparkles className="h-3.5 w-3.5" />, text: "Maintenance plan generated" },
-                  { icon: <Calendar className="h-3.5 w-3.5" />, text: "Tasks scheduled with due dates" },
+                  { icon: <Sparkles className="h-3.5 w-3.5" />, text: planBlocked ? "AI plan locked (free tier)" : "Maintenance plan generated" },
+                  { icon: <Calendar className="h-3.5 w-3.5" />, text: planBlocked ? "Add tasks manually in asset detail" : "Tasks scheduled with due dates" },
                   { icon: <Wrench className="h-3.5 w-3.5" />, text: "Status set to Verified" },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-1.5">
-                    <span className="text-emerald-600">{item.icon}</span>
+                    <span className={planBlocked && i === 1 ? "text-amber-500" : "text-emerald-600"}>{item.icon}</span>
                     {item.text}
                   </div>
                 ))}

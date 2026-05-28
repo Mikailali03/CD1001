@@ -10,6 +10,7 @@ export const subscriptionsTable = pgTable("subscriptions", {
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   aiScansUsed: integer("ai_scans_used").notNull().default(0),
+  aiPlansUsed: integer("ai_plans_used").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

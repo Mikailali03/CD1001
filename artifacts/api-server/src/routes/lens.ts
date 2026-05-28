@@ -9,6 +9,30 @@ import { getOwnedAsset } from "../lib/access.js";
 
 const router = Router();
 
+async function getSubCounts(userId: string) {
+  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId)).limit(1);
+  return {
+    sub,
+    tier: sub?.tier ?? "essential",
+    scansUsed: sub?.aiScansUsed ?? 0,
+    plansUsed: sub?.aiPlansUsed ?? 0,
+  };
+}
+
+async function upsertSub(userId: string, patch: { aiScansUsed?: number; aiPlansUsed?: number }, hasSub: boolean) {
+  if (hasSub) {
+    await db
+      .update(subscriptionsTable)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(subscriptionsTable.userId, userId));
+  } else {
+    await db
+      .insert(subscriptionsTable)
+      .values({ userId, tier: "essential", aiScansUsed: 0, aiPlansUsed: 0, ...patch })
+      .onConflictDoNothing();
+  }
+}
+
 const ScanBody = z.object({
   imageBase64: z.string().min(10),
   mimeType: z.string().default("image/jpeg"),
@@ -16,6 +40,11 @@ const ScanBody = z.object({
 
 router.post("/assets/scan", requireAuth(), async (req, res) => {
   const { imageBase64, mimeType } = ScanBody.parse(req.body);
+
+  const { sub, tier, scansUsed } = await getSubCounts(req.userId);
+  if (tier === "essential" && scansUsed >= 1) {
+    return res.status(403).json({ error: "Free tier allows 1 AI data plate scan. Upgrade to Basic for unlimited scans." });
+  }
 
   const completion = await openai.chat.completions.create({
     model: "gpt-5.1",
@@ -59,6 +88,11 @@ For "suggestedName": a short plain-English name like "Carrier Central AC Unit" o
 
   try {
     const extracted = JSON.parse(cleaned);
+
+    if (tier === "essential") {
+      await upsertSub(req.userId, { aiScansUsed: scansUsed + 1 }, !!sub);
+    }
+
     res.json(extracted);
   } catch {
     req.log.error({ raw }, "AI Lens: failed to parse OCR response");
@@ -74,10 +108,9 @@ router.post("/assets/:assetId/generate-tasks", requireAuth(), async (req, res) =
   const asset = await getOwnedAsset(assetId, req.userId);
   if (!asset) return res.status(404).json({ error: "Asset not found" });
 
-  // Essential tier: only 1 free AI scan total
-  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, req.userId)).limit(1);
-  if (sub && sub.tier === "essential" && (sub.aiScansUsed ?? 0) >= 1) {
-    return res.status(403).json({ error: "Free tier allows 1 AI scan. Upgrade to Basic for unlimited scans." });
+  const { sub, tier, plansUsed } = await getSubCounts(req.userId);
+  if (tier === "essential" && plansUsed >= 1) {
+    return res.status(403).json({ error: "Free tier allows 1 AI maintenance plan. Upgrade to Basic for unlimited plans." });
   }
 
   const ageYears = asset.installDate
@@ -164,12 +197,8 @@ Field rules:
     .set({ status: "verified", updatedAt: new Date() })
     .where(eq(assetsTable.id, assetId));
 
-  // Increment AI scan counter for essential tier users
-  if (sub && sub.tier === "essential") {
-    await db
-      .update(subscriptionsTable)
-      .set({ aiScansUsed: (sub.aiScansUsed ?? 0) + 1, updatedAt: new Date() })
-      .where(eq(subscriptionsTable.userId, req.userId));
+  if (tier === "essential") {
+    await upsertSub(req.userId, { aiPlansUsed: plansUsed + 1 }, !!sub);
   }
 
   res.json({ tasks: inserted, taskCount: inserted.length });
