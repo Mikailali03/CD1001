@@ -420,6 +420,7 @@ export const MarketplaceJobStatus = {
 export interface MarketplaceJob {
   id: string;
   assetId: string;
+  propertyId: string;
   assetName: string;
   assetCategory: string;
   assetBrand?: string;

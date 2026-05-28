@@ -52,14 +52,15 @@ const URGENCY_ICON: Record<string, keyof typeof Feather.glyphMap> = {
   low:       "clock",
 };
 
-function ActiveServiceRequests({ colors, onJobPress }: { colors: ReturnType<typeof useColors>; onJobPress: (id: string) => void }) {
+function ActiveServiceRequests({ colors, onJobPress, propertyId }: { colors: ReturnType<typeof useColors>; onJobPress: (id: string) => void; propertyId?: string }) {
   const { data: jobs } = useListMarketplaceJobs();
   const activeJobs = (jobs ?? []).filter(
     (j: MarketplaceJob) =>
-      j.status === "open" ||
+      (!propertyId || (j as any).propertyId === propertyId) &&
+      (j.status === "open" ||
       j.status === "claimed" ||
       (j.status as string) === "en_route" ||
-      (j.status as string) === "arrived"
+      (j.status as string) === "arrived")
   );
   if (!activeJobs.length) return null;
 
@@ -635,6 +636,7 @@ export default function HomeScreen() {
         <ActiveServiceRequests
           colors={colors}
           onJobPress={(id) => router.push(`/job/${id}`)}
+          propertyId={selectedProperty?.id}
         />
 
         {/* Maintenance inbox */}

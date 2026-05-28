@@ -687,6 +687,7 @@ export const UpsertUserProfileResponse = zod.object({
 export const ListMarketplaceJobsResponseItem = zod.object({
   id: zod.string(),
   assetId: zod.string(),
+  propertyId: zod.string(),
   assetName: zod.string(),
   assetCategory: zod.string(),
   assetBrand: zod.string().optional(),

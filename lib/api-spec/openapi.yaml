@@ -1948,11 +1948,13 @@ components:
     # ─── Marketplace ────────────────────────────────────────────────────────────
     MarketplaceJob:
       type: object
-      required: [id, assetId, assetName, assetCategory, description, status, createdAt]
+      required: [id, assetId, propertyId, assetName, assetCategory, description, status, createdAt]
       properties:
         id:
           type: string
         assetId:
+          type: string
+        propertyId:
           type: string
         assetName:
           type: string

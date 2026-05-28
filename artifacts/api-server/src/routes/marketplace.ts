@@ -54,6 +54,7 @@ router.get("/marketplace/jobs", requireAuth(), async (req, res) => {
     .select({
       id: marketplaceJobsTable.id,
       assetId: marketplaceJobsTable.assetId,
+      propertyId: assetsTable.propertyId,
       assetName: assetsTable.name,
       assetCategory: assetsTable.category,
       assetBrand: assetsTable.brand,
