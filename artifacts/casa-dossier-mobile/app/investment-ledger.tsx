@@ -12,9 +12,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/expo";
+import { useQuery } from "@tanstack/react-query";
 import { useListProperties } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { format } from "date-fns";
+
+type SubscriptionTier = "essential" | "basic" | "managed" | "concierge";
+const TIER_RANK: Record<SubscriptionTier, number> = { essential: 0, basic: 1, managed: 2, concierge: 3 };
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type RangeKey = "this_month" | "last_month" | "this_quarter" | "last_quarter" | "this_year" | "last_year" | "all_time";
@@ -182,12 +186,25 @@ export default function InvestmentLedgerScreen() {
   const { data: properties = [] } = useListProperties();
   const propertyId = (properties[0] as any)?.id as string | undefined;
 
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const baseUrl = domain ? `https://${domain}` : "";
+
+  const { data: subscription, isLoading: subLoading } = useQuery({
+    queryKey: ["subscription"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${baseUrl}/api/subscription`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Failed");
+      return res.json() as Promise<{ tier: SubscriptionTier }>;
+    },
+  });
+  const isBasicPlus = TIER_RANK[subscription?.tier ?? "essential"] >= 1;
+
   const [range, setRange] = useState<RangeKey>("this_year");
   const [data, setData] = useState<LedgerData | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
 
   useEffect(() => {
     if (!propertyId) return;
@@ -237,36 +254,63 @@ export default function InvestmentLedgerScreen() {
       </View>
 
       {/* Range selector */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.rangeRow}
-        style={[styles.rangeScroll, { borderBottomColor: colors.border, backgroundColor: colors.background }]}
-      >
-        {RANGES.map((r) => (
-          <TouchableOpacity
-            key={r.key}
-            onPress={() => setRange(r.key)}
-            style={[
-              styles.rangeChip,
-              range === r.key
-                ? { backgroundColor: colors.primary, borderColor: colors.primary }
-                : { backgroundColor: "transparent", borderColor: colors.border },
-            ]}
-          >
-            <Text style={[
-              styles.rangeChipText,
-              range === r.key
-                ? { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }
-                : { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}>
-              {r.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {isBasicPlus && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.rangeRow}
+          style={[styles.rangeScroll, { borderBottomColor: colors.border, backgroundColor: colors.background }]}
+        >
+          {RANGES.map((r) => (
+            <TouchableOpacity
+              key={r.key}
+              onPress={() => setRange(r.key)}
+              style={[
+                styles.rangeChip,
+                range === r.key
+                  ? { backgroundColor: colors.primary, borderColor: colors.primary }
+                  : { backgroundColor: "transparent", borderColor: colors.border },
+              ]}
+            >
+              <Text style={[
+                styles.rangeChipText,
+                range === r.key
+                  ? { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }
+                  : { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
+              ]}>
+                {r.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
 
-      {loading ? (
+      {subLoading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      ) : !isBasicPlus ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+          <View style={[styles.lockIconWrap, { backgroundColor: "#10b981" + "15" }]}>
+            <Feather name="lock" size={28} color="#10b981" />
+          </View>
+          <Text style={[{ fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground, textAlign: "center" }]}>
+            Basic Plan Required
+          </Text>
+          <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }]}>
+            Track your maintenance spend vs expectations — available on the{" "}
+            <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Basic</Text> plan and above.
+          </Text>
+          <TouchableOpacity
+            style={[styles.upgradeBtn, { backgroundColor: "#10b981" }]}
+            onPress={() => router.push("/upgrade" as any)}
+            activeOpacity={0.8}
+          >
+            <Feather name="star" size={14} color="#fff" />
+            <Text style={[styles.upgradeBtnText, { fontFamily: "Inter_600SemiBold" }]}>Upgrade to Basic — $9.99/mo</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
@@ -431,7 +475,7 @@ const styles = StyleSheet.create({
   headerIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   headerTitle: { fontSize: 17, lineHeight: 20 },
   headerSub: { fontSize: 11, marginTop: 1 },
-  rangeScroll: { maxHeight: 52, borderBottomWidth: 1 },
+  rangeScroll: { height: 56, borderBottomWidth: 1 },
   rangeRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8, alignItems: "center", flexDirection: "row" },
   rangeChip: {
     paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99, borderWidth: 1,
@@ -465,4 +509,7 @@ const styles = StyleSheet.create({
   },
   periodTotalLabel: { fontSize: 11, letterSpacing: 0.8 },
   periodTotalValue: { fontSize: 15 },
+  lockIconWrap: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  upgradeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 12, marginTop: 8 },
+  upgradeBtnText: { color: "#fff", fontSize: 14 },
 });
