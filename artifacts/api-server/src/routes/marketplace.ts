@@ -12,6 +12,7 @@ import { CreateMarketplaceJobBody } from "@workspace/api-zod";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOwnedAsset } from "../lib/access.js";
+import { sendPushToUser } from "../lib/pushNotifications.js";
 
 const router = Router();
 
@@ -271,6 +272,28 @@ router.patch("/marketplace/jobs/:jobId/schedule", requireAuth(), async (req, res
     .set({ scheduledAt: newDate })
     .where(eq(marketplaceJobsTable.id, jobId));
 
+  // Notify homeowner
+  const [assetRow] = await db
+    .select({ name: assetsTable.name, propertyId: assetsTable.propertyId })
+    .from(assetsTable)
+    .where(eq(assetsTable.id, job.assetId))
+    .limit(1);
+  if (assetRow) {
+    const [propRow] = await db
+      .select({ userId: propertiesTable.userId })
+      .from(propertiesTable)
+      .where(eq(propertiesTable.id, assetRow.propertyId))
+      .limit(1);
+    if (propRow) {
+      const dateStr = newDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      sendPushToUser(propRow.userId, {
+        title: "Service Scheduled",
+        body: `Your ${assetRow.name} service has been scheduled for ${dateStr}.`,
+        data: { screen: "job", jobId },
+      }).catch(() => {});
+    }
+  }
+
   res.json({ ok: true, scheduledAt: newDate.toISOString() });
 });
 
@@ -337,6 +360,20 @@ router.post("/marketplace/jobs/:jobId/complete", requireAuth(), async (req, res)
     .set({ status: "completed" })
     .where(eq(marketplaceJobsTable.id, jobId));
 
+  // Notify homeowner
+  const [propRow] = await db
+    .select({ userId: propertiesTable.userId })
+    .from(propertiesTable)
+    .where(eq(propertiesTable.id, row.asset.propertyId))
+    .limit(1);
+  if (propRow) {
+    sendPushToUser(propRow.userId, {
+      title: "Service Complete ✓",
+      body: `Your ${row.asset.name} service has been completed.`,
+      data: { screen: "job", jobId },
+    }).catch(() => {});
+  }
+
   res.json({ ok: true, serviceRecordId: serviceRecord!.id });
 });
 
@@ -394,6 +431,13 @@ router.post("/marketplace/jobs/:jobId/accept", requireAuth(), async (req, res) =
     : [];
 
   if (!row) return res.status(404).json({ error: "Row not found" });
+
+  // Notify homeowner that a tech has claimed the job
+  sendPushToUser(row.property.userId, {
+    title: "Technician Claimed Your Job",
+    body: `${techName} has claimed your ${row.asset.name} job.`,
+    data: { screen: "job", jobId },
+  }).catch(() => {});
 
   res.json({
     id: row.job.id,

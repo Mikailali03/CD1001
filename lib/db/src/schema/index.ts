@@ -11,3 +11,4 @@ export * from "./user_profiles";
 export * from "./email_templates";
 export * from "./email_triggers";
 export * from "./locker";
+export * from "./push_tokens";

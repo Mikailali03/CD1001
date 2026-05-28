@@ -11,7 +11,9 @@ import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, { useEffect } from "react";
+import * as Notifications from "expo-notifications";
+import React, { useEffect, useRef } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -23,12 +25,59 @@ if (process.env.EXPO_PUBLIC_DOMAIN) {
 
 SplashScreen.preventAutoHideAsync();
 
+// Show notifications when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowList: true,
+  }),
+});
+
 const queryClient = new QueryClient();
+
+async function registerForPushNotifications(
+  getToken: () => Promise<string | null>
+) {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const base = domain ? `https://${domain}` : "";
+
+  try {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== "granted") return;
+
+    const tokenData = await Notifications.getExpoPushTokenAsync();
+    const pushToken = tokenData.data;
+
+    const authToken = await getToken();
+    if (!authToken) return;
+
+    await fetch(`${base}/api/push-tokens`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ token: pushToken, platform: Platform.OS }),
+    });
+  } catch {
+    // Push registration is best-effort — never crash the app
+  }
+}
 
 function AuthGate() {
   const { isSignedIn, isLoaded, getToken } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const pushRegistered = useRef(false);
 
   useEffect(() => {
     setAuthTokenGetter(() => getToken());
@@ -43,6 +92,17 @@ function AuthGate() {
       router.replace("/(tabs)");
     }
   }, [isSignedIn, isLoaded, segments]);
+
+  // Register for push notifications once after sign-in
+  useEffect(() => {
+    if (isSignedIn && !pushRegistered.current) {
+      pushRegistered.current = true;
+      registerForPushNotifications(getToken);
+    }
+    if (!isSignedIn) {
+      pushRegistered.current = false;
+    }
+  }, [isSignedIn, getToken]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

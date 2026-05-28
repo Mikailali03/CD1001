@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { bootstrapUserProfiles } from "./lib/bootstrapUserProfiles";
+import { sendMaintenanceReminders } from "./lib/maintenanceReminders.js";
 
 const rawPort = process.env["PORT"];
 
@@ -27,4 +28,14 @@ app.listen(port, (err) => {
   bootstrapUserProfiles().catch((err) =>
     logger.error({ err }, "bootstrapUserProfiles failed"),
   );
+
+  // Maintenance reminder cron — runs every hour, sends push at 8am
+  setInterval(() => {
+    const hour = new Date().getHours();
+    if (hour === 8) {
+      sendMaintenanceReminders().catch((err) =>
+        logger.error({ err }, "Maintenance reminders failed"),
+      );
+    }
+  }, 60 * 60 * 1000);
 });

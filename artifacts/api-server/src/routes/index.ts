@@ -22,6 +22,7 @@ import inboxRouter from "./inbox";
 import adminRouter from "./admin";
 import adminExtendedRouter from "./admin-extended";
 import lockerRouter from "./locker";
+import pushTokensRouter from "./push-tokens";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(userProfileRouter);
 router.use(adminRouter);
 router.use(adminExtendedRouter);
 router.use(lockerRouter);
+router.use(pushTokensRouter);
 
 export default router;
