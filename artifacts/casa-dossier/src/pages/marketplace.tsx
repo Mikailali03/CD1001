@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   useListMarketplaceJobs,
   useCreateMarketplaceJob,
@@ -80,6 +81,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
   const [urgency, setUrgency] = useState("medium");
   const [description, setDescription] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const { t } = useTranslation();
 
   // If initial values arrive after mount (e.g. data race), sync them in
   useEffect(() => {
@@ -110,7 +112,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
-          toast({ title: "Request posted", description: "Qualified pros will be notified of your request." });
+          toast({ title: t("marketplace.requestPosted"), description: t("marketplace.requestPostedDesc") });
           setOpen(false);
           setPropertyId("");
           setAssetId("");
@@ -139,16 +141,16 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
       ) : (
         <Button className="gap-2" data-testid="button-post-job" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" />
-          Post a Request
+          {t("marketplace.postRequest")}
         </Button>
       )}
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Request a Service Pro</DialogTitle>
+          <DialogTitle>{t("marketplace.postServiceRequest")}</DialogTitle>
           <DialogDescription>
             {selectedAsset
-              ? `Requesting service for ${selectedAsset.name}${selectedProperty ? ` at ${selectedProperty.name}` : ""}. Pros see the asset specs before they arrive.`
-              : "Tell us what needs attention. Pros will see the asset specs so they arrive prepared."}
+              ? `${t("marketplace.postRequest")}: ${selectedAsset.name}${selectedProperty ? ` — ${selectedProperty.name}` : ""}. ${t("marketplace.subtitle")}`
+              : t("marketplace.subtitle")}
           </DialogDescription>
         </DialogHeader>
 
@@ -237,13 +239,13 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => setOpen(false)}>{t("marketplace.cancelRequest")}</Button>
           <Button
             onClick={handleSubmit}
             disabled={!assetId || !description.trim() || createJob.isPending || !inServiceArea}
             data-testid="button-submit-job"
           >
-            {createJob.isPending ? "Posting..." : "Post Request"}
+            {createJob.isPending ? t("marketplace.submitting") : t("marketplace.postRequest")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -258,16 +260,17 @@ const urgencyConfig: Record<string, { label: string; className: string; icon: Re
   low:       { label: "Low",       className: "border-l-muted-foreground/30", icon: <Clock className="h-3.5 w-3.5 text-muted-foreground" /> },
 };
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline"; className?: string }> = {
-  open:      { label: "Awaiting a Pro", variant: "secondary" },
-  claimed:   { label: "Pro Assigned",   variant: "default" },
-  en_route:  { label: "On the Way",     variant: "default",  className: "bg-blue-500 hover:bg-blue-500 text-white" },
-  arrived:   { label: "Arrived",        variant: "default",  className: "bg-emerald-500 hover:bg-emerald-500 text-white" },
-  completed: { label: "Completed",      variant: "outline" },
-};
-
 export default function Marketplace() {
   const { data: jobs, isLoading } = useListMarketplaceJobs();
+  const { t } = useTranslation();
+
+  const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline"; className?: string }> = {
+    open:      { label: t("marketplace.awaitingPro"), variant: "secondary" },
+    claimed:   { label: t("marketplace.proAssigned"), variant: "default" },
+    en_route:  { label: t("marketplace.onTheWay"),   variant: "default",  className: "bg-blue-500 hover:bg-blue-500 text-white" },
+    arrived:   { label: t("marketplace.arrived"),    variant: "default",  className: "bg-emerald-500 hover:bg-emerald-500 text-white" },
+    completed: { label: t("marketplace.completed"),  variant: "outline" },
+  };
 
   // Read pre-fill params from URL (e.g. ?propertyId=X&assetId=Y)
   const params = new URLSearchParams(window.location.search);
@@ -295,9 +298,9 @@ export default function Marketplace() {
     <div className="p-6 space-y-6 max-w-3xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">Find a Pro</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">{t("marketplace.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Post a service request — pros see your asset specs before they arrive.
+            {t("marketplace.subtitle")}
           </p>
         </div>
         <PostJobDialog
@@ -325,11 +328,11 @@ export default function Marketplace() {
                       <Badge variant={status.variant} className={status.className}>{status.label}</Badge>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         {urgency.icon}
-                        {urgency.label} priority
+                        {urgency.label} {t("marketplace.priority")}
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      Posted {format(new Date(job.createdAt), "MMM d, yyyy")}
+                      {t("marketplace.posted")} {format(new Date(job.createdAt), "MMM d, yyyy")}
                     </span>
                   </div>
 
@@ -341,7 +344,7 @@ export default function Marketplace() {
                     </div>
                     <div className="min-w-0">
                       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
-                        Asset on File
+                        {t("marketplace.assetOnFile")}
                       </p>
                       <p className="font-medium text-sm">{job.assetName}</p>
                       <p className="text-xs text-muted-foreground font-mono mt-0.5">
@@ -360,7 +363,7 @@ export default function Marketplace() {
 
                   {(job.status === "claimed" || (job.status as string) === "en_route" || (job.status as string) === "arrived") && (
                     <div className="rounded-lg border border-dashed bg-muted/30 p-3.5 space-y-2">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Assigned Pro</p>
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t("marketplace.assignedPro")}</p>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
                         <span className="font-medium text-foreground">{job.technicianName ?? "Pro assigned"}</span>
                         {job.technicianPhone ? (
@@ -377,10 +380,10 @@ export default function Marketplace() {
                         <Calendar className="h-3.5 w-3.5 shrink-0" />
                         {job.scheduledAt ? (
                           <span className="font-medium text-foreground">
-                            Service scheduled for {format(new Date(job.scheduledAt), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                            {t("marketplace.serviceScheduledFor")} {format(new Date(job.scheduledAt), "EEEE, MMMM d, yyyy 'at' h:mm a")}
                           </span>
                         ) : (
-                          <span className="italic">Service date: Pending — your pro will reach out to confirm</span>
+                          <span className="italic">{t("marketplace.serviceDatePending")}</span>
                         )}
                       </div>
                     </div>
@@ -389,7 +392,7 @@ export default function Marketplace() {
                   {job.status === "completed" && (
                     <div className="flex items-center gap-2 text-sm text-chart-1 font-medium">
                       <CheckCircle2 className="h-4 w-4" />
-                      Service completed
+                      {t("marketplace.serviceComplete")}
                     </div>
                   )}
                 </CardContent>
@@ -400,9 +403,9 @@ export default function Marketplace() {
       ) : (
         <div className="text-center py-24 bg-muted/30 rounded-xl border border-dashed">
           <UserSearch className="mx-auto h-12 w-12 text-muted-foreground/30 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground">No service requests yet</h3>
+          <h3 className="text-lg font-semibold text-foreground">{t("marketplace.noRequestsTitle")}</h3>
           <p className="text-muted-foreground max-w-xs mx-auto mt-2 text-sm">
-            When something needs attention, post a request and qualified local pros will reach out.
+            {t("marketplace.noRequestsDesc")}
           </p>
           <div className="mt-6">
             <PostJobDialog />
@@ -413,10 +416,9 @@ export default function Marketplace() {
       <div className="rounded-xl bg-accent/50 border border-accent p-5 flex gap-4">
         <FileText className="h-5 w-5 text-accent-foreground shrink-0 mt-0.5" />
         <div>
-          <p className="font-medium text-sm text-accent-foreground">Why your asset data matters</p>
+          <p className="font-medium text-sm text-accent-foreground">{t("marketplace.whyDataMatters")}</p>
           <p className="text-sm text-muted-foreground mt-1">
-            When you post a request, pros automatically receive your asset's make, model, and serial number.
-            They arrive with the right parts and no guesswork — saving you time and money.
+            {t("marketplace.whyDataMattersDesc")}
           </p>
         </div>
       </div>

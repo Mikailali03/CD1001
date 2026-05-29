@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import {
   Sidebar,
   SidebarContent,
@@ -23,18 +24,19 @@ import {
   Images,
 } from "lucide-react";
 
-const navigation = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
-  { name: "My Assets", href: "/assets", icon: Package },
-  { name: "Digital Locker", href: "/locker", icon: Images },
-  { name: "Capital Outlook", href: "/capital-outlook", icon: TrendingUp },
-  { name: "Find a Pro", href: "/marketplace", icon: UserSearch },
-  { name: "DIY Guides", href: "/guides", icon: BookOpen },
-];
-
 export function AppSidebar() {
   const [location] = useLocation();
   const { setOpen, setOpenMobile, isMobile } = useSidebar();
+  const { t } = useTranslation();
+
+  const navigation = [
+    { name: t("nav.dashboard"),     href: "/",               icon: LayoutDashboard },
+    { name: t("nav.myAssets"),      href: "/assets",         icon: Package },
+    { name: t("nav.digitalLocker"), href: "/locker",         icon: Images },
+    { name: t("nav.capitalOutlook"),href: "/capital-outlook",icon: TrendingUp },
+    { name: t("nav.findAPro"),      href: "/marketplace",    icon: UserSearch },
+    { name: t("nav.diyGuides"),     href: "/guides",         icon: BookOpen },
+  ];
 
   function handleNav() {
     if (isMobile) setOpenMobile(false);
@@ -53,7 +55,7 @@ export function AppSidebar() {
           </div>
           <div className="overflow-hidden group-data-[collapsible=icon]:hidden">
             <p className="font-bold text-base leading-none text-primary whitespace-nowrap">Casa Dossier</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">Your Home, Documented.</p>
+            <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{t("nav.tagline")}</p>
           </div>
         </div>
       </SidebarHeader>
@@ -61,7 +63,7 @@ export function AppSidebar() {
       <SidebarContent className="pt-4">
         <SidebarGroup>
           <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-4 mb-1 group-data-[collapsible=icon]:hidden">
-            Homeowner Portal
+            {t("nav.homeownerPortal")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -96,12 +98,12 @@ export function AppSidebar() {
             <SidebarMenuButton
               asChild
               isActive={location === "/settings"}
-              tooltip="Settings"
+              tooltip={t("nav.settings")}
               className="h-10 px-4 rounded-lg"
             >
               <Link href="/settings" onClick={handleNav} className="flex items-center gap-3">
                 <Settings className="h-4 w-4 shrink-0" />
-                <span className="font-medium">Settings</span>
+                <span className="font-medium">{t("nav.settings")}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPropertySummary,
@@ -41,13 +42,13 @@ import { format } from "date-fns";
 import { Link } from "wouter";
 import homeHeroBadge from "@assets/home_hero_badge_1779979811101.png";
 
-// ── Grade config ───────────────────────────────────────────────────────────────
+// ── Grade config (static colors only — labels/CTAs are translated at render time)
 const GRADE_CONFIG = {
-  A: { color: "#3d7a5f", bg: "#3d7a5f12", ringFg: "#3d7a5f", label: "Excellent",  cta: "Your home is in great shape!" },
-  B: { color: "#4b7fb5", bg: "#4b7fb512", ringFg: "#4b7fb5", label: "Good",       cta: "A few quick tasks will get you to A." },
-  C: { color: "#c8853a", bg: "#c8853a12", ringFg: "#c8853a", label: "Fair",       cta: "Several items need attention." },
-  D: { color: "#b85a2a", bg: "#b85a2a12", ringFg: "#b85a2a", label: "Poor",       cta: "Significant backlog detected." },
-  F: { color: "#c0392b", bg: "#c0392b0e", ringFg: "#c0392b", label: "Critical",   cta: "Immediate action recommended." },
+  A: { color: "#3d7a5f", bg: "#3d7a5f12", ringFg: "#3d7a5f", labelKey: "gradeExcellent" as const, ctaKey: "ctaExcellent" as const },
+  B: { color: "#4b7fb5", bg: "#4b7fb512", ringFg: "#4b7fb5", labelKey: "gradeGood"      as const, ctaKey: "ctaGood"      as const },
+  C: { color: "#c8853a", bg: "#c8853a12", ringFg: "#c8853a", labelKey: "gradeFair"      as const, ctaKey: "ctaFair"      as const },
+  D: { color: "#b85a2a", bg: "#b85a2a12", ringFg: "#b85a2a", labelKey: "gradePoor"      as const, ctaKey: "ctaPoor"      as const },
+  F: { color: "#c0392b", bg: "#c0392b0e", ringFg: "#c0392b", labelKey: "gradeCritical"  as const, ctaKey: "ctaCritical"  as const },
 } as const;
 
 // ── Compact health score widget ────────────────────────────────────────────────
@@ -55,6 +56,7 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
   score: number; grade: keyof typeof GRADE_CONFIG; overdueCount: number; onClick: () => void;
 }) {
   const cfg = GRADE_CONFIG[grade];
+  const { t } = useTranslation();
   const radius = 26, stroke = 5;
   const circ = 2 * Math.PI * radius;
   const dash = (score / 100) * circ;
@@ -87,14 +89,14 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm" style={{ color: cfg.color }}>Grade {grade}</span>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
-            {cfg.label}
+            {t(`dashboard.${cfg.labelKey}`)}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{cfg.cta}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{t(`dashboard.${cfg.ctaKey}`)}</p>
         {overdueCount > 0 && (
           <p className="text-xs font-semibold mt-1.5 flex items-center gap-1" style={{ color: cfg.color }}>
             <TrendingUp className="h-3 w-3" />
-            See improvement plan
+            {t("dashboard.improvementPlan")}
           </p>
         )}
       </div>
@@ -105,6 +107,7 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
 
 // ── Investment Ledger dashboard card ──────────────────────────────────────────
 function LedgerCard({ onClick }: { onClick: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       onClick={onClick}
@@ -116,24 +119,24 @@ function LedgerCard({ onClick }: { onClick: () => void }) {
             <Receipt className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="font-semibold text-sm leading-tight">Investment Ledger</p>
+            <p className="font-semibold text-sm leading-tight">{t("dashboard.investmentLedger")}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Spending by category · expected vs actual
+              {t("dashboard.trackSpend")} · {t("dashboard.estVsActual")}
             </p>
           </div>
         </div>
         <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
       </div>
       <div className="grid grid-cols-3 divide-x border-t bg-muted/20">
-        {[
-          { icon: DollarSign, label: "Track spend", sub: "by system" },
-          { icon: TrendingUp,  label: "Compare",    sub: "est. vs actual" },
-          { icon: FileText,    label: "Full ledger", sub: "all records" },
-        ].map(({ icon: Icon, label, sub }) => (
-          <div key={label} className="flex flex-col items-center gap-0.5 py-3 px-2">
+        {([
+          { icon: DollarSign, labelKey: "trackSpend",  subKey: "bySystem"    },
+          { icon: TrendingUp, labelKey: "compare",     subKey: "estVsActual" },
+          { icon: FileText,   labelKey: "fullLedger",  subKey: "allRecords"  },
+        ] as const).map(({ icon: Icon, labelKey, subKey }) => (
+          <div key={labelKey} className="flex flex-col items-center gap-0.5 py-3 px-2">
             <Icon className="h-3.5 w-3.5 text-primary mb-0.5" />
-            <span className="text-[11px] font-semibold text-foreground">{label}</span>
-            <span className="text-[10px] text-muted-foreground">{sub}</span>
+            <span className="text-[11px] font-semibold text-foreground">{t(`dashboard.${labelKey}`)}</span>
+            <span className="text-[10px] text-muted-foreground">{t(`dashboard.${subKey}`)}</span>
           </div>
         ))}
       </div>
@@ -151,6 +154,7 @@ const jobUrgencyConfig: Record<string, { label: string; icon: React.ReactNode; b
 
 function PendingJobsWidget() {
   const { data: jobs } = useListMarketplaceJobs();
+  const { t } = useTranslation();
   const activeJobs = (jobs ?? []).filter(
     (j) => j.status === "open" || j.status === "claimed" || (j.status as string) === "en_route" || (j.status as string) === "arrived"
   );
@@ -161,12 +165,12 @@ function PendingJobsWidget() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Wrench className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold text-foreground">Active Service Requests</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("dashboard.activeServiceRequests")}</h2>
           <span className="text-xs bg-primary/10 text-primary font-semibold rounded-full px-2 py-0.5">{activeJobs.length}</span>
         </div>
         <Link href="/marketplace">
           <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground">
-            View all <ArrowRight className="h-3 w-3" />
+            {t("dashboard.viewAll")} <ArrowRight className="h-3 w-3" />
           </Button>
         </Link>
       </div>
@@ -175,10 +179,10 @@ function PendingJobsWidget() {
           const uc = jobUrgencyConfig[job.urgency ?? "medium"] ?? jobUrgencyConfig.medium;
           const jobStatus = job.status as string;
           const STATUS_LABEL: Record<string, string> = {
-            open:     "Awaiting Pro",
-            claimed:  "Pro Assigned",
-            en_route: "On the Way",
-            arrived:  "Arrived",
+            open:     t("dashboard.awaitingPro"),
+            claimed:  t("dashboard.proAssigned"),
+            en_route: t("dashboard.onTheWay"),
+            arrived:  t("dashboard.arrived"),
           };
           const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
             open:     "secondary",
@@ -202,7 +206,7 @@ function PendingJobsWidget() {
                     <span className="text-xs font-semibold text-foreground truncate">{job.assetName}</span>
                   </div>
                   <Badge variant={STATUS_VARIANT[jobStatus] ?? "secondary"} className={`text-[10px] shrink-0 ${STATUS_CLASS[jobStatus] ?? ""}`}>
-                    {STATUS_LABEL[jobStatus] ?? "Awaiting Pro"}
+                    {STATUS_LABEL[jobStatus] ?? t("dashboard.awaitingPro")}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2">{job.description}</p>
@@ -211,7 +215,7 @@ function PendingJobsWidget() {
                     <Calendar className="h-3 w-3 shrink-0" />
                     {(job as any).scheduledAt
                       ? <span className="font-medium text-foreground">{format(new Date((job as any).scheduledAt), "MMM d 'at' h:mm a")}</span>
-                      : <span className="italic">Service date pending</span>}
+                      : <span className="italic">{t("dashboard.serviceDatePending")}</span>}
                   </div>
                 )}
               </div>
@@ -224,17 +228,18 @@ function PendingJobsWidget() {
 }
 
 function NoPropertyState() {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-6">
       <div className="bg-secondary rounded-2xl p-6 mb-6">
         <Building2 className="h-12 w-12 text-muted-foreground/40 mx-auto" />
       </div>
-      <h2 className="text-xl font-semibold mb-2">No property selected</h2>
+      <h2 className="text-xl font-semibold mb-2">{t("dashboard.noProperty")}</h2>
       <p className="text-muted-foreground max-w-sm mb-6 text-sm">
-        Add your home to start tracking its health score, assets, and maintenance schedule.
+        {t("dashboard.addHomeDesc")}
       </p>
       <Link href="/properties">
-        <Button className="gap-2"><Plus className="h-4 w-4" />Add Your Home</Button>
+        <Button className="gap-2"><Plus className="h-4 w-4" />{t("dashboard.addYourHome")}</Button>
       </Link>
     </div>
   );
@@ -263,6 +268,7 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { activePropertyId, activeProperty, isLoading: propLoading } = useProperty();
+  const { t } = useTranslation();
   const [healthModalOpen, setHealthModalOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -351,7 +357,7 @@ export default function Dashboard() {
             )}
             <Link href={`/properties/${activePropertyId}`}>
               <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground h-7 px-2 shrink-0">
-                <span className="text-xs">View</span>
+                <span className="text-xs">{t("dashboard.view")}</span>
                 <ArrowRight className="h-3 w-3" />
               </Button>
             </Link>
@@ -397,20 +403,20 @@ export default function Dashboard() {
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="hover:shadow-sm transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tracked Assets</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.trackedAssets")}</CardTitle>
             <Hammer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{summary.totalAssets}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-emerald-600 font-semibold">{summary.verifiedAssets}</span> of {summary.totalAssets} verified
+              <span className="text-emerald-600 font-semibold">{summary.verifiedAssets}</span> {t("dashboard.of")} {summary.totalAssets} {t("dashboard.verified")}
             </p>
           </CardContent>
         </Card>
 
         <Card className={`hover:shadow-sm transition-shadow ${(summary.overdueTaskCount ?? 0) > 0 ? "border-destructive/30" : ""}`}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.overdueTasks")}</CardTitle>
             <AlertCircle className={`h-4 w-4 ${(summary.overdueTaskCount ?? 0) > 0 ? "text-destructive" : "text-muted-foreground"}`} />
           </CardHeader>
           <CardContent>
@@ -421,14 +427,14 @@ export default function Dashboard() {
               onClick={() => setHealthModalOpen(true)}
               className="text-xs text-primary underline-offset-2 hover:underline mt-1 flex items-center gap-0.5"
             >
-              {(summary.overdueTaskCount ?? 0) > 0 ? "See what to fix →" : "All clear"}
+              {(summary.overdueTaskCount ?? 0) > 0 ? t("dashboard.seeWhatToFix") : t("dashboard.allClear")}
             </button>
           </CardContent>
         </Card>
 
         <Card className="hover:shadow-sm transition-shadow">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Assets by System</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("dashboard.assetsBySystem")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-1.5">
@@ -454,8 +460,8 @@ export default function Dashboard() {
         {/* Recent service activity */}
         <Card>
           <CardHeader className="px-4 sm:px-6">
-            <CardTitle className="text-sm font-semibold">Recent Service Activity</CardTitle>
-            <CardDescription>Latest work done on this property</CardDescription>
+            <CardTitle className="text-sm font-semibold">{t("dashboard.recentServiceActivity")}</CardTitle>
+            <CardDescription>{t("dashboard.latestWork")}</CardDescription>
           </CardHeader>
           <CardContent className="px-4 sm:px-6 pt-0">
             {recentRecords.length > 0 ? (
@@ -486,9 +492,9 @@ export default function Dashboard() {
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                 <FileText className="h-10 w-10 mb-3 opacity-20" />
-                <p className="text-sm font-medium">No service records yet</p>
+                <p className="text-sm font-medium">{t("dashboard.noServiceRecords")}</p>
                 <p className="text-xs mt-1 text-center max-w-xs">
-                  Service history will appear here as you log work done on your home's systems.
+                  {t("dashboard.noServiceRecordsDesc")}
                 </p>
               </div>
             )}

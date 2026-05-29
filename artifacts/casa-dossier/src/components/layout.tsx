@@ -19,16 +19,19 @@ import { Building2, ChevronDown, Check, Plus, FileText, LogOut, User, Zap, Shiel
 import { Link } from "wouter";
 import { useClerk, useUser } from "@clerk/react";
 import { useGetUserProfile, getGetUserProfileQueryKey } from "@workspace/api-client-react";
+import { useTranslation } from "react-i18next";
+import { LanguageToggle } from "./language-toggle";
 
 function PropertySwitcher() {
   const { activeProperty, properties, setActivePropertyId } = useProperty();
+  const { t } = useTranslation();
 
   if (properties.length === 0) {
     return (
       <Link href="/properties">
         <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground h-8 text-xs">
           <Plus className="h-3.5 w-3.5" />
-          Add a property
+          {t("header.addProperty")}
         </Button>
       </Link>
     );
@@ -43,13 +46,13 @@ function PropertySwitcher() {
           className="gap-2 h-8 max-w-[180px] sm:max-w-[260px] bg-background text-sm font-medium"
         >
           <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate">{activeProperty?.name ?? "Select property"}</span>
+          <span className="truncate">{activeProperty?.name ?? t("header.selectProperty")}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground ml-auto" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
         <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-          Your Properties
+          {t("header.yourProperties")}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {properties.map((p) => (
@@ -73,7 +76,7 @@ function PropertySwitcher() {
         <DropdownMenuItem asChild>
           <Link href="/properties" className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
             <Plus className="h-3.5 w-3.5" />
-            Manage My Properties
+            {t("header.manageProperties")}
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -83,12 +86,13 @@ function PropertySwitcher() {
 
 function GenerateReportButton() {
   const { activeProperty } = useProperty();
+  const { t } = useTranslation();
   if (!activeProperty) return null;
   return (
     <Link href={`/properties/${activeProperty.id}/report`}>
       <Button variant="outline" size="sm" className="gap-2 h-8 text-xs font-medium hidden sm:inline-flex">
         <FileText className="h-3.5 w-3.5" />
-        Generate Report
+        {t("header.generateReport")}
       </Button>
     </Link>
   );
@@ -140,6 +144,7 @@ function SubscriptionBadge() {
 function UserMenu() {
   const { signOut } = useClerk();
   const { user } = useUser();
+  const { t } = useTranslation();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   const { data: profile } = useGetUserProfile({
@@ -172,7 +177,7 @@ function UserMenu() {
               className="flex items-center gap-2 text-sm cursor-pointer text-primary focus:text-primary font-medium"
             >
               <LayoutDashboard className="h-3.5 w-3.5" />
-              Admin Dashboard
+              {t("header.adminDashboard")}
             </Link>
           </DropdownMenuItem>
         )}
@@ -182,7 +187,7 @@ function UserMenu() {
           className="gap-2 text-sm cursor-pointer text-destructive focus:text-destructive"
         >
           <LogOut className="h-3.5 w-3.5" />
-          Sign Out
+          {t("header.signOut")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -214,6 +219,7 @@ export function AppLayout({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <SubscriptionBadge />
+              <LanguageToggle />
               <GenerateReportButton />
               <UserMenu />
             </div>

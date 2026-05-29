@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useProperty } from "@/contexts/property-context";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
@@ -184,6 +185,7 @@ function AssetsSkeleton() {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function MyAssets() {
   const { activePropertyId, activeProperty, isLoading: propLoading } = useProperty();
+  const { t } = useTranslation();
   const [addOpen, setAddOpen] = useState(false);
   const search = useSearch();
 
@@ -210,12 +212,12 @@ export default function MyAssets() {
         <div className="bg-secondary rounded-2xl p-6 mb-6">
           <Building2 className="h-12 w-12 text-muted-foreground/40 mx-auto" />
         </div>
-        <h2 className="text-xl font-semibold mb-2">No property selected</h2>
+        <h2 className="text-xl font-semibold mb-2">{t("assets.noPropertyTitle")}</h2>
         <p className="text-muted-foreground max-w-sm mb-6 text-sm">
-          Add your home to start tracking assets and their health.
+          {t("assets.noPropertyDesc")}
         </p>
         <Link href="/properties">
-          <Button className="gap-2"><Plus className="h-4 w-4" />Add Your Home</Button>
+          <Button className="gap-2"><Plus className="h-4 w-4" />{t("assets.addYourHome")}</Button>
         </Link>
       </div>
     );
@@ -242,12 +244,12 @@ export default function MyAssets() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">My Assets</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("assets.title")}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{activeProperty.name}</p>
         </div>
         <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAddOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
-          Add Asset
+          {t("assets.addAsset")}
         </Button>
       </div>
 
@@ -255,17 +257,17 @@ export default function MyAssets() {
       <div className="flex flex-wrap gap-2">
         <div className="flex items-center gap-1.5 bg-secondary rounded-full px-3 py-1.5 text-xs font-medium">
           <Package className="h-3.5 w-3.5 text-muted-foreground" />
-          {totalAssets} tracked
+          {totalAssets} {t("assets.tracked")}
         </div>
         {underWarrantyCount > 0 && (
           <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 rounded-full px-3 py-1.5 text-xs font-medium">
             <ShieldCheck className="h-3.5 w-3.5" />
-            {underWarrantyCount} under warranty
+            {underWarrantyCount} {t("assets.underWarranty")}
           </div>
         )}
         {needsAttentionCount > 0 && (
           <div className="flex items-center gap-1.5 bg-destructive/10 text-destructive rounded-full px-3 py-1.5 text-xs font-medium">
-            {needsAttentionCount} need{needsAttentionCount === 1 ? "s" : ""} attention
+            {needsAttentionCount} {needsAttentionCount === 1 ? t("assets.needsAttentionSingular") : t("assets.needAttention")}
           </div>
         )}
       </div>
@@ -277,14 +279,14 @@ export default function MyAssets() {
             <Package className="h-10 w-10 text-muted-foreground/30 mx-auto" />
           </div>
           <div>
-            <p className="font-semibold text-sm">No assets tracked yet</p>
+            <p className="font-semibold text-sm">{t("assets.noAssetsTitle")}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Add your first asset to start tracking health scores and maintenance.
+              {t("assets.noAssetsDesc")}
             </p>
           </div>
           <Button size="sm" className="gap-1.5 mt-1" onClick={() => setAddOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
-            Add Asset
+            {t("assets.addAsset")}
           </Button>
         </div>
       ) : (
