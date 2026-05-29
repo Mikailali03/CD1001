@@ -17,11 +17,12 @@ export function LanguageToggle() {
       variant="ghost"
       size="sm"
       onClick={toggle}
-      className="h-8 gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground px-2"
+      className="h-8 gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground px-2"
       title={isSpanish ? "Switch to English" : "Cambiar a Español"}
     >
-      <Languages className="h-3.5 w-3.5" />
-      {t("lang.toggle")}
+      <Languages className="h-3.5 w-3.5 shrink-0" />
+      <span className="hidden sm:inline">{t("lang.toggle")}</span>
+      <span className="sm:hidden">{t("lang.current")}</span>
     </Button>
   );
 }
