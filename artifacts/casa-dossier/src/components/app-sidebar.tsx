@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
+import { LanguageToggle } from "./language-toggle";
 import {
   Sidebar,
   SidebarContent,
@@ -106,6 +107,11 @@ export function AppSidebar() {
                 <span className="font-medium">{t("nav.settings")}</span>
               </Link>
             </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem className="sm:hidden">
+            <div className="px-4 py-1">
+              <LanguageToggle />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

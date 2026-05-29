@@ -219,7 +219,9 @@ export function AppLayout({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <SubscriptionBadge />
-              <LanguageToggle />
+              <span className="hidden sm:contents">
+                <LanguageToggle />
+              </span>
               <GenerateReportButton />
               <UserMenu />
             </div>
