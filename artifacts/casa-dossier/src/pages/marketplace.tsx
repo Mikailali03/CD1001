@@ -258,9 +258,11 @@ const urgencyConfig: Record<string, { label: string; className: string; icon: Re
   low:       { label: "Low",       className: "border-l-muted-foreground/30", icon: <Clock className="h-3.5 w-3.5 text-muted-foreground" /> },
 };
 
-const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline"; className?: string }> = {
   open:      { label: "Awaiting a Pro", variant: "secondary" },
   claimed:   { label: "Pro Assigned",   variant: "default" },
+  en_route:  { label: "On the Way",     variant: "default",  className: "bg-blue-500 hover:bg-blue-500 text-white" },
+  arrived:   { label: "Arrived",        variant: "default",  className: "bg-emerald-500 hover:bg-emerald-500 text-white" },
   completed: { label: "Completed",      variant: "outline" },
 };
 
@@ -320,7 +322,7 @@ export default function Marketplace() {
                 <CardContent className="p-6 space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant={status.variant}>{status.label}</Badge>
+                      <Badge variant={status.variant} className={status.className}>{status.label}</Badge>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         {urgency.icon}
                         {urgency.label} priority
@@ -356,7 +358,7 @@ export default function Marketplace() {
                     )}
                   </div>
 
-                  {job.status === "claimed" && (
+                  {(job.status === "claimed" || (job.status as string) === "en_route" || (job.status as string) === "arrived") && (
                     <div className="rounded-lg border border-dashed bg-muted/30 p-3.5 space-y-2">
                       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Assigned Pro</p>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
