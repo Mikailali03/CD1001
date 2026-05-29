@@ -6,6 +6,7 @@ import {
   Hash, Cpu, ClipboardList, Quote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { LanguageToggle } from "@/components/language-toggle";
 
 const features = [
   {
@@ -402,6 +403,7 @@ export default function Landing() {
             <span className="font-bold text-lg text-primary">Casa Dossier</span>
           </div>
           <div className="flex items-center gap-3">
+            <LanguageToggle />
             <Link href="/sign-in">
               <Button variant="ghost" size="sm">Log In</Button>
             </Link>
