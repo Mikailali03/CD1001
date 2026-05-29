@@ -151,7 +151,9 @@ const jobUrgencyConfig: Record<string, { label: string; icon: React.ReactNode; b
 
 function PendingJobsWidget() {
   const { data: jobs } = useListMarketplaceJobs();
-  const activeJobs = (jobs ?? []).filter((j) => j.status === "open" || j.status === "claimed");
+  const activeJobs = (jobs ?? []).filter(
+    (j) => j.status === "open" || j.status === "claimed" || (j.status as string) === "en_route" || (j.status as string) === "arrived"
+  );
   if (!activeJobs.length) return null;
 
   return (
@@ -171,7 +173,26 @@ function PendingJobsWidget() {
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3">
         {activeJobs.map((job) => {
           const uc = jobUrgencyConfig[job.urgency ?? "medium"] ?? jobUrgencyConfig.medium;
-          const isClaimed = job.status === "claimed";
+          const jobStatus = job.status as string;
+          const STATUS_LABEL: Record<string, string> = {
+            open:     "Awaiting Pro",
+            claimed:  "Pro Assigned",
+            en_route: "On the Way",
+            arrived:  "Arrived",
+          };
+          const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
+            open:     "secondary",
+            claimed:  "default",
+            en_route: "default",
+            arrived:  "default",
+          };
+          const STATUS_CLASS: Record<string, string> = {
+            open:     "",
+            claimed:  "",
+            en_route: "bg-blue-500 hover:bg-blue-500 text-white",
+            arrived:  "bg-emerald-500 hover:bg-emerald-500 text-white",
+          };
+          const showScheduled = jobStatus === "claimed" || jobStatus === "en_route" || jobStatus === "arrived";
           return (
             <Link key={job.id} href="/marketplace">
               <div className={`shrink-0 w-64 sm:w-auto rounded-xl border border-l-4 ${uc.borderColor} bg-card hover:shadow-md hover:-translate-y-0.5 transition-all p-3.5 space-y-2 cursor-pointer`}>
@@ -180,12 +201,12 @@ function PendingJobsWidget() {
                     {uc.icon}
                     <span className="text-xs font-semibold text-foreground truncate">{job.assetName}</span>
                   </div>
-                  <Badge variant={isClaimed ? "default" : "secondary"} className="text-[10px] shrink-0">
-                    {isClaimed ? "Pro Assigned" : "Awaiting Pro"}
+                  <Badge variant={STATUS_VARIANT[jobStatus] ?? "secondary"} className={`text-[10px] shrink-0 ${STATUS_CLASS[jobStatus] ?? ""}`}>
+                    {STATUS_LABEL[jobStatus] ?? "Awaiting Pro"}
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2">{job.description}</p>
-                {isClaimed && (
+                {showScheduled && (
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
                     <Calendar className="h-3 w-3 shrink-0" />
                     {(job as any).scheduledAt
