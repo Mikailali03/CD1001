@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import { useLocation } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,80 +16,46 @@ import {
   X,
 } from "lucide-react";
 
-const SLIDES = [
-  {
-    icon: LayoutDashboard,
-    iconBg: "bg-blue-100",
-    iconColor: "text-blue-600",
-    accent: "from-blue-50 to-slate-50",
-    title: "Your Home's Command Center",
-    body: "The dashboard shows your real-time Health Score, overdue maintenance tasks, tracked assets by system, and recent service activity — all in one place.",
-    tip: "Your Health Score updates automatically as you log work and complete tasks.",
-  },
-  {
-    icon: Hammer,
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    accent: "from-amber-50 to-orange-50",
-    title: "Track Every System & Appliance",
-    body: "Add your HVAC, roof, water heater, kitchen appliances, and more. Store model numbers, serial numbers, warranties, and purchase dates in one searchable place.",
-    tip: "Each asset gets its own health score and maintenance timeline.",
-  },
-  {
-    icon: ClipboardList,
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    accent: "from-emerald-50 to-teal-50",
-    title: "A Paper Trail for Every Repair",
-    body: "Log every service call, repair, and upgrade. Record the contractor, cost, and notes — and your home builds a verified history that protects your investment.",
-    tip: "Service records are linked to individual assets so history follows each system.",
-  },
-  {
-    icon: Sparkles,
-    iconBg: "bg-violet-100",
-    iconColor: "text-violet-600",
-    accent: "from-violet-50 to-purple-50",
-    title: "Your AI Stewardship Plan",
-    body: "The AI Scout analyzed your home's age, region, and climate to generate a personalized Whole-Home Stewardship Plan — with seasonal tasks, due dates, and DIY tips.",
-    tip: "You can re-run the Scout anytime to refresh your plan as your home changes.",
-  },
-  {
-    icon: FileText,
-    iconBg: "bg-rose-100",
-    iconColor: "text-rose-600",
-    accent: "from-rose-50 to-pink-50",
-    title: "Transfer Your Home's History",
-    body: "When it's time to sell, generate a complete Home Dossier Report — a verifiable record of every repair, appliance, and upgrade that protects value and impresses buyers.",
-    tip: "Reports can be shared as a link or downloaded as a PDF.",
-  },
-];
+const SLIDE_META = [
+  { icon: LayoutDashboard, iconBg: "bg-blue-100", iconColor: "text-blue-600", accent: "from-blue-50 to-slate-50" },
+  { icon: Hammer,          iconBg: "bg-amber-100", iconColor: "text-amber-600", accent: "from-amber-50 to-orange-50" },
+  { icon: ClipboardList,   iconBg: "bg-emerald-100", iconColor: "text-emerald-600", accent: "from-emerald-50 to-teal-50" },
+  { icon: Sparkles,        iconBg: "bg-violet-100", iconColor: "text-violet-600", accent: "from-violet-50 to-purple-50" },
+  { icon: FileText,        iconBg: "bg-rose-100", iconColor: "text-rose-600", accent: "from-rose-50 to-pink-50" },
+] as const;
 
 function SlideContent({
-  slide,
+  meta,
+  title,
+  body,
+  tip,
+  tipLabel,
   animKey,
 }: {
-  slide: (typeof SLIDES)[number];
+  meta: typeof SLIDE_META[number];
+  title: string;
+  body: string;
+  tip: string;
+  tipLabel: string;
   animKey: number;
 }) {
-  const Icon = slide.icon;
+  const Icon = meta.icon;
   return (
     <div
       key={animKey}
-      className={`bg-gradient-to-br ${slide.accent} rounded-xl p-6 flex flex-col items-center text-center gap-4`}
+      className={`bg-gradient-to-br ${meta.accent} rounded-xl p-6 flex flex-col items-center text-center gap-4`}
       style={{ animation: "wFadeUp 0.45s cubic-bezier(0.22,1,0.36,1) both" }}
     >
-      <div className={`${slide.iconBg} rounded-2xl p-4 shadow-sm`}>
-        <Icon className={`h-8 w-8 ${slide.iconColor}`} strokeWidth={1.5} />
+      <div className={`${meta.iconBg} rounded-2xl p-4 shadow-sm`}>
+        <Icon className={`h-8 w-8 ${meta.iconColor}`} strokeWidth={1.5} />
       </div>
       <div className="space-y-2">
-        <h3 className="text-xl font-bold tracking-tight">{slide.title}</h3>
-        <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">
-          {slide.body}
-        </p>
+        <h3 className="text-xl font-bold tracking-tight">{title}</h3>
+        <p className="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">{body}</p>
       </div>
       <div className="rounded-lg border border-dashed bg-background/60 px-4 py-2.5 text-xs text-muted-foreground max-w-xs">
-        <span className="font-semibold text-foreground">Tip: </span>
-        {slide.tip}
+        <span className="font-semibold text-foreground">{tipLabel}</span>
+        {tip}
       </div>
     </div>
   );
@@ -96,6 +63,7 @@ function SlideContent({
 
 export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
   const { user } = useUser();
+  const { t } = useTranslation();
   const [, setLocation] = useLocation();
   const [open, setOpen] = useState(false);
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -132,7 +100,7 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
   }
 
   function next() {
-    if (currentIdx < SLIDES.length - 1) goTo(currentIdx + 1);
+    if (currentIdx < SLIDE_META.length - 1) goTo(currentIdx + 1);
   }
 
   function handleAddAsset() {
@@ -140,8 +108,9 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
     setLocation("/assets?add=1");
   }
 
-  const isLast = currentIdx === SLIDES.length - 1;
-  const slide = SLIDES[currentIdx];
+  const isLast = currentIdx === SLIDE_META.length - 1;
+  const meta = SLIDE_META[currentIdx]!;
+  const n = currentIdx + 1;
 
   return (
     <>
@@ -154,18 +123,19 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
 
       <Dialog open={open} onOpenChange={(v) => { if (!v) dismiss(); }}>
         <DialogContent className="max-w-md p-0 gap-0 overflow-hidden" hideCloseButton>
-          <DialogTitle className="sr-only">Welcome to Casa Dossier — Quick Tour</DialogTitle>
+          <DialogTitle className="sr-only">{t("welcome.heading")}</DialogTitle>
           <DialogDescription className="sr-only">
-            A quick tour of Casa Dossier's main features.
+            {t("welcome.progress", { current: n, total: SLIDE_META.length })}
           </DialogDescription>
+
           {/* Header */}
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                Welcome to Casa Dossier
+                {t("welcome.heading")}
               </p>
               <h2 className="text-sm font-medium text-foreground mt-0.5">
-                {currentIdx + 1} of {SLIDES.length} — quick tour
+                {t("welcome.progress", { current: n, total: SLIDE_META.length })}
               </h2>
             </div>
             <button
@@ -179,12 +149,19 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
 
           {/* Slide */}
           <div className="px-5">
-            <SlideContent slide={slide} animKey={animKey} />
+            <SlideContent
+              meta={meta}
+              title={t(`welcome.slide${n}Title`)}
+              body={t(`welcome.slide${n}Body`)}
+              tip={t(`welcome.slide${n}Tip`)}
+              tipLabel={t("welcome.tip")}
+              animKey={animKey}
+            />
           </div>
 
           {/* Dot indicators */}
           <div className="flex items-center justify-center gap-1.5 py-4">
-            {SLIDES.map((_, i) => (
+            {SLIDE_META.map((_, i) => (
               <button
                 key={i}
                 onClick={() => goTo(i)}
@@ -208,22 +185,22 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
               className="gap-1.5"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Back
+              {t("welcome.back")}
             </Button>
 
             {isLast ? (
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={dismiss}>
-                  Go to Dashboard
+                  {t("welcome.goToDashboard")}
                 </Button>
                 <Button size="sm" onClick={handleAddAsset} className="gap-1.5">
-                  Add My First Asset
+                  {t("welcome.addFirstAsset")}
                   <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             ) : (
               <Button size="sm" onClick={next} className="gap-1.5">
-                Next
+                {t("welcome.next")}
                 <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             )}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUser, useClerk } from "@clerk/react";
+import { useTranslation } from "react-i18next";
 import { PendingInvitesModal } from "@/components/pending-invites-modal";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import { Button } from "@/components/ui/button";
@@ -71,6 +72,7 @@ function StatBadge({
 export function Onboarding() {
   const { user } = useUser();
   const { signOut } = useClerk();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -95,7 +97,6 @@ export function Onboarding() {
 
   const [saveBusy, setSaveBusy] = useState(false);
   const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(null);
-  // Stored from lookup — not shown in UI, passed silently on save
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
 
@@ -109,8 +110,8 @@ export function Onboarding() {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({
-          title: "Address not found",
-          description: err.error ?? "Try a more complete address.",
+          title: t("onboarding.addressNotFound"),
+          description: err.error ?? t("onboarding.addressNotFoundDesc"),
           variant: "destructive",
         });
         return;
@@ -164,7 +165,7 @@ export function Onboarding() {
       });
 
       if (!res.ok) {
-        toast({ title: "Could not save property", variant: "destructive" });
+        toast({ title: t("onboarding.couldNotSave"), variant: "destructive" });
         setStep("verify");
         return;
       }
@@ -189,7 +190,7 @@ export function Onboarding() {
 
       setStep("done");
     } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      toast({ title: t("onboarding.somethingWentWrong"), variant: "destructive" });
       setStep("verify");
     } finally {
       setSaveBusy(false);
@@ -203,7 +204,6 @@ export function Onboarding() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <PendingInvitesModal />
-      {/* Minimal top bar */}
       <header className="border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <div className="bg-primary rounded-lg p-1.5">
@@ -218,7 +218,7 @@ export function Onboarding() {
           onClick={() => signOut({ redirectUrl: `${BASE}/` })}
         >
           <LogOut className="h-4 w-4" />
-          Sign Out
+          {t("onboarding.signOut")}
         </Button>
       </header>
 
@@ -234,43 +234,31 @@ export function Onboarding() {
               <div className="space-y-3">
                 <div className="inline-flex items-center gap-2 bg-primary/8 text-primary text-sm font-medium px-4 py-1.5 rounded-full">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Welcome to Casa Dossier
+                  {t("onboarding.welcomeBadge")}
                 </div>
                 <h1 className="text-4xl font-bold tracking-tight leading-tight">
-                  Hey {firstName}, let's set up<br />your home's dossier.
+                  {t("onboarding.welcomeTitle", { name: firstName })}
                 </h1>
                 <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed">
-                  In just 2 minutes you'll have a living record of every system, appliance, and repair — all in one place.
+                  {t("onboarding.welcomeSubtitle")}
                 </p>
               </div>
 
               <div className="grid grid-cols-3 gap-4">
-                {[
-                  {
-                    icon: ClipboardList,
-                    title: "Full History",
-                    desc: "Every repair, upgrade, and service visit logged",
-                  },
-                  {
-                    icon: Hammer,
-                    title: "Smart Plan",
-                    desc: "AI-generated maintenance schedule for your home",
-                  },
-                  {
-                    icon: ShieldCheck,
-                    title: "Transfer Ready",
-                    desc: "Complete dossier to hand off when you sell",
-                  },
-                ].map(({ icon: Icon, title, desc }) => (
+                {([
+                  { icon: ClipboardList, titleKey: "card1Title", descKey: "card1Desc" },
+                  { icon: Hammer,        titleKey: "card2Title", descKey: "card2Desc" },
+                  { icon: ShieldCheck,   titleKey: "card3Title", descKey: "card3Desc" },
+                ] as const).map(({ icon: Icon, titleKey, descKey }) => (
                   <div
-                    key={title}
+                    key={titleKey}
                     className="rounded-xl border bg-card p-4 text-left space-y-2"
                   >
                     <div className="bg-primary/10 w-fit rounded-lg p-2">
                       <Icon className="h-4 w-4 text-primary" />
                     </div>
-                    <p className="text-sm font-semibold leading-tight">{title}</p>
-                    <p className="text-xs text-muted-foreground leading-snug">{desc}</p>
+                    <p className="text-sm font-semibold leading-tight">{t(`onboarding.${titleKey}`)}</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{t(`onboarding.${descKey}`)}</p>
                   </div>
                 ))}
               </div>
@@ -280,7 +268,7 @@ export function Onboarding() {
                 className="gap-2 px-8 text-base"
                 onClick={() => setStep("address")}
               >
-                Add My Home
+                {t("onboarding.addMyHome")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
@@ -295,16 +283,16 @@ export function Onboarding() {
                   className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  Back
+                  {t("onboarding.back")}
                 </button>
                 <div className="flex items-center gap-3 mb-6">
                   <div className="bg-primary/10 p-2.5 rounded-xl">
                     <Building2 className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h2 className="text-2xl font-bold">What's your address?</h2>
+                    <h2 className="text-2xl font-bold">{t("onboarding.addressTitle")}</h2>
                     <p className="text-muted-foreground text-sm mt-0.5">
-                      We'll look up year built, square footage, and more automatically.
+                      {t("onboarding.addressSubtitle")}
                     </p>
                   </div>
                 </div>
@@ -312,14 +300,14 @@ export function Onboarding() {
 
               <div className="space-y-2">
                 <Label htmlFor="ob-address" className="text-sm font-medium">
-                  Street Address
+                  {t("onboarding.streetAddress")}
                 </Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="ob-address"
-                      placeholder="123 Main St, Austin, TX 78701"
+                      placeholder={t("onboarding.addressPlaceholder")}
                       value={addressInput}
                       onChange={(e) => setAddressInput(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleLookup()}
@@ -337,27 +325,27 @@ export function Onboarding() {
                     ) : (
                       <Search className="h-4 w-4" />
                     )}
-                    {lookupBusy ? "Looking up…" : "Look Up"}
+                    {lookupBusy ? t("onboarding.lookingUp") : t("onboarding.lookUp")}
                   </Button>
                 </div>
               </div>
 
               <div className="rounded-xl border border-dashed bg-muted/30 px-4 py-4 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  What happens next
+                  {t("onboarding.whatHappensNext")}
                 </p>
                 <div className="space-y-2">
                   {[
-                    { icon: <Search className="h-3.5 w-3.5" />, text: "We fetch public records: year built, sq ft, beds & baths" },
-                    { icon: <Wand2 className="h-3.5 w-3.5" />, text: "You verify and edit the details before we save" },
-                    { icon: <Sparkles className="h-3.5 w-3.5" />, text: "AI Scout generates your personalized Whole-Home Stewardship Plan" },
-                  ].map((item, i) => (
+                    { icon: <Search className="h-3.5 w-3.5" />, textKey: "nextStep1" },
+                    { icon: <Wand2 className="h-3.5 w-3.5" />,  textKey: "nextStep2" },
+                    { icon: <Sparkles className="h-3.5 w-3.5" />, textKey: "nextStep3" },
+                  ].map((item) => (
                     <div
-                      key={i}
+                      key={item.textKey}
                       className="flex items-start gap-2.5 text-xs text-muted-foreground"
                     >
                       <span className="mt-0.5 text-primary shrink-0">{item.icon}</span>
-                      <span>{item.text}</span>
+                      <span>{t(`onboarding.${item.textKey}`)}</span>
                     </div>
                   ))}
                 </div>
@@ -368,7 +356,7 @@ export function Onboarding() {
                   onClick={handleSkipToManual}
                   className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline transition-colors"
                 >
-                  Skip lookup — I'll enter details manually
+                  {t("onboarding.skipToManual")}
                 </button>
               </div>
             </div>
@@ -383,7 +371,7 @@ export function Onboarding() {
                   className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  Back
+                  {t("onboarding.back")}
                 </button>
                 <div className="flex items-center gap-3 mb-1">
                   <div className="bg-emerald-100 p-2.5 rounded-xl">
@@ -391,12 +379,10 @@ export function Onboarding() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold">
-                      {manualMode ? "Enter your home's details" : "Verify your details"}
+                      {manualMode ? t("onboarding.manualTitle") : t("onboarding.verifyTitle")}
                     </h2>
                     <p className="text-muted-foreground text-sm mt-0.5">
-                      {manualMode
-                        ? "Fill in what you know — you can always update this later."
-                        : "We pre-filled from public records — edit anything that's off."}
+                      {manualMode ? t("onboarding.manualSubtitle") : t("onboarding.verifySubtitle")}
                     </p>
                   </div>
                 </div>
@@ -404,56 +390,56 @@ export function Onboarding() {
 
               {lookupResult && !manualMode && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <StatBadge icon={<Calendar className="h-3.5 w-3.5" />} label="Year Built" value={lookupResult.yearBuilt} />
-                  <StatBadge icon={<Maximize className="h-3.5 w-3.5" />} label="Sq Ft" value={lookupResult.sqft?.toLocaleString() ?? null} />
-                  <StatBadge icon={<BedDouble className="h-3.5 w-3.5" />} label="Beds" value={lookupResult.bedrooms} />
-                  <StatBadge icon={<Bath className="h-3.5 w-3.5" />} label="Baths" value={lookupResult.bathrooms} />
+                  <StatBadge icon={<Calendar className="h-3.5 w-3.5" />} label={t("onboarding.labelYearBuilt")} value={lookupResult.yearBuilt} />
+                  <StatBadge icon={<Maximize className="h-3.5 w-3.5" />} label={t("onboarding.labelSqFt")} value={lookupResult.sqft?.toLocaleString() ?? null} />
+                  <StatBadge icon={<BedDouble className="h-3.5 w-3.5" />} label={t("onboarding.labelBeds")} value={lookupResult.bedrooms} />
+                  <StatBadge icon={<Bath className="h-3.5 w-3.5" />} label={t("onboarding.labelBaths")} value={lookupResult.bathrooms} />
                 </div>
               )}
 
               <div className="space-y-3 rounded-xl border bg-card p-5">
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Property Name</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelPropertyName")}</Label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. The Johnson Family Home"
+                    placeholder={t("onboarding.propertyNamePlaceholder")}
                     autoFocus={manualMode}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Street Address</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelStreetAddress")}</Label>
                   <Input
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
-                    placeholder="123 Main St"
+                    placeholder={t("onboarding.streetAddressPlaceholder")}
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="space-y-1 col-span-2">
-                    <Label className="text-xs font-medium text-muted-foreground">City</Label>
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Austin" />
+                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelCity")}</Label>
+                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder={t("onboarding.cityPlaceholder")} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">State</Label>
-                    <Input value={state} onChange={(e) => setState(e.target.value)} maxLength={2} placeholder="TX" />
+                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelState")}</Label>
+                    <Input value={state} onChange={(e) => setState(e.target.value)} maxLength={2} placeholder={t("onboarding.statePlaceholder")} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Year Built</Label>
+                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelYearBuilt")}</Label>
                     <Input value={yearBuilt} onChange={(e) => setYearBuilt(e.target.value)} type="number" placeholder="1990" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Sq Ft</Label>
+                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelSqFt")}</Label>
                     <Input value={sqft} onChange={(e) => setSqft(e.target.value)} type="number" placeholder="2000" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Beds</Label>
+                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelBeds")}</Label>
                     <Input value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} type="number" placeholder="3" />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Baths</Label>
+                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelBaths")}</Label>
                     <Input value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} type="number" step="0.5" placeholder="2" />
                   </div>
                 </div>
@@ -462,14 +448,14 @@ export function Onboarding() {
               <div className="flex items-center justify-between gap-3 pt-1">
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  AI Scout runs after saving (~20s)
+                  {t("onboarding.scoutRunning")}
                 </div>
                 <Button
                   onClick={handleSave}
                   disabled={!name.trim() || !address.trim() || saveBusy}
                   className="gap-1.5"
                 >
-                  Save & Generate Plan
+                  {t("onboarding.saveAndGenerate")}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -488,20 +474,16 @@ export function Onboarding() {
                 </div>
               </div>
               <div className="space-y-2">
-                <h2 className="text-2xl font-bold">AI Scout is on it</h2>
+                <h2 className="text-2xl font-bold">{t("onboarding.scoutingTitle")}</h2>
                 <p className="text-muted-foreground max-w-sm leading-relaxed">
-                  Analyzing your home's age, location, and climate to build a personalized Whole-Home Stewardship Plan…
+                  {t("onboarding.scoutingSubtitle")}
                 </p>
               </div>
               <div className="w-full max-w-xs space-y-3 pt-2">
-                {[
-                  "Reviewing home age & regional climate",
-                  "Identifying system-specific risks",
-                  "Generating your maintenance schedule",
-                ].map((s, i) => (
-                  <div key={i} className="flex items-center gap-2.5 text-sm text-muted-foreground">
+                {(["scoutStep1", "scoutStep2", "scoutStep3"] as const).map((key) => (
+                  <div key={key} className="flex items-center gap-2.5 text-sm text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-primary" />
-                    {s}
+                    {t(`onboarding.${key}`)}
                   </div>
                 ))}
               </div>
@@ -516,9 +498,9 @@ export function Onboarding() {
                   <CheckCircle2 className="h-10 w-10 text-emerald-600" />
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-bold">Your home is ready!</h2>
+                  <h2 className="text-3xl font-bold">{t("onboarding.doneTitle")}</h2>
                   <p className="text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                    Property saved and your Whole-Home Stewardship Plan has been generated.
+                    {t("onboarding.doneSubtitle")}
                   </p>
                 </div>
               </div>
@@ -528,29 +510,29 @@ export function Onboarding() {
                   <Sparkles className="h-5 w-5 text-emerald-600 shrink-0" />
                   <div>
                     <p className="text-sm font-semibold text-emerald-800">
-                      {scoutResult.taskCount} maintenance tasks generated
+                      {t("onboarding.tasksGenerated", { count: scoutResult.taskCount })}
                     </p>
                     <p className="text-xs text-emerald-700 mt-0.5">
-                      Added to your Home Stewardship asset with due dates and DIY tips.
+                      {t("onboarding.tasksGeneratedDesc")}
                     </p>
                   </div>
                 </div>
               )}
 
               <div className="grid grid-cols-3 gap-3">
-                {[
-                  { icon: Building2, label: "Property saved" },
-                  { icon: Wand2, label: "AI plan created" },
-                  { icon: ClipboardList, label: "Tasks scheduled" },
-                ].map(({ icon: Icon, label }) => (
+                {([
+                  { icon: Building2,    labelKey: "confirmProperty" },
+                  { icon: Wand2,        labelKey: "confirmAI" },
+                  { icon: ClipboardList, labelKey: "confirmTasks" },
+                ] as const).map(({ icon: Icon, labelKey }) => (
                   <div
-                    key={label}
+                    key={labelKey}
                     className="rounded-xl border bg-card p-4 flex flex-col items-center gap-2"
                   >
                     <div className="bg-emerald-100 rounded-lg p-2">
                       <Icon className="h-4 w-4 text-emerald-600" />
                     </div>
-                    <p className="text-xs font-medium text-center leading-tight">{label}</p>
+                    <p className="text-xs font-medium text-center leading-tight">{t(`onboarding.${labelKey}`)}</p>
                   </div>
                 ))}
               </div>
@@ -560,7 +542,7 @@ export function Onboarding() {
                 className="gap-2 px-8 w-full"
                 onClick={handleFinish}
               >
-                Go to My Dashboard
+                {t("onboarding.goToDashboard")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>
