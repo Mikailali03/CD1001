@@ -764,22 +764,10 @@ function EditAssetModal({
     setPhotoUploading(false);
   }, [asset?.id, visible]);
 
-  async function pickEditPhoto() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Permission needed", "Photo library access is needed to add a photo.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    const picked = result.assets[0];
+  async function uploadEditAsset(picked: ImagePicker.ImagePickerAsset) {
     setPhotoUri(picked.uri);
     setPhotoUrl(null);
     setPhotoUploading(true);
-
     try {
       const token = await getToken();
       const fileName = picked.uri.split("/").pop() ?? "photo.jpg";
@@ -808,6 +796,32 @@ function EditAssetModal({
     } finally {
       setPhotoUploading(false);
     }
+  }
+
+  async function takeEditPhoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Camera access is needed to take a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadEditAsset(result.assets[0]);
+  }
+
+  async function pickEditPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Photo library access is needed to add a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadEditAsset(result.assets[0]);
   }
 
   async function patch(body: object) {
@@ -1068,16 +1082,28 @@ function EditAssetModal({
                   )}
                 </View>
               ) : (
-                <TouchableOpacity
-                  onPress={pickEditPhoto}
-                  style={[editStyles.photoPickerBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                  activeOpacity={0.7}
-                >
-                  <Feather name="camera" size={18} color={colors.mutedForeground} />
-                  <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Add a photo of the unit
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={takeEditPhoto}
+                    style={[editStyles.photoPickerBtn, { flex: 1, borderColor: colors.primary + "60", backgroundColor: colors.primary + "08" }]}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="camera" size={16} color={colors.primary} />
+                    <Text style={[{ fontSize: 12, color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                      Take Photo
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={pickEditPhoto}
+                    style={[editStyles.photoPickerBtn, { flex: 1, borderColor: colors.border, backgroundColor: colors.card }]}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="image" size={16} color={colors.mutedForeground} />
+                    <Text style={[{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                      Choose from Library
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </ScrollView>

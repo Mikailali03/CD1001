@@ -91,26 +91,14 @@ export default function AddAssetScreen() {
     setPhotoUri(null); setPhotoUrl(null); setPhotoUploading(false);
   }
 
-  async function pickAssetPhoto() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      Alert.alert("Permission needed", "Photo library access is needed to add a photo.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
-    setPhotoUri(asset.uri);
+  async function uploadPickedAsset(pickedAsset: ImagePicker.ImagePickerAsset) {
+    setPhotoUri(pickedAsset.uri);
     setPhotoUrl(null);
     setPhotoUploading(true);
-
     try {
       const token = await getToken();
-      const fileName = asset.uri.split("/").pop() ?? "photo.jpg";
-      const contentType = asset.mimeType ?? "image/jpeg";
+      const fileName = pickedAsset.uri.split("/").pop() ?? "photo.jpg";
+      const contentType = pickedAsset.mimeType ?? "image/jpeg";
 
       const urlRes = await fetch(`${base}/api/storage/uploads/request-url`, {
         method: "POST",
@@ -118,12 +106,12 @@ export default function AddAssetScreen() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ name: fileName, size: asset.fileSize ?? 0, contentType }),
+        body: JSON.stringify({ name: fileName, size: pickedAsset.fileSize ?? 0, contentType }),
       });
       if (!urlRes.ok) throw new Error("Failed to get upload URL");
       const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
 
-      const blob = await (await fetch(asset.uri)).blob();
+      const blob = await (await fetch(pickedAsset.uri)).blob();
       const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
       if (!putRes.ok) throw new Error(`PUT failed: ${putRes.status}`);
 
@@ -135,6 +123,32 @@ export default function AddAssetScreen() {
     } finally {
       setPhotoUploading(false);
     }
+  }
+
+  async function takeAssetPhoto() {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Camera access is needed to take a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadPickedAsset(result.assets[0]);
+  }
+
+  async function pickAssetPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Photo library access is needed to add a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadPickedAsset(result.assets[0]);
   }
 
   async function pickFromCamera() {
@@ -690,16 +704,28 @@ export default function AddAssetScreen() {
                   )}
                 </View>
               ) : (
-                <TouchableOpacity
-                  onPress={pickAssetPhoto}
-                  style={[s.photoPickerBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-                  activeOpacity={0.7}
-                >
-                  <Feather name="camera" size={18} color={colors.mutedForeground} />
-                  <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Add a photo of the unit
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={takeAssetPhoto}
+                    style={[s.photoPickerBtn, { flex: 1, borderColor: colors.primary + "60", backgroundColor: colors.primary + "08" }]}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="camera" size={16} color={colors.primary} />
+                    <Text style={[{ fontSize: 12, color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                      Take Photo
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={pickAssetPhoto}
+                    style={[s.photoPickerBtn, { flex: 1, borderColor: colors.border, backgroundColor: colors.card }]}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="image" size={16} color={colors.mutedForeground} />
+                    <Text style={[{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                      Choose from Library
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </ScrollView>
