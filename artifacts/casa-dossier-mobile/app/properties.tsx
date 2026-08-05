@@ -18,6 +18,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
+import { useAuth } from "@clerk/expo";
 import {
   useListProperties,
   useGetPropertySummary,
@@ -443,9 +445,18 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
   const queryClient = useQueryClient();
   const createProperty = useCreateProperty();
   const updateProperty = useUpdateProperty();
+  const { getToken } = useAuth();
+
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const baseUrl = domain ? `https://${domain}` : "";
 
   const [form, setForm] = useState<FormState>(BLANK_FORM);
   const [saving, setSaving] = useState(false);
+
+  // Photo state
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
 
   // Populate form when opening for edit
   useEffect(() => {
@@ -461,12 +472,70 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
           yearBuilt: p.yearBuilt != null ? String(p.yearBuilt) : "",
           sqft: p.sqft != null ? String(p.sqft) : "",
         });
+        setPhotoUri(p.photoUrl ?? null);
+        setPhotoUrl(p.photoUrl ?? null);
       } else {
         setForm(BLANK_FORM);
+        setPhotoUri(null);
+        setPhotoUrl(null);
       }
       setSaving(false);
+      setPhotoUploading(false);
     }
   }, [visible, mode, property?.id]);
+
+  async function pickPhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Please allow access to your photo library to add a property photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setPhotoUri(asset.uri);
+    setPhotoUrl(null);
+    setPhotoUploading(true);
+
+    try {
+      const token = await getToken();
+      const fileName = asset.uri.split("/").pop() ?? "photo.jpg";
+      const contentType = asset.mimeType ?? "image/jpeg";
+
+      const urlRes = await fetch(`${baseUrl}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: fileName, size: asset.fileSize ?? 0, contentType }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+
+      const blob = await (await fetch(asset.uri)).blob();
+      await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
+
+      setPhotoUrl(`${baseUrl}/api/storage${objectPath}`);
+    } catch {
+      Alert.alert("Upload failed", "Could not upload the photo. Please try again.");
+      setPhotoUri(null);
+      setPhotoUrl(null);
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
+
+  function removePhoto() {
+    setPhotoUri(null);
+    setPhotoUrl(null);
+  }
 
   function set(key: keyof FormState, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -475,6 +544,10 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
   async function handleSave() {
     if (!form.name.trim() || !form.address.trim()) {
       Alert.alert("Required fields", "Please fill in the property name and address.");
+      return;
+    }
+    if (photoUploading) {
+      Alert.alert("Please wait", "Photo is still uploading. Please wait a moment.");
       return;
     }
     setSaving(true);
@@ -494,6 +567,7 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
           ...(form.zipCode.trim() ? { zipCode: form.zipCode.trim() } : {}),
           ...(!isNaN(yearBuiltNum) && yearBuiltNum > 0 ? { yearBuilt: yearBuiltNum } : {}),
           ...(!isNaN(sqftNum) && sqftNum > 0 ? { sqft: sqftNum } : {}),
+          ...(photoUrl ? { photoUrl } : {}),
         };
         await createProperty.mutateAsync({ data: createData });
         await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
@@ -507,6 +581,7 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
           zipCode: form.zipCode.trim() || null,
           yearBuilt: !isNaN(yearBuiltNum) && yearBuiltNum > 0 ? yearBuiltNum : null,
           sqft: !isNaN(sqftNum) && sqftNum > 0 ? sqftNum : null,
+          photoUrl: photoUrl ?? null,
         };
         await updateProperty.mutateAsync({ propertyId: property.id, data: updateData });
         await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
@@ -654,6 +729,60 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
                   />
                 </View>
               </View>
+
+              {/* Photo */}
+              <View style={fStyles.field}>
+                <Text style={labelStyle}>Property Photo</Text>
+                {photoUri ? (
+                  <View style={fStyles.photoPreviewContainer}>
+                    <Image
+                      source={{ uri: photoUri }}
+                      style={fStyles.photoPreview}
+                      resizeMode="cover"
+                    />
+                    {photoUploading && (
+                      <View style={fStyles.photoOverlay}>
+                        <ActivityIndicator color="#fff" size="small" />
+                        <Text style={fStyles.photoOverlayText}>Uploading…</Text>
+                      </View>
+                    )}
+                    {!photoUploading && (
+                      <View style={fStyles.photoActions}>
+                        <TouchableOpacity
+                          onPress={pickPhoto}
+                          style={fStyles.photoActionBtn}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="camera" size={13} color={colors.foreground} />
+                          <Text style={[fStyles.photoActionText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>Change</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={removePhoto}
+                          style={[fStyles.photoActionBtn, { backgroundColor: "#fee2e2" }]}
+                          activeOpacity={0.8}
+                        >
+                          <Feather name="trash-2" size={13} color="#ef4444" />
+                          <Text style={[fStyles.photoActionText, { color: "#ef4444", fontFamily: "Inter_500Medium" }]}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    onPress={pickPhoto}
+                    style={[fStyles.photoPlaceholder, { borderColor: colors.border, backgroundColor: colors.muted + "40" }]}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="image" size={24} color={colors.mutedForeground} style={{ opacity: 0.6 }} />
+                    <Text style={[fStyles.photoPlaceholderText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                      Tap to add a photo
+                    </Text>
+                    <Text style={[fStyles.photoPlaceholderSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                      Optional — from your photo library
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </ScrollView>
 
             {/* Footer */}
@@ -718,6 +847,31 @@ const fStyles = StyleSheet.create({
   cancelText: { fontSize: 15 },
   saveBtn: { flex: 2, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   saveText: { fontSize: 15, color: "#fff" },
+  photoPlaceholder: {
+    height: 110, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
+    alignItems: "center", justifyContent: "center", gap: 6,
+  },
+  photoPlaceholderText: { fontSize: 14 },
+  photoPlaceholderSub: { fontSize: 11, opacity: 0.7 },
+  photoPreviewContainer: { borderRadius: 12, overflow: "hidden", height: 140 },
+  photoPreview: { width: "100%", height: "100%" },
+  photoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center", justifyContent: "center", gap: 6,
+  },
+  photoOverlayText: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium" },
+  photoActions: {
+    position: "absolute", bottom: 8, right: 8,
+    flexDirection: "row", gap: 6,
+  },
+  photoActionBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#fff",
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 8,
+  },
+  photoActionText: { fontSize: 12 },
 });
 
 // ---------------------------------------------------------------------------
