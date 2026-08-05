@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { bootstrapUserProfiles } from "./lib/bootstrapUserProfiles";
 import { sendMaintenanceReminders } from "./lib/maintenanceReminders.js";
+import { sendMonthlyTips } from "./lib/monthlyTips.js";
 
 const rawPort = process.env["PORT"];
 
@@ -35,6 +36,16 @@ app.listen(port, (err) => {
     if (hour === 8) {
       sendMaintenanceReminders().catch((err) =>
         logger.error({ err }, "Maintenance reminders failed"),
+      );
+    }
+  }, 60 * 60 * 1000);
+
+  // Monthly tips cron — runs every 24h, fires on the 1st of the month at 9am
+  setInterval(() => {
+    const now = new Date();
+    if (now.getDate() === 1 && now.getHours() === 9) {
+      sendMonthlyTips().catch((err) =>
+        logger.error({ err }, "Monthly tips failed"),
       );
     }
   }, 60 * 60 * 1000);

@@ -121,7 +121,9 @@ export default function SignInScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (signUp as any).attemptEmailAddressVerification({ code: verificationCode.trim() });
+      const result = await (signUp as any).attemptEmailAddressVerification({
+        code: verificationCode.trim(),
+      });
       if (result.status === "complete") {
         await setSignUpActive({ session: result.createdSessionId });
       } else {
@@ -167,74 +169,78 @@ export default function SignInScreen() {
           Your Home's Complete History
         </Text>
 
-        {/* SSO Buttons */}
-        <View style={[styles.ssoGroup, { width: "100%", maxWidth: 400 }]}>
-          <TouchableOpacity
-            style={[
-              styles.ssoBtn,
-              { backgroundColor: colors.card, borderColor: colors.border },
-              anyLoading && { opacity: 0.65 },
-            ]}
-            onPress={() => handleSSOSignIn("oauth_google")}
-            disabled={anyLoading}
-            activeOpacity={0.75}
-          >
-            {ssoLoading === "google" ? (
-              <ActivityIndicator color={colors.foreground} size="small" />
-            ) : (
-              <GoogleIcon />
-            )}
+        {/* SSO Buttons — hidden during verification step */}
+        {!pendingVerification && (
+          <View style={[styles.ssoGroup, { width: "100%", maxWidth: 400 }]}>
+            <TouchableOpacity
+              style={[
+                styles.ssoBtn,
+                { backgroundColor: colors.card, borderColor: colors.border },
+                anyLoading && { opacity: 0.65 },
+              ]}
+              onPress={() => handleSSOSignIn("oauth_google")}
+              disabled={anyLoading}
+              activeOpacity={0.75}
+            >
+              {ssoLoading === "google" ? (
+                <ActivityIndicator color={colors.foreground} size="small" />
+              ) : (
+                <GoogleIcon />
+              )}
+              <Text
+                style={[
+                  styles.ssoBtnText,
+                  { color: colors.foreground, fontFamily: "Inter_500Medium" },
+                ]}
+              >
+                Continue with Google
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.ssoBtn,
+                { backgroundColor: colors.primary, borderColor: colors.primary },
+                anyLoading && { opacity: 0.65 },
+              ]}
+              onPress={() => handleSSOSignIn("oauth_apple")}
+              disabled={anyLoading}
+              activeOpacity={0.75}
+            >
+              {ssoLoading === "apple" ? (
+                <ActivityIndicator color={colors.primaryForeground} size="small" />
+              ) : (
+                <AppleIcon color={colors.primaryForeground} />
+              )}
+              <Text
+                style={[
+                  styles.ssoBtnText,
+                  { color: colors.primaryForeground, fontFamily: "Inter_500Medium" },
+                ]}
+              >
+                Continue with Apple
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Divider — hidden during verification */}
+        {!pendingVerification && (
+          <View style={[styles.dividerRow, { width: "100%", maxWidth: 400 }]}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
             <Text
               style={[
-                styles.ssoBtnText,
-                { color: colors.foreground, fontFamily: "Inter_500Medium" },
+                styles.dividerText,
+                { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
               ]}
             >
-              Continue with Google
+              or
             </Text>
-          </TouchableOpacity>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          </View>
+        )}
 
-          <TouchableOpacity
-            style={[
-              styles.ssoBtn,
-              { backgroundColor: colors.primary, borderColor: colors.primary },
-              anyLoading && { opacity: 0.65 },
-            ]}
-            onPress={() => handleSSOSignIn("oauth_apple")}
-            disabled={anyLoading}
-            activeOpacity={0.75}
-          >
-            {ssoLoading === "apple" ? (
-              <ActivityIndicator color={colors.primaryForeground} size="small" />
-            ) : (
-              <AppleIcon color={colors.primaryForeground} />
-            )}
-            <Text
-              style={[
-                styles.ssoBtnText,
-                { color: colors.primaryForeground, fontFamily: "Inter_500Medium" },
-              ]}
-            >
-              Continue with Apple
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Divider */}
-        <View style={styles.dividerRow}>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          <Text
-            style={[
-              styles.dividerText,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            or
-          </Text>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-        </View>
-
-        {/* Email/password form card */}
+        {/* Card — switches between sign-in/up form and verification code form */}
         <View
           style={[
             styles.card,
@@ -243,10 +249,14 @@ export default function SignInScreen() {
         >
           {pendingVerification ? (
             <>
-              <Text style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+              <Text
+                style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+              >
                 Check your email
               </Text>
-              <Text style={[styles.verifyHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              <Text
+                style={[styles.verifyHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+              >
                 We sent a 6-digit code to {email}. Enter it below to verify your account.
               </Text>
               <TextInput
@@ -272,13 +282,19 @@ export default function SignInScreen() {
               {error !== "" && (
                 <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "18" }]}>
                   <Feather name="alert-circle" size={14} color={colors.destructive} />
-                  <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                  <Text
+                    style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}
+                  >
                     {error}
                   </Text>
                 </View>
               )}
               <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: colors.primary }, anyLoading && { opacity: 0.7 }]}
+                style={[
+                  styles.submitBtn,
+                  { backgroundColor: colors.primary },
+                  (anyLoading || verificationCode.length < 6) && { opacity: 0.7 },
+                ]}
                 onPress={handleVerify}
                 disabled={anyLoading || verificationCode.length < 6}
                 activeOpacity={0.85}
@@ -286,34 +302,78 @@ export default function SignInScreen() {
                 {loading ? (
                   <ActivityIndicator color={colors.primaryForeground} />
                 ) : (
-                  <Text style={[styles.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                  <Text
+                    style={[styles.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}
+                  >
                     Verify Email
                   </Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => { setPendingVerification(false); setError(""); setVerificationCode(""); }}
+                onPress={() => {
+                  setPendingVerification(false);
+                  setError("");
+                  setVerificationCode("");
+                }}
                 style={{ alignItems: "center", marginTop: 4 }}
               >
-                <Text style={[styles.toggleLink, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                <Text
+                  style={[styles.toggleLink, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
+                >
                   Back to sign up
                 </Text>
               </TouchableOpacity>
             </>
           ) : (
-          <>
-          <Text
-            style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
-          >
-            {mode === "signin" ? "Sign in with email" : "Create account"}
-          </Text>
+            <>
+              <Text
+                style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
+              >
+                {mode === "signin" ? "Sign in with email" : "Create account"}
+              </Text>
 
-          {mode === "signup" && (
-            <View style={styles.nameRow}>
+              {mode === "signup" && (
+                <View style={styles.nameRow}>
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.halfInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        fontFamily: "Inter_400Regular",
+                      },
+                    ]}
+                    placeholder="First name"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={firstName}
+                    onChangeText={setFirstName}
+                    autoCapitalize="words"
+                  />
+                  <TextInput
+                    style={[
+                      styles.input,
+                      styles.halfInput,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.border,
+                        color: colors.foreground,
+                        fontFamily: "Inter_400Regular",
+                      },
+                    ]}
+                    placeholder="Last name"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={lastName}
+                    onChangeText={setLastName}
+                    autoCapitalize="words"
+                  />
+                </View>
+              )}
+
               <TextInput
                 style={[
                   styles.input,
-                  styles.halfInput,
                   {
                     backgroundColor: colors.background,
                     borderColor: colors.border,
@@ -321,147 +381,111 @@ export default function SignInScreen() {
                     fontFamily: "Inter_400Regular",
                   },
                 ]}
-                placeholder="First name"
+                placeholder="Email address"
                 placeholderTextColor={colors.mutedForeground}
-                value={firstName}
-                onChangeText={setFirstName}
-                autoCapitalize="words"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
-              <TextInput
+
+              <View style={styles.passwordWrap}>
+                <TextInput
+                  style={[
+                    styles.input,
+                    styles.passwordInput,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                      color: colors.foreground,
+                      fontFamily: "Inter_400Regular",
+                    },
+                  ]}
+                  placeholder="Password"
+                  placeholderTextColor={colors.mutedForeground}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                />
+                <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
+                  <Feather
+                    name={showPassword ? "eye-off" : "eye"}
+                    size={18}
+                    color={colors.mutedForeground}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {error !== "" && (
+                <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "18" }]}>
+                  <Feather name="alert-circle" size={14} color={colors.destructive} />
+                  <Text
+                    style={[
+                      styles.errorText,
+                      { color: colors.destructive, fontFamily: "Inter_400Regular" },
+                    ]}
+                  >
+                    {error}
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity
                 style={[
-                  styles.input,
-                  styles.halfInput,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.border,
-                    color: colors.foreground,
-                    fontFamily: "Inter_400Regular",
-                  },
+                  styles.submitBtn,
+                  { backgroundColor: colors.primary },
+                  anyLoading && { opacity: 0.7 },
                 ]}
-                placeholder="Last name"
-                placeholderTextColor={colors.mutedForeground}
-                value={lastName}
-                onChangeText={setLastName}
-                autoCapitalize="words"
-              />
-            </View>
-          )}
-
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.background,
-                borderColor: colors.border,
-                color: colors.foreground,
-                fontFamily: "Inter_400Regular",
-              },
-            ]}
-            placeholder="Email address"
-            placeholderTextColor={colors.mutedForeground}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-
-          <View style={styles.passwordWrap}>
-            <TextInput
-              style={[
-                styles.input,
-                styles.passwordInput,
-                {
-                  backgroundColor: colors.background,
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                  fontFamily: "Inter_400Regular",
-                },
-              ]}
-              placeholder="Password"
-              placeholderTextColor={colors.mutedForeground}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword((v) => !v)}>
-              <Feather
-                name={showPassword ? "eye-off" : "eye"}
-                size={18}
-                color={colors.mutedForeground}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {error !== "" && (
-            <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "18" }]}>
-              <Feather name="alert-circle" size={14} color={colors.destructive} />
-              <Text
-                style={[
-                  styles.errorText,
-                  { color: colors.destructive, fontFamily: "Inter_400Regular" },
-                ]}
+                onPress={handleAuth}
+                disabled={anyLoading}
+                activeOpacity={0.85}
               >
-                {error}
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[
-              styles.submitBtn,
-              { backgroundColor: colors.primary },
-              anyLoading && { opacity: 0.7 },
-            ]}
-            onPress={handleAuth}
-            disabled={anyLoading}
-            activeOpacity={0.85}
-          >
-            {loading ? (
-              <ActivityIndicator color={colors.primaryForeground} />
-            ) : (
-              <Text
-                style={[
-                  styles.submitText,
-                  { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" },
-                ]}
-              >
-                {mode === "signin" ? "Sign In" : "Create Account"}
-              </Text>
-            )}
-          </TouchableOpacity>
-          </>
+                {loading ? (
+                  <ActivityIndicator color={colors.primaryForeground} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.submitText,
+                      { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" },
+                    ]}
+                  >
+                    {mode === "signin" ? "Sign In" : "Create Account"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </>
           )}
         </View>
 
-        {/* Toggle */}
+        {/* Toggle sign-in / sign-up — hidden during verification */}
         {!pendingVerification && (
-        <View style={styles.toggleRow}>
-          <Text
-            style={[
-              styles.toggleText,
-              { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
-            ]}
-          >
-            {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
-          </Text>
-          <TouchableOpacity
-            onPress={() => {
-              setMode((m) => (m === "signin" ? "signup" : "signin"));
-              setError("");
-            }}
-          >
+          <View style={styles.toggleRow}>
             <Text
               style={[
-                styles.toggleLink,
-                { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                styles.toggleText,
+                { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
               ]}
             >
-              {mode === "signin" ? "Sign Up" : "Sign In"}
+              {mode === "signin" ? "Don't have an account?" : "Already have an account?"}
             </Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              onPress={() => {
+                setMode((m) => (m === "signin" ? "signup" : "signin"));
+                setError("");
+              }}
+            >
+              <Text
+                style={[
+                  styles.toggleLink,
+                  { color: colors.primary, fontFamily: "Inter_600SemiBold" },
+                ]}
+              >
+                {mode === "signin" ? "Sign Up" : "Sign In"}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </KeyboardAvoidingView>
@@ -517,8 +541,6 @@ const styles = StyleSheet.create({
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
-    width: "100%",
-    maxWidth: 400,
     marginVertical: 20,
     gap: 12,
   },
@@ -531,6 +553,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   cardTitle: { fontSize: 16, marginBottom: 2 },
+  verifyHint: { fontSize: 14, lineHeight: 20 },
   nameRow: { flexDirection: "row", gap: 10 },
   halfInput: { flex: 1 },
   input: {
@@ -573,5 +596,4 @@ const styles = StyleSheet.create({
   },
   toggleText: { fontSize: 14 },
   toggleLink: { fontSize: 14 },
-  verifyHint: { fontSize: 14, lineHeight: 20 },
 });
