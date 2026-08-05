@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthFetch } from "@/hooks/use-auth-fetch";
 import {
@@ -41,6 +41,9 @@ import {
   ShieldCheck,
   Archive,
   ArchiveRestore,
+  Camera,
+  ImagePlus,
+  X as XIcon,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -79,6 +82,7 @@ type Asset = {
   notes?: string | null;
   status?: string | null;
   retiredAt?: string | Date | null;
+  photoUrl?: string | null;
 };
 
 type Props = {
@@ -106,6 +110,12 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
   const [warrantyExpiry, setWarrantyExpiry] = useState("");
   const [notes, setNotes] = useState("");
 
+  // Photo upload state
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isRetired = !!asset?.retiredAt;
 
   useEffect(() => {
@@ -123,7 +133,44 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
       asset.warrantyExpiry ? asset.warrantyExpiry.substring(0, 7) : ""
     );
     setNotes(asset.notes ?? "");
+    setPhotoPreview(asset.photoUrl ?? null);
+    setPendingPhotoUrl(null);
   }, [asset]);
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPhotoPreview(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const urlRes = await authFetch(`${BASE}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+      const uploadRes = await fetch(uploadURL, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error("Upload failed");
+      setPendingPhotoUrl(`${BASE}/api/storage${objectPath}`);
+    } catch {
+      toast({ title: "Photo upload failed", variant: "destructive" });
+      setPhotoPreview(asset?.photoUrl ?? null);
+      setPendingPhotoUrl(null);
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
+
+  function removePhoto() {
+    setPhotoPreview(null);
+    setPendingPhotoUrl("");
+  }
 
   function invalidateAssetQueries() {
     queryClient.invalidateQueries({
@@ -142,22 +189,25 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     if (!asset || !name.trim()) return;
     setBusy(true);
     try {
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        category,
+        brand: brand.trim() || null,
+        model: model.trim() || null,
+        serialNumber: serialNumber.trim() || null,
+        installDate: installDate ? `${installDate}-01` : null,
+        replacementCost: replacementCost ? parseFloat(replacementCost) : null,
+        warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : null,
+        notes: notes.trim() || null,
+      };
+      // Only send photoUrl when it has been changed (pendingPhotoUrl !== null)
+      if (pendingPhotoUrl !== null) {
+        body.photoUrl = pendingPhotoUrl || null;
+      }
       const res = await authFetch(`${BASE}/api/assets/${asset.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          category,
-          brand: brand.trim() || null,
-          model: model.trim() || null,
-          serialNumber: serialNumber.trim() || null,
-          installDate: installDate ? `${installDate}-01` : null,
-          replacementCost: replacementCost
-            ? parseFloat(replacementCost)
-            : null,
-          warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : null,
-          notes: notes.trim() || null,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) throw new Error("Failed");
@@ -244,6 +294,66 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
           )}
 
           <div className="space-y-4">
+            {/* Photo */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Asset Photo</Label>
+              <div className="relative group">
+                {photoPreview ? (
+                  <div className="relative h-44 w-full rounded-xl overflow-hidden border border-border">
+                    <img src={photoPreview} alt="Asset" className="h-full w-full object-cover" />
+                    {uploading && (
+                      <div className="absolute inset-0 bg-background/70 flex items-center justify-center">
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                      </div>
+                    )}
+                    {!uploading && (
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="bg-white/90 hover:bg-white text-foreground rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+                        >
+                          <Camera className="h-3.5 w-3.5" />
+                          Change
+                        </button>
+                        <button
+                          type="button"
+                          onClick={removePhoto}
+                          className="bg-white/90 hover:bg-white text-destructive rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
+                        >
+                          <XIcon className="h-3.5 w-3.5" />
+                          Remove
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="w-full h-32 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/40 hover:bg-primary/5 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-primary transition-all cursor-pointer"
+                  >
+                    {uploading ? (
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    ) : (
+                      <>
+                        <ImagePlus className="h-6 w-6" />
+                        <span className="text-xs font-medium">Upload a photo</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+            </div>
+
             {/* Name */}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">

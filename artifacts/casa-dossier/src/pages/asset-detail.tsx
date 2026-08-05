@@ -1272,6 +1272,17 @@ export default function AssetDetail() {
         </div>
       </div>
 
+      {/* Asset Photo */}
+      {(asset as any).photoUrl && (
+        <div className="rounded-2xl overflow-hidden border" style={{ borderColor: cfg.color + "30" }}>
+          <img
+            src={(asset as any).photoUrl}
+            alt={asset.name}
+            className="w-full max-h-72 object-cover"
+          />
+        </div>
+      )}
+
       {/* Notes */}
       {asset.notes && (
         <div className="rounded-xl border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
