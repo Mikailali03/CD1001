@@ -432,6 +432,15 @@ const BLANK_FORM: FormState = {
   name: "", address: "", city: "", state: "", zipCode: "", yearBuilt: "", sqft: "",
 };
 
+interface LookupResult {
+  address: string;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  yearBuilt: number | null;
+  sqft: number | null;
+}
+
 interface PropertyFormModalProps {
   mode: "add" | "edit";
   property?: Property | null;
@@ -452,6 +461,11 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
 
   const [form, setForm] = useState<FormState>(BLANK_FORM);
   const [saving, setSaving] = useState(false);
+
+  // Address lookup state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupFilled, setLookupFilled] = useState(false);
 
   // Photo state
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -481,8 +495,51 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
       }
       setSaving(false);
       setPhotoUploading(false);
+      setSearchQuery("");
+      setLookupLoading(false);
+      setLookupFilled(false);
     }
   }, [visible, mode, property?.id]);
+
+  async function handleLookup() {
+    const q = searchQuery.trim();
+    if (!q) return;
+    setLookupLoading(true);
+    setLookupFilled(false);
+    try {
+      const token = await getToken();
+      const res = await fetch(
+        `${baseUrl}/api/properties/lookup?address=${encodeURIComponent(q)}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as any;
+        const msg =
+          res.status === 404
+            ? "No property found for that address. You can still fill in the details manually."
+            : (body?.detail ?? "Could not look up the address. Please try again.");
+        Alert.alert("Address not found", msg);
+        return;
+      }
+      const data = (await res.json()) as LookupResult;
+      setForm((prev) => ({
+        name: prev.name || data.address,
+        address: data.address,
+        city: data.city ?? prev.city,
+        state: data.state ?? prev.state,
+        zipCode: data.zipCode ?? prev.zipCode,
+        yearBuilt: data.yearBuilt != null ? String(data.yearBuilt) : prev.yearBuilt,
+        sqft: data.sqft != null ? String(data.sqft) : prev.sqft,
+      }));
+      setLookupFilled(true);
+    } catch {
+      Alert.alert("Error", "Could not reach the server. Please check your connection.");
+    } finally {
+      setLookupLoading(false);
+    }
+  }
 
   async function pickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -632,6 +689,50 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
+              {/* Address Search (add mode only) */}
+              {mode === "add" && (
+                <View style={fStyles.field}>
+                  <Text style={[fStyles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+                    Search Address
+                  </Text>
+                  <View style={fStyles.searchRow}>
+                    <TextInput
+                      style={[
+                        fStyles.searchInput,
+                        { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" },
+                      ]}
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      placeholder="e.g. 123 Main St, Austin, TX"
+                      placeholderTextColor={colors.mutedForeground}
+                      returnKeyType="search"
+                      onSubmitEditing={handleLookup}
+                      editable={!lookupLoading}
+                    />
+                    <TouchableOpacity
+                      onPress={handleLookup}
+                      style={[fStyles.searchBtn, { backgroundColor: colors.primary, opacity: lookupLoading || !searchQuery.trim() ? 0.6 : 1 }]}
+                      activeOpacity={0.8}
+                      disabled={lookupLoading || !searchQuery.trim()}
+                    >
+                      {lookupLoading ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Feather name="search" size={17} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  {lookupFilled && (
+                    <View style={[fStyles.filledBanner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "35" }]}>
+                      <Feather name="check-circle" size={13} color={colors.primary} />
+                      <Text style={[fStyles.filledText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
+                        Fields filled from public records — feel free to edit any of them.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
               {/* Name */}
               <View style={fStyles.field}>
                 <Text style={labelStyle}>Property Name *</Text>
@@ -847,6 +948,20 @@ const fStyles = StyleSheet.create({
   cancelText: { fontSize: 15 },
   saveBtn: { flex: 2, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   saveText: { fontSize: 15, color: "#fff" },
+  searchRow: { flexDirection: "row", gap: 8 },
+  searchInput: {
+    flex: 1, height: 44, borderWidth: 1, borderRadius: 10,
+    paddingHorizontal: 12, fontSize: 15,
+  },
+  searchBtn: {
+    width: 44, height: 44, borderRadius: 10,
+    alignItems: "center", justifyContent: "center",
+  },
+  filledBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 6,
+    borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2,
+  },
+  filledText: { fontSize: 12, flex: 1, lineHeight: 16 },
   photoPlaceholder: {
     height: 110, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
     alignItems: "center", justifyContent: "center", gap: 6,
