@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { PropertyFormModal } from "@/components/PropertyFormModal";
 import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import {
   View,
@@ -462,6 +463,7 @@ export default function HomeScreen() {
   const [healthModalOpen, setHealthModalOpen] = useState(false);
   const [invitesSheetOpen, setInvitesSheetOpen] = useState(false);
   const [inboxOverride, setInboxOverride] = useState<Inbox | null>(null);
+  const [addPropertyOpen, setAddPropertyOpen] = useState(false);
 
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const baseUrl = domain ? `https://${domain}` : "";
@@ -581,12 +583,33 @@ export default function HomeScreen() {
             <Feather name="home" size={48} color={colors.mutedForeground} style={{ opacity: 0.4 }} />
           </View>
           <Text style={{ fontSize: 20, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 }}>
-            No property selected
+            No property yet
           </Text>
-          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" }}>
-            Add your home in the web app to start tracking health scores, assets, and maintenance.
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular", marginBottom: 28 }}>
+            Add your first home to start tracking health scores, assets, and maintenance.
           </Text>
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setAddPropertyOpen(true); }}
+            activeOpacity={0.85}
+            style={{
+              flexDirection: "row", alignItems: "center", gap: 8,
+              backgroundColor: colors.primary, borderRadius: 14,
+              paddingHorizontal: 24, paddingVertical: 14,
+            }}
+          >
+            <Feather name="plus" size={18} color={colors.primaryForeground} />
+            <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground }}>
+              Add Property
+            </Text>
+          </TouchableOpacity>
         </View>
+        <PropertyFormModal
+          mode="add"
+          visible={addPropertyOpen}
+          onClose={() => setAddPropertyOpen(false)}
+          colors={colors}
+          insets={insets}
+        />
       </View>
     );
   }
