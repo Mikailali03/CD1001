@@ -89,17 +89,16 @@ export const UpdatePropertyParams = zod.object({
 export const UpdatePropertyBody = zod.object({
   name: zod.string().optional(),
   address: zod.string().optional(),
-  // nullable allows explicitly clearing an existing value (null → database null)
-  city: zod.string().nullable().optional(),
-  state: zod.string().nullable().optional(),
-  zipCode: zod.string().nullable().optional(),
-  yearBuilt: zod.number().nullable().optional(),
-  sqft: zod.number().nullable().optional(),
-  bedrooms: zod.number().nullable().optional(),
-  bathrooms: zod.number().nullable().optional(),
-  latitude: zod.number().nullable().optional(),
-  longitude: zod.number().nullable().optional(),
-  photoUrl: zod.string().nullable().optional(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  zipCode: zod.string().nullish(),
+  yearBuilt: zod.number().nullish(),
+  sqft: zod.number().nullish(),
+  bedrooms: zod.number().nullish(),
+  bathrooms: zod.number().nullish(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
+  photoUrl: zod.string().nullish(),
 });
 
 export const UpdatePropertyResponse = zod.object({
@@ -392,7 +391,7 @@ export const UpdateAssetBody = zod.object({
   warrantyExpiry: zod.coerce.date().optional(),
   status: zod.enum(["verified", "unverified", "needs_attention"]).optional(),
   notes: zod.string().optional(),
-  photoUrl: zod.string().optional(),
+  photoUrl: zod.string().nullish(),
   retiredAt: zod.coerce.date().nullish(),
   replacementCost: zod.number().optional(),
 });

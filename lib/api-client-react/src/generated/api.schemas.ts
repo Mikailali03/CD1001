@@ -287,7 +287,7 @@ export interface UpdateAssetBody {
   warrantyExpiry?: string;
   status?: UpdateAssetBodyStatus;
   notes?: string;
-  photoUrl?: string;
+  photoUrl?: string | null;
   retiredAt?: string | null;
   replacementCost?: number;
 }

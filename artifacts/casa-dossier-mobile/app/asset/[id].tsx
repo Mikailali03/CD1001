@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
 import {
   View,
   Text,
@@ -47,6 +49,7 @@ type Asset = {
   status: string;
   notes?: string;
   replacementCost?: number;
+  photoUrl?: string;
   createdAt: string;
 };
 
@@ -737,6 +740,11 @@ function EditAssetModal({
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [retireConfirm, setRetireConfirm] = useState(false);
 
+  // Photo upload state
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   const isRetired = !!(asset as any)?.retiredAt;
 
   // Populate form whenever asset changes
@@ -751,7 +759,56 @@ function EditAssetModal({
     setReplacementCost(asset.replacementCost != null ? String(Number(asset.replacementCost)) : "");
     setWarrantyExpiry(asset.warrantyExpiry ? asset.warrantyExpiry.substring(0, 7) : "");
     setNotes((asset as any).notes ?? "");
+    setPhotoUri(asset.photoUrl ?? null);
+    setPhotoUrl(asset.photoUrl ?? null);
+    setPhotoUploading(false);
   }, [asset?.id, visible]);
+
+  async function pickEditPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Photo library access is needed to add a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const picked = result.assets[0];
+    setPhotoUri(picked.uri);
+    setPhotoUrl(null);
+    setPhotoUploading(true);
+
+    try {
+      const token = await getToken();
+      const fileName = picked.uri.split("/").pop() ?? "photo.jpg";
+      const contentType = picked.mimeType ?? "image/jpeg";
+
+      const urlRes = await fetch(`${baseUrl}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: fileName, size: picked.fileSize ?? 0, contentType }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+
+      const blob = await (await fetch(picked.uri)).blob();
+      const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
+      if (!putRes.ok) throw new Error(`PUT failed: ${putRes.status}`);
+
+      setPhotoUrl(`${baseUrl}/api/storage${objectPath}`);
+    } catch {
+      Alert.alert("Upload failed", "Could not upload the photo. Please try again.");
+      setPhotoUri(null);
+      setPhotoUrl(null);
+    } finally {
+      setPhotoUploading(false);
+    }
+  }
 
   async function patch(body: object) {
     if (!asset) return false;
@@ -775,6 +832,10 @@ function EditAssetModal({
 
   async function handleSave() {
     if (!name.trim()) { Alert.alert("Name required", "Please enter an asset name."); return; }
+    if (photoUploading) {
+      Alert.alert("Please wait", "Photo is still uploading. Please wait a moment.");
+      return;
+    }
     const ok = await patch({
       name: name.trim(),
       category,
@@ -785,6 +846,7 @@ function EditAssetModal({
       replacementCost: replacementCost ? parseFloat(replacementCost) : undefined,
       warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : undefined,
       notes: notes.trim() || undefined,
+      photoUrl: photoUrl ?? null,
     });
     if (ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -982,6 +1044,42 @@ function EditAssetModal({
                 style={[editStyles.input, editStyles.textArea, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
               />
             </View>
+
+            {/* Photo */}
+            <View style={editStyles.field}>
+              <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Photo (optional)</Text>
+              {photoUri ? (
+                <View style={[editStyles.photoPreview, { borderColor: colors.border }]}>
+                  <Image source={{ uri: photoUri }} style={{ width: "100%", height: 160 }} contentFit="cover" />
+                  {photoUploading && (
+                    <View style={editStyles.photoOverlay}>
+                      <ActivityIndicator color="#fff" size="small" />
+                      <Text style={[{ color: "#fff", fontFamily: "Inter_500Medium", fontSize: 12 }]}>Uploading…</Text>
+                    </View>
+                  )}
+                  {!photoUploading && (
+                    <TouchableOpacity
+                      onPress={() => { setPhotoUri(null); setPhotoUrl(null); }}
+                      style={editStyles.photoClearBtn}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="x" size={14} color="#fff" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={pickEditPhoto}
+                  style={[editStyles.photoPickerBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="camera" size={18} color={colors.mutedForeground} />
+                  <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    Add a photo of the unit
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </ScrollView>
 
           {/* Footer actions */}
@@ -1078,6 +1176,10 @@ const editStyles = StyleSheet.create({
   footer: { borderTopWidth: 1, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 32, gap: 10 },
   saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 14 },
   saveBtnText: { color: "#fff", fontSize: 15 },
+  photoPreview: { borderRadius: 10, borderWidth: 1, overflow: "hidden", position: "relative" },
+  photoOverlay: { position: "absolute", inset: 0, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", gap: 6 },
+  photoClearBtn: { position: "absolute", top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.55)", alignItems: "center", justifyContent: "center" },
+  photoPickerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, borderRadius: 10, borderWidth: 1, borderStyle: "dashed", paddingVertical: 14 },
   retireBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 12, borderWidth: 1, paddingVertical: 11 },
   retireBtnText: { fontSize: 13 },
   confirmBox: { borderRadius: 12, borderWidth: 1, padding: 14 },
@@ -1196,6 +1298,17 @@ export default function AssetDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* ── Asset Photo ── */}
+        {(a as any).photoUrl && (
+          <View style={[detailStyles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
+            <Image
+              source={{ uri: (a as any).photoUrl }}
+              style={{ width: "100%", height: 200 }}
+              contentFit="cover"
+            />
+          </View>
+        )}
 
         {/* ── Request a Pro CTA ── */}
         <TouchableOpacity

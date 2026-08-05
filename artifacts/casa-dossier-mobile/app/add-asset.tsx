@@ -76,6 +76,11 @@ export default function AddAssetScreen() {
   const [planBlocked, setPlanBlocked] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
 
+  // Photo upload state (separate from AI-scan image)
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   function reset() {
     setStep("method"); setImageUri(null); setImageBase64(null);
     setScanBusy(false); setScanResult(null); setScanError(null); setPlanBlocked(false);
@@ -83,6 +88,53 @@ export default function AddAssetScreen() {
     setSerialNumber(""); setInstallDate(""); setReplacementCost(""); setWarrantyExpiry("");
     setSaveBusy(false); setTaskCount(null); setCreatedAssetId(null);
     setGeneratingStatus("Creating asset…");
+    setPhotoUri(null); setPhotoUrl(null); setPhotoUploading(false);
+  }
+
+  async function pickAssetPhoto() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permission needed", "Photo library access is needed to add a photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images", quality: 0.8, allowsEditing: true, aspect: [4, 3],
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+    setPhotoUri(asset.uri);
+    setPhotoUrl(null);
+    setPhotoUploading(true);
+
+    try {
+      const token = await getToken();
+      const fileName = asset.uri.split("/").pop() ?? "photo.jpg";
+      const contentType = asset.mimeType ?? "image/jpeg";
+
+      const urlRes = await fetch(`${base}/api/storage/uploads/request-url`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ name: fileName, size: asset.fileSize ?? 0, contentType }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
+
+      const blob = await (await fetch(asset.uri)).blob();
+      const putRes = await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
+      if (!putRes.ok) throw new Error(`PUT failed: ${putRes.status}`);
+
+      setPhotoUrl(`${base}/api/storage${objectPath}`);
+    } catch {
+      Alert.alert("Upload failed", "Could not upload the photo. Please try again.");
+      setPhotoUri(null);
+      setPhotoUrl(null);
+    } finally {
+      setPhotoUploading(false);
+    }
   }
 
   async function pickFromCamera() {
@@ -159,6 +211,13 @@ export default function AddAssetScreen() {
 
     try {
       const token = await getToken();
+      if (photoUploading) {
+        Alert.alert("Please wait", "Photo is still uploading. Please wait a moment.");
+        setStep("review");
+        setSaveBusy(false);
+        return;
+      }
+
       const res = await fetch(`${base}/api/properties/${propertyId}/assets`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -171,6 +230,7 @@ export default function AddAssetScreen() {
           installDate: installDate ? `${installDate}-01` : undefined,
           replacementCost: replacementCost ? parseFloat(replacementCost) : undefined,
           warrantyExpiry: warrantyExpiry ? `${warrantyExpiry}-01` : undefined,
+          ...(photoUrl ? { photoUrl } : {}),
         }),
       });
 
@@ -606,6 +666,42 @@ export default function AddAssetScreen() {
                 style={[s.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
               />
             </View>
+
+            {/* Photo */}
+            <View style={{ gap: 6 }}>
+              <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Photo (optional)</Text>
+              {photoUri ? (
+                <View style={[s.imagePreview, { borderColor: colors.border }]}>
+                  <Image source={{ uri: photoUri }} style={{ width: "100%", height: 160 }} contentFit="cover" />
+                  {photoUploading && (
+                    <View style={s.scanOverlay}>
+                      <ActivityIndicator color={colors.primary} size="small" />
+                      <Text style={[{ color: colors.primary, fontFamily: "Inter_500Medium", fontSize: 12 }]}>Uploading…</Text>
+                    </View>
+                  )}
+                  {!photoUploading && (
+                    <TouchableOpacity
+                      onPress={() => { setPhotoUri(null); setPhotoUrl(null); }}
+                      style={[s.clearBtn, { backgroundColor: colors.background + "ee" }]}
+                      activeOpacity={0.8}
+                    >
+                      <Feather name="x" size={14} color={colors.foreground} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={pickAssetPhoto}
+                  style={[s.photoPickerBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="camera" size={18} color={colors.mutedForeground} />
+                  <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                    Add a photo of the unit
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </ScrollView>
 
           {/* Save button fixed at bottom */}
@@ -779,4 +875,8 @@ const s = StyleSheet.create({
   genIconWrap: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
   genBullets: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 12, width: "100%" },
   genBulletRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  photoPickerBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    borderRadius: 10, borderWidth: 1, borderStyle: "dashed", paddingVertical: 14,
+  },
 });

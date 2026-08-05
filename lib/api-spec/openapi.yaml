@@ -1543,24 +1543,34 @@ components:
           type: string
         city:
           type: string
+          nullable: true
         state:
           type: string
+          nullable: true
         zipCode:
           type: string
+          nullable: true
         yearBuilt:
           type: integer
+          nullable: true
         sqft:
           type: integer
+          nullable: true
         bedrooms:
           type: integer
+          nullable: true
         bathrooms:
           type: number
+          nullable: true
         latitude:
           type: number
+          nullable: true
         longitude:
           type: number
+          nullable: true
         photoUrl:
           type: string
+          nullable: true
 
     AssetHealthScore:
       type: object
@@ -1737,6 +1747,7 @@ components:
           type: string
         photoUrl:
           type: string
+          nullable: true
         retiredAt:
           type: string
           format: date-time
