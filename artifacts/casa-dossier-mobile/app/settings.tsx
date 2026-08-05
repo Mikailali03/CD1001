@@ -64,6 +64,7 @@ function ActionRow({
   colors,
   last,
   rightEl,
+  disabled,
 }: {
   icon: keyof typeof Feather.glyphMap;
   label: string;
@@ -73,15 +74,18 @@ function ActionRow({
   colors: ReturnType<typeof useColors>;
   last?: boolean;
   rightEl?: React.ReactNode;
+  disabled?: boolean;
 }) {
   return (
     <TouchableOpacity
       style={[
         styles.actionRow,
         !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+        disabled && { opacity: 0.5 },
       ]}
       onPress={onPress}
-      activeOpacity={onPress ? 0.6 : 1}
+      activeOpacity={onPress && !disabled ? 0.6 : 1}
+      disabled={disabled}
     >
       <View style={[styles.rowIcon, { backgroundColor: danger ? colors.destructive + "15" : colors.muted }]}>
         <Feather name={icon} size={17} color={danger ? colors.destructive : colors.foreground} />
@@ -170,6 +174,8 @@ export default function SettingsScreen() {
 
   const performAccountDeletion = async () => {
     setDeletingAccount(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
     try {
       const token = await getToken();
       const domain = process.env.EXPO_PUBLIC_DOMAIN;
@@ -177,6 +183,7 @@ export default function SettingsScreen() {
       const res = await fetch(`${baseUrl}/api/user`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -186,7 +193,16 @@ export default function SettingsScreen() {
       router.replace("/");
     } catch (err: any) {
       setDeletingAccount(false);
-      Alert.alert("Error", err?.message ?? "Could not delete your account. Please try again.");
+      const isTimeout = err?.name === "AbortError";
+      Alert.alert(
+        "Delete Account Failed",
+        isTimeout
+          ? "The request timed out. Please check your connection and try again."
+          : (err?.message ?? "Could not delete your account. Please try again."),
+        [{ text: "OK" }]
+      );
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 
@@ -362,6 +378,7 @@ export default function SettingsScreen() {
             danger
             colors={colors}
             onPress={handleDeleteAccount}
+            disabled={deletingAccount}
             last
             rightEl={
               deletingAccount ? (
