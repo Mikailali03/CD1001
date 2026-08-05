@@ -441,6 +441,13 @@ interface LookupResult {
   sqft: number | null;
 }
 
+interface Suggestion {
+  address: string;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+}
+
 interface PropertyFormModalProps {
   mode: "add" | "edit";
   property?: Property | null;
@@ -466,6 +473,12 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
   const [searchQuery, setSearchQuery] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupFilled, setLookupFilled] = useState(false);
+
+  // Autocomplete suggestions
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const autocompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Photo state
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -498,12 +511,61 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
       setSearchQuery("");
       setLookupLoading(false);
       setLookupFilled(false);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSuggestionsLoading(false);
     }
   }, [visible, mode, property?.id]);
 
-  async function handleLookup() {
+  // Debounced autocomplete: fire 350ms after the user stops typing (3+ chars)
+  useEffect(() => {
+    if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
+
     const q = searchQuery.trim();
+    if (q.length < 3) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      setSuggestionsLoading(false);
+      return;
+    }
+
+    setSuggestionsLoading(true);
+    autocompleteTimer.current = setTimeout(async () => {
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${baseUrl}/api/properties/autocomplete?query=${encodeURIComponent(q)}&limit=6`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+        );
+        if (res.ok) {
+          const data = await res.json() as { suggestions: Suggestion[] };
+          setSuggestions(data.suggestions ?? []);
+          setShowSuggestions((data.suggestions ?? []).length > 0);
+        } else {
+          setSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch {
+        // Network error — gracefully degrade, keep search button functional
+        setSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setSuggestionsLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
+    };
+  }, [searchQuery]);
+
+  async function handleLookup(overrideAddress?: string) {
+    const q = (overrideAddress ?? searchQuery).trim();
     if (!q) return;
+    // Dismiss suggestions before starting full lookup
+    setSuggestions([]);
+    setShowSuggestions(false);
+    if (overrideAddress) setSearchQuery(overrideAddress);
     setLookupLoading(true);
     setLookupFilled(false);
     try {
@@ -731,26 +793,68 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
                         { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" },
                       ]}
                       value={searchQuery}
-                      onChangeText={setSearchQuery}
+                      onChangeText={(v) => {
+                        setSearchQuery(v);
+                        setLookupFilled(false);
+                      }}
                       placeholder="e.g. 123 Main St, Austin, TX"
                       placeholderTextColor={colors.mutedForeground}
                       returnKeyType="search"
-                      onSubmitEditing={handleLookup}
+                      onSubmitEditing={() => handleLookup()}
                       editable={!lookupLoading}
+                      onBlur={() => {
+                        // Small delay so tapping a suggestion registers before hiding
+                        setTimeout(() => setShowSuggestions(false), 150);
+                      }}
+                      onFocus={() => {
+                        if (suggestions.length > 0) setShowSuggestions(true);
+                      }}
                     />
                     <TouchableOpacity
-                      onPress={handleLookup}
+                      onPress={() => handleLookup()}
                       style={[fStyles.searchBtn, { backgroundColor: colors.primary, opacity: lookupLoading || !searchQuery.trim() ? 0.6 : 1 }]}
                       activeOpacity={0.8}
                       disabled={lookupLoading || !searchQuery.trim()}
                     >
                       {lookupLoading ? (
                         <ActivityIndicator size="small" color="#fff" />
+                      ) : suggestionsLoading ? (
+                        <ActivityIndicator size="small" color="#fff" />
                       ) : (
                         <Feather name="search" size={17} color="#fff" />
                       )}
                     </TouchableOpacity>
                   </View>
+
+                  {/* Suggestions dropdown */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <View style={[fStyles.suggestionsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                      {suggestions.map((s, i) => (
+                        <TouchableOpacity
+                          key={`${s.address}-${i}`}
+                          style={[
+                            fStyles.suggestionRow,
+                            i < suggestions.length - 1 && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => handleLookup(s.address)}
+                        >
+                          <Feather name="map-pin" size={13} color={colors.mutedForeground} style={{ marginTop: 1 }} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[fStyles.suggestionAddress, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
+                              {s.address}
+                            </Text>
+                            {(s.city || s.state) && (
+                              <Text style={[fStyles.suggestionMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
+                                {[s.city, s.state, s.zipCode].filter(Boolean).join(", ")}
+                              </Text>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
                   {lookupFilled && (
                     <View style={[fStyles.filledBanner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "35" }]}>
                       <Feather name="check-circle" size={13} color={colors.primary} />
@@ -990,6 +1094,19 @@ const fStyles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2,
   },
   filledText: { fontSize: 12, flex: 1, lineHeight: 16 },
+  suggestionsContainer: {
+    borderWidth: 1, borderRadius: 10, marginTop: 4,
+    overflow: "hidden",
+    // Elevate above other form elements
+    shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  suggestionRow: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  suggestionAddress: { fontSize: 14, lineHeight: 18 },
+  suggestionMeta: { fontSize: 12, marginTop: 1 },
   photoPlaceholder: {
     height: 110, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed",
     alignItems: "center", justifyContent: "center", gap: 6,

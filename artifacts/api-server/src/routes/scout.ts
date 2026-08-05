@@ -9,6 +9,58 @@ import { getAccessibleProperty } from "../lib/access.js";
 
 const router = Router();
 
+// ---------------------------------------------------------------------------
+// Address autocomplete  (debounced as-you-type suggestions)
+// ---------------------------------------------------------------------------
+
+const AutocompleteQuery = z.object({
+  query: z.string().min(3),
+  limit: z.coerce.number().int().min(1).max(10).default(5),
+});
+
+router.get("/properties/autocomplete", requireAuth(), async (req, res) => {
+  const parsed = AutocompleteQuery.safeParse(req.query);
+  if (!parsed.success) return res.json({ suggestions: [] });
+  const { query, limit } = parsed.data;
+
+  const apiKey = process.env.RENTCAST_API_KEY;
+  if (!apiKey) {
+    req.log.warn("RentCast API key not configured — autocomplete unavailable");
+    return res.json({ suggestions: [] });
+  }
+
+  try {
+    const url = `https://api.rentcast.io/v1/autocomplete?address=${encodeURIComponent(query)}&limit=${limit}`;
+    const response = await fetch(url, {
+      headers: { "X-Api-Key": apiKey, Accept: "application/json" },
+    });
+
+    if (!response.ok) {
+      req.log.warn({ status: response.status }, "RentCast autocomplete failed — degrading gracefully");
+      return res.json({ suggestions: [] });
+    }
+
+    const data = await response.json() as any[];
+    const suggestions = (Array.isArray(data) ? data : [])
+      .map((item: any) => ({
+        address: item.formattedAddress ?? item.addressLine1 ?? "",
+        city: item.city ?? null,
+        state: item.state ?? null,
+        zipCode: item.zipCode ?? null,
+      }))
+      .filter((s) => s.address);
+
+    return res.json({ suggestions });
+  } catch (err) {
+    req.log.warn({ err }, "RentCast autocomplete error — degrading gracefully");
+    return res.json({ suggestions: [] });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Full property lookup
+// ---------------------------------------------------------------------------
+
 const LookupQuery = z.object({ address: z.string().min(5) });
 
 router.get("/properties/lookup", requireAuth(), async (req, res) => {
