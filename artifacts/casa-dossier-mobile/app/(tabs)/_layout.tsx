@@ -7,11 +7,16 @@ import { Feather } from "@expo/vector-icons";
 import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { InboxProvider, useInboxPendingCount } from "@/context/InboxContext";
 
 function NativeTabLayout() {
+  const pendingCount = useInboxPendingCount();
   return (
     <NativeTabs>
-      <NativeTabs.Trigger name="index">
+      <NativeTabs.Trigger
+        name="index"
+        options={pendingCount > 0 ? { badgeValue: String(pendingCount) } : undefined}
+      >
         <Icon sf={{ default: "house", selected: "house.fill" }} />
         <Label>Home</Label>
       </NativeTabs.Trigger>
@@ -37,6 +42,7 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const pendingCount = useInboxPendingCount();
 
   return (
     <Tabs
@@ -70,6 +76,7 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: "Home",
+          tabBarBadge: pendingCount > 0 ? pendingCount : undefined,
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="house" tintColor={color} size={24} />
@@ -118,9 +125,17 @@ function ClassicTabLayout() {
   );
 }
 
-export default function TabLayout() {
+function TabLayoutInner() {
   if (isLiquidGlassAvailable()) {
     return <NativeTabLayout />;
   }
   return <ClassicTabLayout />;
+}
+
+export default function TabLayout() {
+  return (
+    <InboxProvider>
+      <TabLayoutInner />
+    </InboxProvider>
+  );
 }
