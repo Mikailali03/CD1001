@@ -98,16 +98,16 @@ export interface CreatePropertyBody {
 export interface UpdatePropertyBody {
   name?: string;
   address?: string;
-  city?: string;
-  state?: string;
-  zipCode?: string;
-  yearBuilt?: number;
-  sqft?: number;
-  bedrooms?: number;
-  bathrooms?: number;
-  latitude?: number;
-  longitude?: number;
-  photoUrl?: string;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  yearBuilt?: number | null;
+  sqft?: number | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  photoUrl?: string | null;
 }
 
 export interface AssetHealthScore {

@@ -89,16 +89,17 @@ export const UpdatePropertyParams = zod.object({
 export const UpdatePropertyBody = zod.object({
   name: zod.string().optional(),
   address: zod.string().optional(),
-  city: zod.string().optional(),
-  state: zod.string().optional(),
-  zipCode: zod.string().optional(),
-  yearBuilt: zod.number().optional(),
-  sqft: zod.number().optional(),
-  bedrooms: zod.number().optional(),
-  bathrooms: zod.number().optional(),
-  latitude: zod.number().optional(),
-  longitude: zod.number().optional(),
-  photoUrl: zod.string().optional(),
+  // nullable allows explicitly clearing an existing value (null → database null)
+  city: zod.string().nullable().optional(),
+  state: zod.string().nullable().optional(),
+  zipCode: zod.string().nullable().optional(),
+  yearBuilt: zod.number().nullable().optional(),
+  sqft: zod.number().nullable().optional(),
+  bedrooms: zod.number().nullable().optional(),
+  bathrooms: zod.number().nullable().optional(),
+  latitude: zod.number().nullable().optional(),
+  longitude: zod.number().nullable().optional(),
+  photoUrl: zod.string().nullable().optional(),
 });
 
 export const UpdatePropertyResponse = zod.object({

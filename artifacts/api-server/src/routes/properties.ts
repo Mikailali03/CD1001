@@ -72,9 +72,12 @@ router.patch("/properties/:propertyId", requireAuth(), async (req, res) => {
   const body = UpdatePropertyBody.parse(req.body);
   const existing = await getOwnedProperty(propertyId, req.userId);
   if (!existing) return res.status(404).json({ error: "Property not found" });
+  // Drizzle's static types for .set() don't accept null for nullable columns,
+  // but the runtime correctly maps null → SQL NULL for columns without notNull().
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [property] = await db
     .update(propertiesTable)
-    .set({ ...body, updatedAt: new Date() })
+    .set({ ...(body as any), updatedAt: new Date() })
     .where(and(eq(propertiesTable.id, propertyId), eq(propertiesTable.userId, req.userId)))
     .returning();
   if (!property) return res.status(404).json({ error: "Property not found" });

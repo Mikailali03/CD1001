@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -10,14 +10,24 @@ import {
   Image,
   Modal,
   Pressable,
+  TextInput,
+  KeyboardAvoidingView,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListProperties,
   useGetPropertySummary,
+  useCreateProperty,
+  useUpdateProperty,
   getGetPropertySummaryQueryKey,
+  getListPropertiesQueryKey,
+  getGetPropertyQueryKey,
+  type Property,
+  type UpdatePropertyBody,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import Svg, { Circle, Text as SvgText } from "react-native-svg";
@@ -403,6 +413,314 @@ const mStyles = StyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
+// Property form modal (add + edit)
+// ---------------------------------------------------------------------------
+
+interface FormState {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  yearBuilt: string;
+  sqft: string;
+}
+
+const BLANK_FORM: FormState = {
+  name: "", address: "", city: "", state: "", zipCode: "", yearBuilt: "", sqft: "",
+};
+
+interface PropertyFormModalProps {
+  mode: "add" | "edit";
+  property?: Property | null;
+  visible: boolean;
+  onClose: () => void;
+  colors: ReturnType<typeof useColors>;
+  insets: { bottom: number };
+}
+
+function PropertyFormModal({ mode, property, visible, onClose, colors, insets }: PropertyFormModalProps) {
+  const queryClient = useQueryClient();
+  const createProperty = useCreateProperty();
+  const updateProperty = useUpdateProperty();
+
+  const [form, setForm] = useState<FormState>(BLANK_FORM);
+  const [saving, setSaving] = useState(false);
+
+  // Populate form when opening for edit
+  useEffect(() => {
+    if (visible) {
+      if (mode === "edit" && property) {
+        const p = property as any;
+        setForm({
+          name: p.name ?? "",
+          address: p.address ?? "",
+          city: p.city ?? "",
+          state: p.state ?? "",
+          zipCode: p.zipCode ?? "",
+          yearBuilt: p.yearBuilt != null ? String(p.yearBuilt) : "",
+          sqft: p.sqft != null ? String(p.sqft) : "",
+        });
+      } else {
+        setForm(BLANK_FORM);
+      }
+      setSaving(false);
+    }
+  }, [visible, mode, property?.id]);
+
+  function set(key: keyof FormState, value: string) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  async function handleSave() {
+    if (!form.name.trim() || !form.address.trim()) {
+      Alert.alert("Required fields", "Please fill in the property name and address.");
+      return;
+    }
+    setSaving(true);
+    try {
+      // Build payload omitting blank optional fields — the API schema uses
+      // optional (not nullable), so sending null fails Zod validation.
+      const yearBuiltNum = form.yearBuilt ? parseInt(form.yearBuilt, 10) : NaN;
+      const sqftNum = form.sqft ? parseInt(form.sqft, 10) : NaN;
+
+      if (mode === "add") {
+        // For create: omit blank optionals (API schema uses optional, not nullable)
+        const createData = {
+          name: form.name.trim(),
+          address: form.address.trim(),
+          ...(form.city.trim() ? { city: form.city.trim() } : {}),
+          ...(form.state.trim() ? { state: form.state.trim() } : {}),
+          ...(form.zipCode.trim() ? { zipCode: form.zipCode.trim() } : {}),
+          ...(!isNaN(yearBuiltNum) && yearBuiltNum > 0 ? { yearBuilt: yearBuiltNum } : {}),
+          ...(!isNaN(sqftNum) && sqftNum > 0 ? { sqft: sqftNum } : {}),
+        };
+        await createProperty.mutateAsync({ data: createData });
+        await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+      } else if (mode === "edit" && property?.id) {
+        // For edit: send explicit null for blank optional fields so existing values are cleared
+        const updateData: UpdatePropertyBody = {
+          name: form.name.trim(),
+          address: form.address.trim(),
+          city: form.city.trim() || null,
+          state: form.state.trim() || null,
+          zipCode: form.zipCode.trim() || null,
+          yearBuilt: !isNaN(yearBuiltNum) && yearBuiltNum > 0 ? yearBuiltNum : null,
+          sqft: !isNaN(sqftNum) && sqftNum > 0 ? sqftNum : null,
+        };
+        await updateProperty.mutateAsync({ propertyId: property.id, data: updateData });
+        await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+        await queryClient.invalidateQueries({ queryKey: getGetPropertyQueryKey(property.id) });
+      }
+      onClose();
+    } catch {
+      Alert.alert("Error", mode === "add" ? "Could not save property. Please try again." : "Could not update property. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputStyle = [
+    fStyles.input,
+    { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground, fontFamily: "Inter_400Regular" },
+  ];
+  const labelStyle = [fStyles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }];
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={fStyles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={fStyles.kvContainer}
+        >
+          <View style={[fStyles.sheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 8 }]}>
+            {/* Handle */}
+            <View style={[fStyles.handle, { backgroundColor: colors.border }]} />
+
+            {/* Header */}
+            <View style={[fStyles.header, { borderBottomColor: colors.border }]}>
+              <View style={[fStyles.headerIcon, { backgroundColor: colors.primary + "18" }]}>
+                <Feather name="home" size={16} color={colors.primary} />
+              </View>
+              <Text style={[fStyles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                {mode === "add" ? "Add Property" : "Edit Property"}
+              </Text>
+              <TouchableOpacity onPress={onClose} style={[fStyles.closeBtn, { backgroundColor: colors.muted }]} activeOpacity={0.7}>
+                <Feather name="x" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Form */}
+            <ScrollView
+              contentContainerStyle={{ padding: 20, gap: 16, paddingBottom: 24 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Name */}
+              <View style={fStyles.field}>
+                <Text style={labelStyle}>Property Name *</Text>
+                <TextInput
+                  style={inputStyle}
+                  value={form.name}
+                  onChangeText={(v) => set("name", v)}
+                  placeholder="e.g. The Johnson Family Home"
+                  placeholderTextColor={colors.mutedForeground}
+                  returnKeyType="next"
+                />
+              </View>
+
+              {/* Address */}
+              <View style={fStyles.field}>
+                <Text style={labelStyle}>Street Address *</Text>
+                <TextInput
+                  style={inputStyle}
+                  value={form.address}
+                  onChangeText={(v) => set("address", v)}
+                  placeholder="123 Main St"
+                  placeholderTextColor={colors.mutedForeground}
+                  returnKeyType="next"
+                />
+              </View>
+
+              {/* City + State */}
+              <View style={fStyles.row}>
+                <View style={[fStyles.field, { flex: 2 }]}>
+                  <Text style={labelStyle}>City</Text>
+                  <TextInput
+                    style={inputStyle}
+                    value={form.city}
+                    onChangeText={(v) => set("city", v)}
+                    placeholder="Austin"
+                    placeholderTextColor={colors.mutedForeground}
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={[fStyles.field, { flex: 1 }]}>
+                  <Text style={labelStyle}>State</Text>
+                  <TextInput
+                    style={inputStyle}
+                    value={form.state}
+                    onChangeText={(v) => set("state", v.toUpperCase())}
+                    placeholder="TX"
+                    placeholderTextColor={colors.mutedForeground}
+                    maxLength={2}
+                    autoCapitalize="characters"
+                    returnKeyType="next"
+                  />
+                </View>
+              </View>
+
+              {/* ZIP */}
+              <View style={fStyles.field}>
+                <Text style={labelStyle}>ZIP Code</Text>
+                <TextInput
+                  style={inputStyle}
+                  value={form.zipCode}
+                  onChangeText={(v) => set("zipCode", v)}
+                  placeholder="78701"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="numeric"
+                  maxLength={10}
+                  returnKeyType="next"
+                />
+              </View>
+
+              {/* Year Built + Sq Ft */}
+              <View style={fStyles.row}>
+                <View style={[fStyles.field, { flex: 1 }]}>
+                  <Text style={labelStyle}>Year Built</Text>
+                  <TextInput
+                    style={inputStyle}
+                    value={form.yearBuilt}
+                    onChangeText={(v) => set("yearBuilt", v)}
+                    placeholder="1990"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    returnKeyType="next"
+                  />
+                </View>
+                <View style={[fStyles.field, { flex: 1 }]}>
+                  <Text style={labelStyle}>Sq Ft</Text>
+                  <TextInput
+                    style={inputStyle}
+                    value={form.sqft}
+                    onChangeText={(v) => set("sqft", v)}
+                    placeholder="2000"
+                    placeholderTextColor={colors.mutedForeground}
+                    keyboardType="number-pad"
+                    returnKeyType="done"
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Footer */}
+            <View style={[fStyles.footer, { borderTopColor: colors.border }]}>
+              <TouchableOpacity
+                onPress={onClose}
+                style={[fStyles.cancelBtn, { backgroundColor: colors.muted }]}
+                activeOpacity={0.7}
+                disabled={saving}
+              >
+                <Text style={[fStyles.cancelText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSave}
+                style={[fStyles.saveBtn, { backgroundColor: colors.primary, opacity: saving ? 0.7 : 1 }]}
+                activeOpacity={0.8}
+                disabled={saving}
+              >
+                {saving ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={[fStyles.saveText, { fontFamily: "Inter_600SemiBold" }]}>
+                    {mode === "add" ? "Add Property" : "Save Changes"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+const fStyles = StyleSheet.create({
+  backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" },
+  kvContainer: { justifyContent: "flex-end" },
+  sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "92%" },
+  handle: { width: 40, height: 4, borderRadius: 2, alignSelf: "center", marginTop: 10, marginBottom: 4 },
+  header: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  headerIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  headerTitle: { fontSize: 17, flex: 1 },
+  closeBtn: { width: 30, height: 30, borderRadius: 99, alignItems: "center", justifyContent: "center" },
+  field: { gap: 6 },
+  row: { flexDirection: "row", gap: 10 },
+  label: { fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase" },
+  input: {
+    height: 44, borderWidth: 1, borderRadius: 10,
+    paddingHorizontal: 12, fontSize: 15,
+  },
+  footer: {
+    flexDirection: "row", gap: 10,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  cancelBtn: { flex: 1, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  cancelText: { fontSize: 15 },
+  saveBtn: { flex: 2, height: 46, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  saveText: { fontSize: 15, color: "#fff" },
+});
+
+// ---------------------------------------------------------------------------
 // Main screen
 // ---------------------------------------------------------------------------
 
@@ -414,6 +732,23 @@ export default function PropertiesScreen() {
 
   const { data: properties = [], isLoading } = useListProperties();
   const [healthModalId, setHealthModalId] = useState<string | null>(null);
+
+  // Form modal state
+  const [formMode, setFormMode] = useState<"add" | "edit">("add");
+  const [formVisible, setFormVisible] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+
+  function openAdd() {
+    setFormMode("add");
+    setEditingProperty(null);
+    setFormVisible(true);
+  }
+
+  function openEdit(property: Property) {
+    setFormMode("edit");
+    setEditingProperty(property);
+    setFormVisible(true);
+  }
 
   const selectedProperty = healthModalId ? properties.find((p) => p.id === healthModalId) : null;
   const selectedName = selectedProperty
@@ -435,10 +770,19 @@ export default function PropertiesScreen() {
             My Properties
           </Text>
         </View>
-        <View style={[styles.countChip, { backgroundColor: colors.muted }]}>
-          <Text style={[styles.countText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
-            {properties.length}
-          </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={[styles.countChip, { backgroundColor: colors.muted }]}>
+            <Text style={[styles.countText, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
+              {properties.length}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={openAdd}
+            style={[styles.addHeaderBtn, { backgroundColor: colors.primary + "18" }]}
+            activeOpacity={0.7}
+          >
+            <Feather name="plus" size={18} color={colors.primary} />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -447,7 +791,7 @@ export default function PropertiesScreen() {
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       ) : properties.length === 0 ? (
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 }}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 16, paddingHorizontal: 32 }}>
           <View style={[styles.emptyIcon, { backgroundColor: colors.muted }]}>
             <Feather name="home" size={36} color={colors.mutedForeground} style={{ opacity: 0.5 }} />
           </View>
@@ -455,12 +799,20 @@ export default function PropertiesScreen() {
             No properties yet
           </Text>
           <Text style={[styles.emptySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Add your home in the web app to start tracking assets and maintenance.
+            Add your first home to start tracking assets and maintenance.
           </Text>
+          <TouchableOpacity
+            onPress={openAdd}
+            style={[styles.emptyAddBtn, { backgroundColor: colors.primary }]}
+            activeOpacity={0.8}
+          >
+            <Feather name="plus" size={16} color="#fff" />
+            <Text style={[styles.emptyAddText, { fontFamily: "Inter_600SemiBold" }]}>Add Property</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32, gap: 12 }}
+          contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 100, gap: 12 }}
           showsVerticalScrollIndicator={false}
         >
           {properties.map((property) => {
@@ -514,9 +866,9 @@ export default function PropertiesScreen() {
                   />
                 </View>
 
-                {/* Specs row */}
-                {specs.length > 0 && (
-                  <View style={[styles.specsRow, { borderTopColor: colors.border }]}>
+                {/* Specs row + Edit button */}
+                <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
+                  <View style={styles.specsRow}>
                     {specs.map((spec, i) => (
                       <React.Fragment key={spec}>
                         {i > 0 && <View style={[styles.specDot, { backgroundColor: colors.mutedForeground }]} />}
@@ -526,15 +878,33 @@ export default function PropertiesScreen() {
                       </React.Fragment>
                     ))}
                   </View>
-                )}
+                  <TouchableOpacity
+                    onPress={() => openEdit(property)}
+                    style={[styles.editBtn, { backgroundColor: colors.muted }]}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="edit-2" size={12} color={colors.mutedForeground} />
+                    <Text style={[styles.editText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
+                      Edit
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })}
-
-          <Text style={[styles.hint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            To add or edit properties, visit the web app.
-          </Text>
         </ScrollView>
+      )}
+
+      {/* FAB — Add Property */}
+      {properties.length > 0 && (
+        <TouchableOpacity
+          onPress={openAdd}
+          style={[styles.fab, { backgroundColor: colors.primary, bottom: insets.bottom + 24 }]}
+          activeOpacity={0.85}
+        >
+          <Feather name="plus" size={22} color="#fff" />
+          <Text style={[styles.fabText, { fontFamily: "Inter_600SemiBold" }]}>Add Property</Text>
+        </TouchableOpacity>
       )}
 
       {/* Health modal */}
@@ -548,6 +918,16 @@ export default function PropertiesScreen() {
           insets={insets}
         />
       )}
+
+      {/* Add / Edit form modal */}
+      <PropertyFormModal
+        mode={formMode}
+        property={editingProperty}
+        visible={formVisible}
+        onClose={() => setFormVisible(false)}
+        colors={colors}
+        insets={insets}
+      />
     </View>
   );
 }
@@ -564,9 +944,12 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18 },
   countChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 },
   countText: { fontSize: 13 },
+  addHeaderBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center" },
   emptyIcon: { width: 80, height: 80, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   emptyTitle: { fontSize: 18 },
   emptySub: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+  emptyAddBtn: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  emptyAddText: { fontSize: 15, color: "#fff" },
   card: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
   cardTop: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
   cardPhoto: { width: 52, height: 52, borderRadius: 12 },
@@ -574,11 +957,31 @@ const styles = StyleSheet.create({
   cardName: { fontSize: 16 },
   addrRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   addrText: { fontSize: 12, flex: 1 },
+  cardFooter: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 8,
+  },
   specsRow: {
-    flexDirection: "row", alignItems: "center", flexWrap: "wrap",
-    gap: 6, paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth,
+    flex: 1,
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6,
   },
   specDot: { width: 3, height: 3, borderRadius: 99, opacity: 0.4 },
   specText: { fontSize: 12 },
-  hint: { textAlign: "center", fontSize: 12, marginTop: 4 },
+  editBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  editText: { fontSize: 12 },
+  fab: {
+    position: "absolute",
+    right: 20,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderRadius: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fabText: { fontSize: 15, color: "#fff" },
 });
