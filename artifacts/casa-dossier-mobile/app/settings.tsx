@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useUser } from "@clerk/expo";
+import { useUser, useAuth, useClerk } from "@clerk/expo";
 import * as Notifications from "expo-notifications";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -106,6 +106,9 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useUser();
+  const { getToken } = useAuth();
+  const { signOut } = useClerk();
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName, setLastName] = useState(user?.lastName ?? "");
@@ -165,18 +168,53 @@ export default function SettingsScreen() {
     }
   };
 
+  const performAccountDeletion = async () => {
+    setDeletingAccount(true);
+    try {
+      const token = await getToken();
+      const domain = process.env.EXPO_PUBLIC_DOMAIN;
+      const baseUrl = domain ? `https://${domain}` : "";
+      const res = await fetch(`${baseUrl}/api/user`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? `Server error ${res.status}`);
+      }
+      await signOut();
+      router.replace("/");
+    } catch (err: any) {
+      setDeletingAccount(false);
+      Alert.alert("Error", err?.message ?? "Could not delete your account. Please try again.");
+    }
+  };
+
   const handleDeleteAccount = () => {
+    if (deletingAccount) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Alert.alert(
       "Delete Account",
-      "This will permanently delete your account and all property data. This cannot be undone.",
+      "This will permanently delete your account and ALL property data — assets, documents, service records, and subscriptions. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Delete",
+          text: "Delete My Account",
           style: "destructive",
           onPress: () => {
-            Alert.alert("Contact Support", "Please email support@casadossier.com to complete account deletion.");
+            // Second confirmation
+            Alert.alert(
+              "Are you absolutely sure?",
+              "Your account and all associated data will be permanently erased. You will not be able to recover it.",
+              [
+                { text: "Cancel", style: "cancel" },
+                {
+                  text: "Yes, Delete Everything",
+                  style: "destructive",
+                  onPress: performAccountDeletion,
+                },
+              ]
+            );
           },
         },
       ]
@@ -325,6 +363,11 @@ export default function SettingsScreen() {
             colors={colors}
             onPress={handleDeleteAccount}
             last
+            rightEl={
+              deletingAccount ? (
+                <ActivityIndicator size="small" color={colors.destructive} />
+              ) : undefined
+            }
           />
         </SettingsCard>
       </ScrollView>
