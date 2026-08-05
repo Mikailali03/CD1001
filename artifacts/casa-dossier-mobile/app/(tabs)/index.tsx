@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import {
   View,
@@ -24,6 +24,8 @@ import {
 import { useColors } from "@/hooks/useColors";
 import { MaintenanceInbox } from "@/components/MaintenanceInbox";
 import { HealthScoreModal } from "@/components/HealthScoreModal";
+import { PendingInvitesSheet, type Inbox } from "@/components/PendingInvitesSheet";
+import { useAuth } from "@clerk/expo";
 import * as Haptics from "expo-haptics";
 import { format } from "date-fns";
 
@@ -454,9 +456,32 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { getToken } = useAuth();
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [healthModalOpen, setHealthModalOpen] = useState(false);
+  const [invitesSheetOpen, setInvitesSheetOpen] = useState(false);
+  const [inboxOverride, setInboxOverride] = useState<Inbox | null>(null);
+
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const baseUrl = domain ? `https://${domain}` : "";
+
+  // Fetch pending invites
+  const { data: inboxData } = useQuery<Inbox>({
+    queryKey: ["inbox"],
+    queryFn: async () => {
+      const token = await getToken();
+      const res = await fetch(`${baseUrl}/api/inbox`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return { transfers: [], collaboratorInvites: [] };
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  // Use local override (optimistic updates) or server data
+  const inbox: Inbox = inboxOverride ?? inboxData ?? { transfers: [], collaboratorInvites: [] };
 
   const { data: properties = [], isLoading: propsLoading } = useListProperties();
   const selectedProperty = properties[selectedIdx];
@@ -514,20 +539,59 @@ export default function HomeScreen() {
   }
 
   if (properties.length === 0) {
+    const emptyPendingCount = inbox.transfers.length + inbox.collaboratorInvites.length;
     return (
-      <View style={[{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }]}>
-        <View style={[{ backgroundColor: colors.muted, borderRadius: 20, padding: 24, marginBottom: 20 }]}>
-          <Feather name="home" size={48} color={colors.mutedForeground} style={{ opacity: 0.4 }} />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <PendingInvitesSheet
+          visible={invitesSheetOpen}
+          inbox={inbox}
+          onClose={() => setInvitesSheetOpen(false)}
+          onInboxChange={(updated) => {
+            setInboxOverride(updated);
+            if (updated.transfers.length + updated.collaboratorInvites.length === 0) {
+              setInvitesSheetOpen(false);
+            }
+          }}
+        />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
+          {emptyPendingCount > 0 && (
+            <TouchableOpacity
+              style={[inviteBannerStyles.banner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "33", marginBottom: 24, width: "100%" }]}
+              onPress={() => { Haptics.selectionAsync(); setInvitesSheetOpen(true); }}
+              activeOpacity={0.8}
+            >
+              <View style={[inviteBannerStyles.iconWrap, { backgroundColor: colors.primary + "20" }]}>
+                <Feather name="mail" size={14} color={colors.primary} />
+              </View>
+              <View style={inviteBannerStyles.textWrap}>
+                <Text style={[inviteBannerStyles.title, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                  {emptyPendingCount === 1 ? "You have a property invitation" : `You have ${emptyPendingCount} property invitations`}
+                </Text>
+                <Text style={[inviteBannerStyles.sub, { color: colors.primary + "bb", fontFamily: "Inter_400Regular" }]}>
+                  Tap to accept or decline
+                </Text>
+              </View>
+              <View style={[inviteBannerStyles.badge, { backgroundColor: colors.primary }]}>
+                <Text style={[inviteBannerStyles.badgeText, { fontFamily: "Inter_700Bold" }]}>{emptyPendingCount}</Text>
+              </View>
+              <Feather name="chevron-right" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+          <View style={[{ backgroundColor: colors.muted, borderRadius: 20, padding: 24, marginBottom: 20 }]}>
+            <Feather name="home" size={48} color={colors.mutedForeground} style={{ opacity: 0.4 }} />
+          </View>
+          <Text style={{ fontSize: 20, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 }}>
+            No property selected
+          </Text>
+          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" }}>
+            Add your home in the web app to start tracking health scores, assets, and maintenance.
+          </Text>
         </View>
-        <Text style={{ fontSize: 20, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 }}>
-          No property selected
-        </Text>
-        <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" }}>
-          Add your home in the web app to start tracking health scores, assets, and maintenance.
-        </Text>
       </View>
     );
   }
+
+  const pendingInviteCount = inbox.transfers.length + inbox.collaboratorInvites.length;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -540,6 +604,17 @@ export default function HomeScreen() {
       overdueTasks={overdueTasks}
       assetScores={assetScores}
       propertyId={selectedProperty?.id ?? ""}
+    />
+    <PendingInvitesSheet
+      visible={invitesSheetOpen}
+      inbox={inbox}
+      onClose={() => setInvitesSheetOpen(false)}
+      onInboxChange={(updated) => {
+        setInboxOverride(updated);
+        if (updated.transfers.length + updated.collaboratorInvites.length === 0) {
+          setInvitesSheetOpen(false);
+        }
+      }}
     />
     <ScrollView
       style={{ backgroundColor: colors.background }}
@@ -575,6 +650,35 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           />
+        )}
+
+        {/* Pending invites banner */}
+        {pendingInviteCount > 0 && (
+          <TouchableOpacity
+            style={[inviteBannerStyles.banner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "33" }]}
+            onPress={() => { Haptics.selectionAsync(); setInvitesSheetOpen(true); }}
+            activeOpacity={0.8}
+          >
+            <View style={[inviteBannerStyles.iconWrap, { backgroundColor: colors.primary + "20" }]}>
+              <Feather name="mail" size={14} color={colors.primary} />
+            </View>
+            <View style={inviteBannerStyles.textWrap}>
+              <Text style={[inviteBannerStyles.title, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
+                {pendingInviteCount === 1
+                  ? "You have a property invitation"
+                  : `You have ${pendingInviteCount} property invitations`}
+              </Text>
+              <Text style={[inviteBannerStyles.sub, { color: colors.primary + "bb", fontFamily: "Inter_400Regular" }]}>
+                Tap to accept or decline
+              </Text>
+            </View>
+            <View style={[inviteBannerStyles.badge, { backgroundColor: colors.primary }]}>
+              <Text style={[inviteBannerStyles.badgeText, { fontFamily: "Inter_700Bold" }]}>
+                {pendingInviteCount}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={16} color={colors.primary} />
+          </TouchableOpacity>
         )}
 
         {/* Property header */}
@@ -766,4 +870,37 @@ const propStyles = StyleSheet.create({
 
 const sectionStyles = StyleSheet.create({
   card: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 16 },
+});
+
+const inviteBannerStyles = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  textWrap: { flex: 1 },
+  title: { fontSize: 13 },
+  sub: { fontSize: 11, marginTop: 2 },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  badgeText: { fontSize: 11, color: "#fff" },
 });
