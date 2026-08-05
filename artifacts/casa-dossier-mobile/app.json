@@ -22,6 +22,15 @@
     },
     "plugins": [
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static",
+            "modularHeaders": true
+          }
+        }
+      ],
+      [
         "expo-router",
         {
           "origin": "https://replit.com/"
