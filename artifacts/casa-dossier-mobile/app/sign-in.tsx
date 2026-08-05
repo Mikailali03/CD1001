@@ -44,6 +44,8 @@ export default function SignInScreen() {
   const [loading, setLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState<"google" | "apple" | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
 
   const { signIn, setActive: setSignInActive, isLoaded: signInLoaded } = useSignIn();
   const { signUp, setActive: setSignUpActive, isLoaded: signUpLoaded } = useSignUp();
@@ -98,13 +100,36 @@ export default function SignInScreen() {
         if (result.status === "complete") {
           await setSignUpActive({ session: result.createdSessionId });
         } else if (result.status === "missing_requirements") {
-          await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-          setError("Check your email for a verification code.");
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (signUp as any).prepareEmailAddressVerification({ strategy: "email_code" });
+          setPendingVerification(true);
         }
       }
     } catch (err: unknown) {
       const clerkErr = err as { errors?: { message: string }[] };
       setError(clerkErr.errors?.[0]?.message ?? "Something went wrong. Please try again.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify = async () => {
+    if (!signUpLoaded) return;
+    setError("");
+    setLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (signUp as any).attemptEmailAddressVerification({ code: verificationCode.trim() });
+      if (result.status === "complete") {
+        await setSignUpActive({ session: result.createdSessionId });
+      } else {
+        setError("Verification incomplete. Please try again.");
+      }
+    } catch (err: unknown) {
+      const clerkErr = err as { errors?: { message: string }[] };
+      setError(clerkErr.errors?.[0]?.message ?? "Invalid code. Please try again.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
@@ -216,6 +241,67 @@ export default function SignInScreen() {
             { backgroundColor: colors.card, borderColor: colors.border, width: "100%", maxWidth: 400 },
           ]}
         >
+          {pendingVerification ? (
+            <>
+              <Text style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
+                Check your email
+              </Text>
+              <Text style={[styles.verifyHint, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                We sent a 6-digit code to {email}. Enter it below to verify your account.
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.background,
+                    borderColor: colors.border,
+                    color: colors.foreground,
+                    fontFamily: "Inter_400Regular",
+                    letterSpacing: 4,
+                    textAlign: "center",
+                  },
+                ]}
+                placeholder="------"
+                placeholderTextColor={colors.mutedForeground}
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+                keyboardType="number-pad"
+                maxLength={6}
+                autoFocus
+              />
+              {error !== "" && (
+                <View style={[styles.errorBadge, { backgroundColor: colors.destructive + "18" }]}>
+                  <Feather name="alert-circle" size={14} color={colors.destructive} />
+                  <Text style={[styles.errorText, { color: colors.destructive, fontFamily: "Inter_400Regular" }]}>
+                    {error}
+                  </Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={[styles.submitBtn, { backgroundColor: colors.primary }, anyLoading && { opacity: 0.7 }]}
+                onPress={handleVerify}
+                disabled={anyLoading || verificationCode.length < 6}
+                activeOpacity={0.85}
+              >
+                {loading ? (
+                  <ActivityIndicator color={colors.primaryForeground} />
+                ) : (
+                  <Text style={[styles.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                    Verify Email
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setPendingVerification(false); setError(""); setVerificationCode(""); }}
+                style={{ alignItems: "center", marginTop: 4 }}
+              >
+                <Text style={[styles.toggleLink, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  Back to sign up
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+          <>
           <Text
             style={[styles.cardTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
           >
@@ -345,9 +431,12 @@ export default function SignInScreen() {
               </Text>
             )}
           </TouchableOpacity>
+          </>
+          )}
         </View>
 
         {/* Toggle */}
+        {!pendingVerification && (
         <View style={styles.toggleRow}>
           <Text
             style={[
@@ -373,6 +462,7 @@ export default function SignInScreen() {
             </Text>
           </TouchableOpacity>
         </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -483,4 +573,5 @@ const styles = StyleSheet.create({
   },
   toggleText: { fontSize: 14 },
   toggleLink: { fontSize: 14 },
+  verifyHint: { fontSize: 14, lineHeight: 20 },
 });
