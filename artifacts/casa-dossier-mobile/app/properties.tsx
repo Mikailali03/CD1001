@@ -541,21 +541,7 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
     }
   }
 
-  async function pickPhoto() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission required", "Please allow access to your photo library to add a property photo.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-    if (result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
+  async function uploadPickedAsset(asset: ImagePicker.ImagePickerAsset) {
     setPhotoUri(asset.uri);
     setPhotoUrl(null);
     setPhotoUploading(true);
@@ -587,6 +573,50 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
     } finally {
       setPhotoUploading(false);
     }
+  }
+
+  async function pickFromLibrary() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Please allow access to your photo library to add a property photo.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadPickedAsset(result.assets[0]);
+  }
+
+  async function takePhoto() {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Permission required", "Please allow camera access to take a property photo.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    await uploadPickedAsset(result.assets[0]);
+  }
+
+  function pickPhoto() {
+    Alert.alert(
+      "Add Property Photo",
+      "Choose how you'd like to add a photo.",
+      [
+        { text: "Choose from Library", onPress: pickFromLibrary },
+        { text: "Take Photo", onPress: takePhoto },
+        { text: "Cancel", style: "cancel" },
+      ],
+    );
   }
 
   function removePhoto() {
