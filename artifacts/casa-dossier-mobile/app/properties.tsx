@@ -719,9 +719,8 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Address Search (add mode only) */}
-              {mode === "add" && (
-                <View style={fStyles.field}>
+              {/* Address Search */}
+              <View style={fStyles.field}>
                   <Text style={[fStyles.label, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
                     Search Address
                   </Text>
@@ -761,7 +760,6 @@ function PropertyFormModal({ mode, property, visible, onClose, colors, insets }:
                     </View>
                   )}
                 </View>
-              )}
 
               {/* Name */}
               <View style={fStyles.field}>
