@@ -1,51 +1,27 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { useTranslation } from "react-i18next";
+import { compressImage, uploadToStorage, PHOTO_MAX_PX, apiErrorMessage } from "@/lib/upload";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  getListPropertiesQueryKey,
+  lookupProperty,
+  createProperty,
+  generateStewardshipPlan,
+  type PropertyLookupResult,
+  type Property,
+} from "@workspace/api-client-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Building2, Loader2, CheckCircle2, Sparkles, TreePine, ArrowRight, Wand2 } from "lucide-react";
+import { AddressStep } from "@/components/add-property/address-step";
 import {
-  Building2,
-  Search,
-  Loader2,
-  CheckCircle2,
-  Sparkles,
-  MapPin,
-  Calendar,
-  Maximize,
-  BedDouble,
-  Bath,
-  TreePine,
-  ArrowRight,
-  ChevronLeft,
-  Wand2,
-  ImagePlus,
-  Camera,
-  X,
-} from "lucide-react";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type LookupResult = {
-  address: string;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
-  yearBuilt: number | null;
-  sqft: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  lotSize: number | null;
-  latitude: number | null;
-  longitude: number | null;
-};
+  VerifyStep,
+  EMPTY_PROPERTY_FORM,
+  type PropertyForm,
+  type PropertyFormErrors,
+} from "@/components/add-property/verify-step";
+import { PhotoStep } from "@/components/add-property/photo-step";
 
 type Step = "address" | "verify" | "photo" | "scouting" | "done";
 
@@ -55,40 +31,24 @@ type Props = {
   onCreated?: (propertyId: string) => void;
 };
 
-function StatBadge({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number | null }) {
-  if (value == null) return null;
-  return (
-    <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm">
-      <span className="text-muted-foreground">{icon}</span>
-      <div>
-        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
-        <p className="font-semibold text-sm leading-tight">{value}</p>
-      </div>
-    </div>
-  );
+/** HTTP status carried by generated-client errors; undefined for network failures. */
+function errorStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
 }
 
 export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   const queryClient = useQueryClient();
-  const authFetch = useAuthFetch();
+  const { t } = useTranslation();
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>("address");
   const [addressInput, setAddressInput] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
-  const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  const [lookupResult, setLookupResult] = useState<PropertyLookupResult | null>(null);
 
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [yearBuilt, setYearBuilt] = useState("");
-  const [sqft, setSqft] = useState("");
-  const [bedrooms, setBedrooms] = useState("");
-  const [bathrooms, setBathrooms] = useState("");
-  const [lotSize, setLotSize] = useState("");
+  const [form, setForm] = useState<PropertyForm>(EMPTY_PROPERTY_FORM);
+  const setField = (key: keyof PropertyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const [saveBusy, setSaveBusy] = useState(false);
   const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(null);
@@ -101,13 +61,15 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   const [photoUploading, setPhotoUploading] = useState(false);
   const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(null);
 
+  const [errors, setErrors] = useState<PropertyFormErrors>({});
+  const clearError = (key: keyof PropertyFormErrors) => setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
+
   function reset() {
     setStep("address");
     setAddressInput("");
     setLookupBusy(false);
     setLookupResult(null);
-    setName(""); setAddress(""); setCity(""); setState(""); setZipCode("");
-    setYearBuilt(""); setSqft(""); setBedrooms(""); setBathrooms(""); setLotSize("");
+    setForm(EMPTY_PROPERTY_FORM);
     setSaveBusy(false);
     setScoutResult(null);
     setCreatedPropertyId(null);
@@ -116,6 +78,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     setPhotoPreview(null);
     setPhotoUploading(false);
     setPendingPhotoUrl(null);
+    setErrors({});
   }
 
   function handleClose(v: boolean) {
@@ -124,29 +87,37 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
   }
 
   async function handleLookup() {
-    if (!addressInput.trim()) return;
+    if (!addressInput.trim()) {
+      setErrors({ addressInput: t("onboarding.errAddressRequired") });
+      return;
+    }
     setLookupBusy(true);
     try {
-      const res = await authFetch(`${BASE}/api/properties/lookup?address=${encodeURIComponent(addressInput.trim())}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast({ title: "Address not found", description: err.error ?? "Try a more complete address.", variant: "destructive" });
+      let data: PropertyLookupResult;
+      try {
+        data = await lookupProperty({ address: addressInput.trim() });
+      } catch (err) {
+        toast({
+          title: t("onboarding.addressNotFound"),
+          description: apiErrorMessage(err, t("onboarding.addressNotFoundDesc")),
+          variant: "destructive",
+        });
         return;
       }
-      const data: LookupResult = await res.json();
       setLookupResult(data);
-      setAddress(data.address);
-      setCity(data.city ?? "");
-      setState(data.state ?? "");
-      setZipCode(data.zipCode ?? "");
-      setYearBuilt(data.yearBuilt != null ? String(data.yearBuilt) : "");
-      setSqft(data.sqft != null ? String(data.sqft) : "");
-      setBedrooms(data.bedrooms != null ? String(data.bedrooms) : "");
-      setBathrooms(data.bathrooms != null ? String(data.bathrooms) : "");
-      setLotSize(data.lotSize != null ? String(data.lotSize) : "");
+      setForm({
+        name: data.address,
+        address: data.address,
+        city: data.city ?? "",
+        state: data.state ?? "",
+        zipCode: data.zipCode ?? "",
+        yearBuilt: data.yearBuilt != null ? String(data.yearBuilt) : "",
+        sqft: data.sqft != null ? String(data.sqft) : "",
+        bedrooms: data.bedrooms != null ? String(data.bedrooms) : "",
+        bathrooms: data.bathrooms != null ? String(data.bathrooms) : "",
+      });
       setLatitude(data.latitude ?? null);
       setLongitude(data.longitude ?? null);
-      setName(data.address);
       setStep("verify");
     } finally {
       setLookupBusy(false);
@@ -159,17 +130,9 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     setPhotoPreview(URL.createObjectURL(file));
     setPhotoUploading(true);
     try {
-      const urlRes = await authFetch(`${BASE}/api/storage/uploads/request-url`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-      });
-      if (!urlRes.ok) throw new Error("Failed to get upload URL");
-      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-      await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      setPendingPhotoUrl(`${BASE}/api/storage${objectPath}`);
-    } catch {
-      toast({ title: "Photo upload failed", variant: "destructive" });
+      setPendingPhotoUrl(await uploadToStorage(await compressImage(file, PHOTO_MAX_PX)));
+    } catch (err) {
+      toast({ title: t("addProperty.photoUploadFailed"), description: err instanceof Error ? err.message : undefined, variant: "destructive" });
       setPhotoPreview(null);
       setPendingPhotoUrl(null);
     } finally {
@@ -178,62 +141,89 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
     }
   }
 
+  function validateDetails() {
+    const next: PropertyFormErrors = {};
+    if (!form.name.trim()) next.name = t("onboarding.errNameRequired");
+    if (!form.address.trim()) next.address = t("onboarding.errStreetRequired");
+    const year = form.yearBuilt ? parseInt(form.yearBuilt) : null;
+    if (year != null && (year < 1600 || year > new Date().getFullYear() + 1)) next.yearBuilt = t("onboarding.errYearInvalid");
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
   async function handleSave(photoUrl?: string | null) {
-    if (!name.trim() || !address.trim()) return;
+    if (!form.name.trim() || !form.address.trim()) return;
     setSaveBusy(true);
     setStep("scouting");
 
     try {
-      const res = await authFetch(`${BASE}/api/properties`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          address: address.trim(),
-          city: city.trim() || null,
-          state: state.trim() || null,
-          zipCode: zipCode.trim() || null,
-          yearBuilt: yearBuilt ? parseInt(yearBuilt) : null,
-          sqft: sqft ? parseInt(sqft) : null,
-          bedrooms: bedrooms ? parseInt(bedrooms) : null,
-          bathrooms: bathrooms ? parseFloat(bathrooms) : null,
-          lotSize: lotSize ? parseInt(lotSize) : null,
-          latitude: latitude ?? undefined,
-          longitude: longitude ?? undefined,
-          ...(photoUrl != null ? { photoUrl } : {}),
-        }),
-      });
-
-      if (!res.ok) {
-        toast({ title: "Could not save property", variant: "destructive" });
-        setStep("verify");
+      // If an earlier attempt already created the property (and failed
+      // afterwards), don't POST again — that would create a duplicate.
+      if (createdPropertyId) {
+        await runScout(createdPropertyId);
         return;
       }
 
-      const property = await res.json();
-      setCreatedPropertyId(property.id);
-
-      await queryClient.invalidateQueries({ queryKey: ["list-properties"] });
-      await queryClient.invalidateQueries({ predicate: (q) => q.queryKey.some((k) => k === "listProperties" || k === "properties") });
-
+      let property: Property | null;
       try {
-        const scoutRes = await authFetch(`${BASE}/api/properties/${property.id}/scout`, { method: "POST" });
-        if (scoutRes.ok) {
-          const scoutData = await scoutRes.json();
-          setScoutResult({ taskCount: scoutData.taskCount });
+        property = await createProperty({
+          name: form.name.trim(),
+          address: form.address.trim(),
+          city: form.city.trim() || undefined,
+          state: form.state.trim() || undefined,
+          zipCode: form.zipCode.trim() || undefined,
+          yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : undefined,
+          sqft: form.sqft ? parseInt(form.sqft) : undefined,
+          bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
+          bathrooms: form.bathrooms ? parseFloat(form.bathrooms) : undefined,
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
+          ...(photoUrl != null ? { photoUrl } : {}),
+        });
+      } catch (err) {
+        const status = errorStatus(err);
+        if (status === undefined) throw err;
+        if (status >= 200 && status < 300) {
+          // Created, but the body couldn't be read (see below).
+          property = null;
+        } else {
+          toast({ title: t("onboarding.couldNotSave"), variant: "destructive" });
+          setStep("verify");
+          return;
         }
-      } catch {
-        setScoutResult({ taskCount: 0 });
       }
 
-      setStep("done");
-      onCreated?.(property.id);
+      // The property exists once the POST succeeds. If the body can't be read
+      // we don't know its id, so close rather than let a retry duplicate it.
+      if (!property?.id) {
+        await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+        toast({ title: t("addProperty.savedToast"), description: t("addProperty.savedToastDesc") });
+        handleClose(false);
+        return;
+      }
+      setCreatedPropertyId(property.id);
+
+      await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+      await runScout(property.id);
     } catch {
-      toast({ title: "Something went wrong", variant: "destructive" });
+      toast({ title: t("common.somethingWentWrong"), variant: "destructive" });
       setStep("verify");
     } finally {
       setSaveBusy(false);
     }
+  }
+
+  async function runScout(propertyId: string) {
+    try {
+      const scoutData = await generateStewardshipPlan(propertyId);
+      setScoutResult({ taskCount: scoutData.taskCount });
+    } catch (err) {
+      // A non-2xx reply leaves the result unset; only a network failure records 0.
+      if (errorStatus(err) === undefined) setScoutResult({ taskCount: 0 });
+    }
+
+    setStep("done");
+    onCreated?.(propertyId);
   }
 
   return (
@@ -242,235 +232,41 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
 
         {/* ── Step 1: Address ── */}
         {step === "address" && (
-          <>
-            <DialogHeader className="px-6 pt-6 pb-4 border-b">
-              <div className="flex items-center gap-3">
-                <div className="bg-primary/10 p-2.5 rounded-xl">
-                  <Building2 className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg">Add Your Home</DialogTitle>
-                  <p className="text-sm text-muted-foreground mt-0.5">We'll look up the details automatically.</p>
-                </div>
-              </div>
-            </DialogHeader>
-            <div className="px-6 py-6 space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="address-input" className="text-sm font-medium">Street Address</Label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="address-input"
-                      placeholder="123 Main St, Austin, TX 78701"
-                      value={addressInput}
-                      onChange={(e) => setAddressInput(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-                      className="pl-9"
-                      autoFocus
-                    />
-                  </div>
-                  <Button onClick={handleLookup} disabled={!addressInput.trim() || lookupBusy} className="gap-2 shrink-0">
-                    {lookupBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    {lookupBusy ? "Looking up…" : "Look Up"}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-dashed bg-muted/30 px-4 py-5 space-y-2.5">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">What happens next</p>
-                <div className="space-y-2">
-                  {[
-                    { icon: <Search className="h-3.5 w-3.5" />, text: "We fetch year built, square footage, beds & baths automatically" },
-                    { icon: <Wand2 className="h-3.5 w-3.5" />, text: "You verify and edit the details before saving" },
-                    { icon: <Sparkles className="h-3.5 w-3.5" />, text: "An AI Scout generates a personalized Whole-Home Stewardship Plan" },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2.5 text-xs text-muted-foreground">
-                      <span className="mt-0.5 text-primary shrink-0">{item.icon}</span>
-                      <span>{item.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="border-t px-6 py-4 flex justify-end">
-              <Button variant="ghost" size="sm" onClick={() => handleClose(false)}>Cancel</Button>
-            </div>
-          </>
+          <AddressStep
+            addressInput={addressInput}
+            onAddressChange={(v) => { setAddressInput(v); clearError("addressInput"); }}
+            error={errors.addressInput}
+            lookupBusy={lookupBusy}
+            onLookup={handleLookup}
+            onCancel={() => handleClose(false)}
+          />
         )}
 
         {/* ── Step 2: Verify ── */}
         {step === "verify" && (
-          <>
-            <DialogHeader className="px-6 pt-6 pb-4 border-b">
-              <div className="flex items-center gap-3">
-                <div className="bg-emerald-100 p-2.5 rounded-xl">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg">Verify Your Details</DialogTitle>
-                  <p className="text-sm text-muted-foreground mt-0.5">We pre-filled from public records — edit anything that's off.</p>
-                </div>
-              </div>
-            </DialogHeader>
-
-            <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
-              {lookupResult && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <StatBadge icon={<Calendar className="h-3.5 w-3.5" />} label="Year Built" value={lookupResult.yearBuilt} />
-                  <StatBadge icon={<Maximize className="h-3.5 w-3.5" />} label="Sq Ft" value={lookupResult.sqft?.toLocaleString() ?? null} />
-                  <StatBadge icon={<BedDouble className="h-3.5 w-3.5" />} label="Beds" value={lookupResult.bedrooms} />
-                  <StatBadge icon={<Bath className="h-3.5 w-3.5" />} label="Baths" value={lookupResult.bathrooms} />
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Property Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. The Johnson Family Home" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">Street Address</Label>
-                  <Input value={address} onChange={(e) => setAddress(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1 col-span-2">
-                    <Label className="text-xs font-medium text-muted-foreground">City</Label>
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">State</Label>
-                    <Input value={state} onChange={(e) => setState(e.target.value)} maxLength={2} placeholder="TX" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Year Built</Label>
-                    <Input value={yearBuilt} onChange={(e) => setYearBuilt(e.target.value)} type="number" placeholder="1990" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Sq Ft</Label>
-                    <Input value={sqft} onChange={(e) => setSqft(e.target.value)} type="number" placeholder="2000" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Beds</Label>
-                    <Input value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} type="number" placeholder="3" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Baths</Label>
-                    <Input value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} type="number" step="0.5" placeholder="2" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t px-6 py-4 flex items-center justify-between gap-3 bg-muted/20">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setStep("address")}>
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back
-              </Button>
-              <Button onClick={() => setStep("photo")} disabled={!name.trim() || !address.trim()} className="gap-1.5">
-                Next: Add Photo
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </>
+          <VerifyStep
+            form={form}
+            setField={setField}
+            errors={errors}
+            clearError={clearError}
+            lookupResult={lookupResult}
+            onBack={() => setStep("address")}
+            onNext={() => { if (validateDetails()) setStep("photo"); }}
+          />
         )}
 
         {/* ── Step 3: Photo ── */}
         {step === "photo" && (
-          <>
-            <DialogHeader className="px-6 pt-6 pb-4 border-b">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-100 p-2.5 rounded-xl">
-                  <Camera className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg">Add a Photo</DialogTitle>
-                  <p className="text-sm text-muted-foreground mt-0.5">Optional — you can always add one later.</p>
-                </div>
-              </div>
-            </DialogHeader>
-
-            <div className="px-6 py-6 space-y-4">
-              <div className="relative group">
-                {photoPreview ? (
-                  <div className="relative h-52 w-full rounded-xl overflow-hidden border border-border">
-                    <img src={photoPreview} alt="Property" className="h-full w-full object-cover" />
-                    {photoUploading && (
-                      <div className="absolute inset-0 bg-background/70 flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                        <span className="text-sm text-muted-foreground">Uploading…</span>
-                      </div>
-                    )}
-                    {!photoUploading && (
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          className="bg-white/90 hover:bg-white text-foreground rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
-                        >
-                          <Camera className="h-3.5 w-3.5" />
-                          Change
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setPhotoPreview(null); setPendingPhotoUrl(null); }}
-                          className="bg-white/90 hover:bg-white text-destructive rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-40 rounded-xl border-2 border-dashed border-muted-foreground/25 hover:border-primary/40 hover:bg-primary/5 flex flex-col items-center justify-center gap-3 text-muted-foreground hover:text-primary transition-all cursor-pointer"
-                  >
-                    <ImagePlus className="h-8 w-8" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium">Upload a photo of your home</p>
-                      <p className="text-xs opacity-70 mt-0.5">JPG, PNG, WebP accepted</p>
-                    </div>
-                  </button>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handlePhotoFileChange}
-                />
-              </div>
-
-              <p className="text-xs text-muted-foreground text-center">
-                A photo helps you quickly identify this property in your dossier.
-              </p>
-            </div>
-
-            <div className="border-t px-6 py-4 flex items-center justify-between gap-3 bg-muted/20">
-              <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setStep("verify")}>
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Back
-              </Button>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => handleSave(null)} disabled={saveBusy}>
-                  Skip
-                </Button>
-                <Button
-                  onClick={() => handleSave(pendingPhotoUrl)}
-                  disabled={saveBusy || photoUploading}
-                  className="gap-1.5"
-                >
-                  {saveBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                  Save & Generate Plan
-                </Button>
-              </div>
-            </div>
-          </>
+          <PhotoStep
+            photoPreview={photoPreview}
+            photoUploading={photoUploading}
+            saveBusy={saveBusy}
+            onFileChange={handlePhotoFileChange}
+            onRemove={() => { setPhotoPreview(null); setPendingPhotoUrl(null); }}
+            onBack={() => setStep("verify")}
+            onSkip={() => handleSave(null)}
+            onSave={() => handleSave(pendingPhotoUrl)}
+          />
         )}
 
         {/* ── Step 4: AI Scouting ── */}
@@ -485,16 +281,16 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
               </div>
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-lg font-bold">AI Scout is researching your home</h3>
+              <h3 className="text-lg font-bold">{t("addProperty.scoutingTitle")}</h3>
               <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-                Analyzing your home's age, location, and climate to generate a personalized Whole-Home Stewardship Plan…
+                {t("onboarding.scoutingSubtitle")}
               </p>
             </div>
             <div className="w-full max-w-xs space-y-2 pt-2">
-              {["Reviewing home age & regional climate", "Identifying system-specific risks", "Generating maintenance schedule"].map((s, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
+              {(["scoutStep1", "scoutStep2", "scoutStep3"] as const).map((key) => (
+                <div key={key} className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-                  {s}
+                  {t(`onboarding.${key}`)}
                 </div>
               ))}
             </div>
@@ -509,9 +305,9 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
                 <CheckCircle2 className="h-9 w-9 text-emerald-600" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-xl font-bold">Your home is ready!</h3>
+                <h3 className="text-xl font-bold">{t("onboarding.doneTitle")}</h3>
                 <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
-                  Property saved and your Whole-Home Stewardship Plan has been generated.
+                  {t("onboarding.doneSubtitle")}
                 </p>
               </div>
 
@@ -520,10 +316,10 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
                   <Sparkles className="h-5 w-5 text-emerald-600 shrink-0" />
                   <div className="text-left">
                     <p className="text-sm font-semibold text-emerald-800">
-                      {scoutResult.taskCount} maintenance tasks generated
+                      {t("onboarding.tasksGenerated", { count: scoutResult.taskCount })}
                     </p>
                     <p className="text-xs text-emerald-700 mt-0.5">
-                      Added to your Home Stewardship asset with due dates and DIY instructions.
+                      {t("onboarding.tasksGeneratedDesc")}
                     </p>
                   </div>
                 </div>
@@ -531,10 +327,10 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
 
               <div className="grid grid-cols-2 gap-2 w-full text-xs text-muted-foreground">
                 {[
-                  { icon: <Building2 className="h-3.5 w-3.5" />, text: "Property saved to your account" },
-                  { icon: <Wand2 className="h-3.5 w-3.5" />, text: "AI-generated stewardship plan" },
-                  { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: "Home Stewardship asset created" },
-                  { icon: <TreePine className="h-3.5 w-3.5" />, text: "Seasonal tasks scheduled" },
+                  { icon: <Building2 className="h-3.5 w-3.5" />, text: t("addProperty.checkSaved") },
+                  { icon: <Wand2 className="h-3.5 w-3.5" />, text: t("addProperty.checkPlan") },
+                  { icon: <CheckCircle2 className="h-3.5 w-3.5" />, text: t("addProperty.checkStewardship") },
+                  { icon: <TreePine className="h-3.5 w-3.5" />, text: t("addProperty.checkSeasonal") },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-1.5">
                     <span className="text-emerald-600">{item.icon}</span>
@@ -545,7 +341,7 @@ export function AddPropertyDialog({ open, onOpenChange, onCreated }: Props) {
             </div>
             <div className="border-t px-6 py-4 flex justify-end">
               <Button onClick={() => handleClose(false)} className="gap-1.5">
-                View Dashboard
+                {t("addProperty.viewDashboard")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </div>

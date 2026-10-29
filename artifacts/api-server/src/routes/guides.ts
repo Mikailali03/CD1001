@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
-import { guidesTable, insertGuideSchema } from "@workspace/db";
+import { guidesTable, insertGuideSchema, type Guide } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { ListGuidesQueryParams, GetGuideParams } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
@@ -13,7 +13,7 @@ router.get("/guides", async (req, res) => {
   const query = ListGuidesQueryParams.parse(req.query);
   const conditions = [];
   if (query.category) conditions.push(eq(guidesTable.category, query.category));
-  if (query.difficulty) conditions.push(eq(guidesTable.difficulty, query.difficulty));
+  if (query.difficulty) conditions.push(eq(guidesTable.difficulty, query.difficulty as Guide["difficulty"]));
 
   const guides = await db
     .select()
@@ -33,7 +33,10 @@ router.get("/guides", async (req, res) => {
 router.get("/guides/:guideId", async (req, res) => {
   const { guideId } = GetGuideParams.parse(req.params);
   const [guide] = await db.select().from(guidesTable).where(eq(guidesTable.id, guideId));
-  if (!guide) return res.status(404).json({ error: "Guide not found" });
+  if (!guide) {
+    res.status(404).json({ error: "Guide not found" });
+    return;
+  }
   res.json({
     ...guide,
     toolsNeeded: guide.toolsNeeded ? JSON.parse(guide.toolsNeeded) : [],

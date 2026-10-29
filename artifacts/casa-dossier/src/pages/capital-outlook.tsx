@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { Trans, useTranslation } from "react-i18next";
+import { useGetCapitalOutlook, getGetCapitalOutlookQueryKey } from "@workspace/api-client-react";
 import { useProperty } from "@/contexts/property-context";
 import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import {
@@ -16,7 +16,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
 import {
   TrendingUp,
   AlertTriangle,
@@ -25,189 +24,42 @@ import {
   Calendar,
   ArrowRight,
   Building2,
-  CheckCircle2,
-  Lock,
-  Sparkles,
 } from "lucide-react";
-import { Link } from "wouter";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type AssetOutlook = {
-  id: string;
-  name: string;
-  category: string;
-  brand: string | null;
-  model: string | null;
-  installDate: string | null;
-  installYear: number | null;
-  replacementCost: number | null;
-  expectedLifespanYears: number;
-  replacementYear: number | null;
-  yearsRemaining: number | null;
-  urgency: "critical" | "warning" | "good" | "unknown";
-  ageYears: number | null;
-  percentLifeUsed: number | null;
-};
-
-type TimelineEntry = {
-  year: number;
-  projectedCost: number;
-  assetNames: string[];
-};
-
-type CapitalOutlookData = {
-  totalTrackedValue: number;
-  assets: AssetOutlook[];
-  timeline: TimelineEntry[];
-  summary: {
-    nextReplacement: { name: string; year: number; cost: number } | null;
-    next5YearCost: number;
-    next10YearCost: number;
-  };
-};
-
-function fmt(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
-}
-
-const URGENCY_CONFIG = {
-  critical: { label: "Replace Soon", color: "text-destructive", bg: "bg-destructive/10", border: "border-destructive/30", bar: "#ef4444" },
-  warning:  { label: "Plan Ahead",   color: "text-amber-600",   bg: "bg-amber-50",       border: "border-amber-200",       bar: "#f59e0b" },
-  good:     { label: "Good Shape",   color: "text-chart-1",     bg: "bg-chart-1/10",     border: "border-chart-1/20",      bar: "#22c55e" },
-  unknown:  { label: "No Data",      color: "text-muted-foreground", bg: "bg-muted",      border: "border-border",          bar: "#94a3b8" },
-};
-
-const CATEGORY_ICONS: Record<string, string> = {
-  HVAC: "❄️", Plumbing: "🔧", Electrical: "⚡", Roof: "🏠", Appliance: "🫙", Structural: "🏗️", Other: "📦",
-};
-
-function LifeBar({ percent, urgency }: { percent: number; urgency: AssetOutlook["urgency"] }) {
-  const colors = { critical: "bg-destructive", warning: "bg-amber-400", good: "bg-chart-1", unknown: "bg-muted-foreground/30" };
-  return (
-    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-      <div
-        className={`h-full rounded-full transition-all ${colors[urgency]}`}
-        style={{ width: `${Math.min(percent, 100)}%` }}
-      />
-    </div>
-  );
-}
-
-type CustomTooltipProps = {
-  active?: boolean;
-  payload?: { value: number }[];
-  label?: number;
-  data?: TimelineEntry[];
-};
-
-function CustomBarTooltip({ active, payload, label, data }: CustomTooltipProps) {
-  if (!active || !payload?.length) return null;
-  const entry = data?.find((d) => d.year === label);
-  return (
-    <div className="bg-background border shadow-lg rounded-xl px-4 py-3 text-sm min-w-[180px]">
-      <p className="font-bold text-base mb-1">{label}</p>
-      <p className="text-primary font-semibold">{fmt(payload[0]!.value)}</p>
-      {entry?.assetNames.length ? (
-        <div className="mt-2 pt-2 border-t space-y-0.5">
-          {entry.assetNames.map((n) => (
-            <p key={n} className="text-xs text-muted-foreground flex items-center gap-1">
-              <span className="w-1 h-1 rounded-full bg-muted-foreground inline-block" />
-              {n}
-            </p>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function SummaryCard({ icon, label, value, sub, highlight }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; highlight?: boolean;
-}) {
-  return (
-    <Card className={highlight ? "border-primary/30 bg-primary/5" : ""}>
-      <CardContent className="pt-5 pb-4">
-        <div className="flex items-start gap-3">
-          <div className={`p-2.5 rounded-xl shrink-0 ${highlight ? "bg-primary/15" : "bg-muted"}`}>
-            <span className={highlight ? "text-primary" : "text-muted-foreground"}>{icon}</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs text-muted-foreground font-medium">{label}</p>
-            <p className={`text-xl font-bold mt-0.5 ${highlight ? "text-primary" : ""}`}>{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
+import {
+  CustomBarTooltip,
+  SummaryCard,
+  fmt,
+  type CustomTooltipProps,
+} from "@/components/capital-outlook/parts";
+import { CapitalOutlookLocked } from "@/components/capital-outlook/locked";
+import { AssetOutlookCard } from "@/components/capital-outlook/asset-outlook-card";
 
 export default function CapitalOutlook() {
   const { activePropertyId } = useProperty();
-  const authFetch = useAuthFetch();
-  const { subscription, openUpgradeModal } = useSubscription();
+  const { t } = useTranslation();
+  const { subscription, isLoading: subscriptionLoading, openUpgradeModal } = useSubscription();
   const currentYear = new Date().getFullYear();
-  const locked = !isBasicPlus(subscription?.tier);
+  const locked = !subscriptionLoading && !isBasicPlus(subscription?.tier);
 
-  const { data, isLoading, error } = useQuery<CapitalOutlookData>({
-    queryKey: ["capital-outlook", activePropertyId],
-    queryFn: async () => {
-      if (!activePropertyId) throw new Error("No property selected");
-      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/capital-outlook`);
-      if (!res.ok) throw new Error("Failed to load capital outlook");
-      return res.json();
+  const { data, isLoading, error } = useGetCapitalOutlook(activePropertyId ?? "", {
+    query: {
+      queryKey: getGetCapitalOutlookQueryKey(activePropertyId ?? ""),
+      enabled: !!activePropertyId && !subscriptionLoading && !locked,
     },
-    enabled: !!activePropertyId && !locked,
   });
 
-  if (locked) {
-    return (
-      <div className="p-6 max-w-7xl mx-auto flex flex-col items-center justify-center py-20 gap-6 text-center">
-        <div className="bg-amber-100 dark:bg-amber-950 p-5 rounded-full">
-          <Lock className="h-10 w-10 text-amber-600" />
-        </div>
-        <div className="max-w-md">
-          <h2 className="text-xl font-bold mb-2">Capital Outlook</h2>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            See a 10-year projection of replacement costs and plan capital investments — available on the <strong>Basic</strong> plan and above.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2 w-full max-w-xs">
-          <Button onClick={openUpgradeModal} className="gap-2">
-            <Sparkles className="h-4 w-4" />
-            Upgrade to Basic — $9.99/mo
-          </Button>
-        </div>
-        <div className="relative w-full max-w-2xl mt-4 rounded-xl overflow-hidden border">
-          <div className="absolute inset-0 bg-background/70 backdrop-blur-sm z-10 flex items-center justify-center">
-            <Badge className="text-xs font-semibold px-3 py-1.5 bg-amber-500 text-white">
-              <Lock className="h-3 w-3 mr-1.5" />
-              Upgrade to unlock
-            </Badge>
-          </div>
-          <div className="p-6 space-y-3 opacity-40 pointer-events-none select-none">
-            <div className="h-8 bg-muted rounded-xl w-48" />
-            <div className="grid grid-cols-3 gap-3">
-              {[0, 1, 2].map((i) => <div key={i} className="h-24 bg-muted rounded-xl" />)}
-            </div>
-            <div className="h-48 bg-muted rounded-xl" />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (locked) return <CapitalOutlookLocked onUpgrade={openUpgradeModal} />;
 
   if (!activePropertyId) {
     return (
       <div className="p-6 max-w-7xl mx-auto flex flex-col items-center justify-center py-20 gap-4">
         <Building2 className="h-12 w-12 text-muted-foreground/30" />
-        <p className="text-muted-foreground">Select a property to view its Capital Outlook.</p>
+        <p className="text-muted-foreground">{t("capitalOutlook.selectProperty")}</p>
       </div>
     );
   }
 
-  if (isLoading) {
+  if (subscriptionLoading || isLoading) {
     return (
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <Skeleton className="h-10 w-64" />
@@ -226,15 +78,15 @@ export default function CapitalOutlook() {
     return (
       <div className="p-6 text-center py-20 text-muted-foreground">
         <AlertTriangle className="mx-auto h-10 w-10 mb-3 text-destructive/50" />
-        <p>Could not load Capital Outlook data.</p>
+        <p>{t("capitalOutlook.loadFailed")}</p>
       </div>
     );
   }
 
   // Trim timeline to show only years with activity ± a window, max 15 years
-  const activeYears = data.timeline.filter((t) => t.projectedCost > 0).map((t) => t.year);
+  const activeYears = data.timeline.filter((e) => e.projectedCost > 0).map((e) => e.year);
   const maxYear = activeYears.length ? Math.min(Math.max(...activeYears) + 1, currentYear + 15) : currentYear + 10;
-  const chartData = data.timeline.filter((t) => t.year <= maxYear);
+  const chartData = data.timeline.filter((e) => e.year <= maxYear);
 
   // Sort assets: unknown last, then by yearsRemaining ascending
   const sortedAssets = [...data.assets].sort((a, b) => {
@@ -256,10 +108,10 @@ export default function CapitalOutlook() {
             <div className="bg-primary/10 p-2 rounded-xl">
               <TrendingUp className="h-5 w-5 text-primary" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight text-primary">Capital Outlook</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-primary">{t("capitalOutlook.title")}</h1>
           </div>
           <p className="text-muted-foreground text-sm">
-            Projected replacement costs for your home's major systems — so you're never surprised.
+            {t("capitalOutlook.subtitle")}
           </p>
         </div>
         {(criticalCount > 0 || warningCount > 0) && (
@@ -267,13 +119,13 @@ export default function CapitalOutlook() {
             {criticalCount > 0 && (
               <Badge variant="destructive" className="gap-1.5 py-1 px-2.5">
                 <AlertTriangle className="h-3 w-3" />
-                {criticalCount} critical
+                {t("capitalOutlook.criticalCount", { count: criticalCount })}
               </Badge>
             )}
             {warningCount > 0 && (
               <Badge className="gap-1.5 py-1 px-2.5 bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
                 <Clock className="h-3 w-3" />
-                {warningCount} plan ahead
+                {t("capitalOutlook.planAheadCount", { count: warningCount })}
               </Badge>
             )}
           </div>
@@ -285,19 +137,19 @@ export default function CapitalOutlook() {
         <SummaryCard
           highlight
           icon={<DollarSign className="h-5 w-5" />}
-          label="Total Tracked Replacement Value"
+          label={t("capitalOutlook.totalTrackedValue")}
           value={fmt(data.totalTrackedValue)}
-          sub={`Across ${assetsWithCost.length} tracked asset${assetsWithCost.length !== 1 ? "s" : ""}`}
+          sub={t("capitalOutlook.acrossAssets", { count: assetsWithCost.length })}
         />
         <SummaryCard
           icon={<Calendar className="h-5 w-5" />}
-          label="Next 5-Year Projected Spend"
+          label={t("capitalOutlook.next5Years")}
           value={fmt(data.summary.next5YearCost)}
           sub={`${currentYear}–${currentYear + 4}`}
         />
         <SummaryCard
           icon={<TrendingUp className="h-5 w-5" />}
-          label="Next 10-Year Projected Spend"
+          label={t("capitalOutlook.next10Years")}
           value={fmt(data.summary.next10YearCost)}
           sub={`${currentYear}–${currentYear + 9}`}
         />
@@ -317,14 +169,18 @@ export default function CapitalOutlook() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm">
-              Next Up: <span className="text-primary">{data.summary.nextReplacement.name}</span>
+              {t("capitalOutlook.nextUp")} <span className="text-primary">{data.summary.nextReplacement.name}</span>
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Projected replacement in <strong>{data.summary.nextReplacement.year}</strong>
-              {" "}({data.summary.nextReplacement.year - currentYear <= 0
-                ? "overdue"
-                : `${data.summary.nextReplacement.year - currentYear} year${data.summary.nextReplacement.year - currentYear !== 1 ? "s" : ""} away`})
-              {" "}— est. <strong>{fmt(data.summary.nextReplacement.cost)}</strong>
+              <Trans
+                i18nKey={data.summary.nextReplacement.year - currentYear <= 0 ? "capitalOutlook.nextReplacementOverdue" : "capitalOutlook.nextReplacementIn"}
+                values={{
+                  year: data.summary.nextReplacement.year,
+                  count: data.summary.nextReplacement.year - currentYear,
+                  cost: fmt(data.summary.nextReplacement.cost),
+                }}
+                components={{ strong: <strong /> }}
+              />
             </p>
           </div>
           <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -336,9 +192,9 @@ export default function CapitalOutlook() {
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            Replacement Cost Timeline
+            {t("capitalOutlook.timelineTitle")}
           </CardTitle>
-          <CardDescription>Projected year-by-year capital expenditures for your tracked assets</CardDescription>
+          <CardDescription>{t("capitalOutlook.timelineDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="pt-2">
           {chartData.some((d) => d.projectedCost > 0) ? (
@@ -360,11 +216,16 @@ export default function CapitalOutlook() {
                 />
                 <Tooltip
                   content={(props) => (
-                    <CustomBarTooltip {...props as any} data={chartData} />
+                    <CustomBarTooltip
+                      active={props.active}
+                      payload={props.payload as CustomTooltipProps["payload"]}
+                      label={props.label as number | undefined}
+                      data={chartData}
+                    />
                   )}
                   cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
                 />
-                <ReferenceLine x={currentYear} stroke="hsl(var(--primary))" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: "Today", position: "top", fontSize: 10, fill: "hsl(var(--primary))" }} />
+                <ReferenceLine x={currentYear} stroke="hsl(var(--primary))" strokeDasharray="4 3" strokeWidth={1.5} label={{ value: t("capitalOutlook.today"), position: "top", fontSize: 10, fill: "hsl(var(--primary))" }} />
                 <Bar dataKey="projectedCost" radius={[6, 6, 0, 0]} maxBarSize={52}>
                   {chartData.map((entry) => {
                     const yr = entry.year;
@@ -379,8 +240,8 @@ export default function CapitalOutlook() {
             <div className="h-48 flex flex-col items-center justify-center text-center gap-3">
               <TrendingUp className="h-10 w-10 text-muted-foreground/25" />
               <div>
-                <p className="text-sm font-medium text-muted-foreground">No replacement data yet</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">Add assets with replacement costs to see the timeline</p>
+                <p className="text-sm font-medium text-muted-foreground">{t("capitalOutlook.noData")}</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">{t("capitalOutlook.noDataDesc")}</p>
               </div>
             </div>
           )}
@@ -388,10 +249,10 @@ export default function CapitalOutlook() {
           {/* Legend */}
           <div className="flex flex-wrap gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
             {[
-              { color: "#ef4444", label: "Overdue / Past Due" },
-              { color: "#f59e0b", label: "Within 3 years" },
-              { color: "#3b82f6", label: "4–8 years" },
-              { color: "#22c55e", label: "9+ years" },
+              { color: "#ef4444", label: t("capitalOutlook.legend.overdue") },
+              { color: "#f59e0b", label: t("capitalOutlook.legend.within3") },
+              { color: "#3b82f6", label: t("capitalOutlook.legend.fourToEight") },
+              { color: "#22c55e", label: t("capitalOutlook.legend.ninePlus") },
             ].map((l) => (
               <div key={l.label} className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-sm inline-block" style={{ background: l.color }} />
@@ -404,86 +265,25 @@ export default function CapitalOutlook() {
 
       {/* Asset Cards */}
       <div>
-        <h2 className="text-base font-semibold mb-3">Asset Breakdown</h2>
+        <h2 className="text-base font-semibold mb-3">{t("capitalOutlook.assetBreakdown")}</h2>
         <div className="grid gap-4 md:grid-cols-2">
-          {sortedAssets.map((asset) => {
-            const cfg = URGENCY_CONFIG[asset.urgency];
-            return (
-              <Link key={asset.id} href={`/properties/${activePropertyId}/assets/${asset.id}`}>
-                <Card className={`cursor-pointer hover:shadow-md transition-shadow border ${cfg.border}`}>
-                  <CardContent className="pt-4 pb-4 px-5">
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-start gap-2.5 min-w-0">
-                        <span className="text-xl shrink-0 mt-0.5">{CATEGORY_ICONS[asset.category] ?? "📦"}</span>
-                        <div className="min-w-0">
-                          <p className="font-semibold text-sm leading-tight line-clamp-1">{asset.name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {[asset.brand, asset.model].filter(Boolean).join(" · ") || asset.category}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge className={`${cfg.bg} ${cfg.color} border ${cfg.border} text-[10px] font-semibold shrink-0 whitespace-nowrap`}>
-                        {asset.urgency === "critical" && <AlertTriangle className="h-2.5 w-2.5 mr-1" />}
-                        {asset.urgency === "good" && <CheckCircle2 className="h-2.5 w-2.5 mr-1" />}
-                        {cfg.label}
-                      </Badge>
-                    </div>
-
-                    {/* Life bar */}
-                    {asset.percentLifeUsed != null && (
-                      <div className="mb-3">
-                        <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                          <span>Life used: {asset.percentLifeUsed}%</span>
-                          <span>{asset.expectedLifespanYears}yr lifespan</span>
-                        </div>
-                        <LifeBar percent={asset.percentLifeUsed} urgency={asset.urgency} />
-                      </div>
-                    )}
-
-                    {/* Stats row */}
-                    <div className="grid grid-cols-3 gap-2 text-xs mt-3">
-                      <div>
-                        <p className="text-muted-foreground">Installed</p>
-                        <p className="font-medium">{asset.installYear ?? "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Replace by</p>
-                        <p className={`font-semibold ${asset.urgency === "critical" ? "text-destructive" : asset.urgency === "warning" ? "text-amber-600" : ""}`}>
-                          {asset.replacementYear ?? "—"}
-                          {asset.yearsRemaining != null && (
-                            <span className="font-normal text-muted-foreground">
-                              {" "}({asset.yearsRemaining <= 0 ? "past" : `${asset.yearsRemaining}yr`})
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Est. Cost</p>
-                        <p className="font-semibold">
-                          {asset.replacementCost != null ? fmt(asset.replacementCost) : <span className="text-muted-foreground font-normal">—</span>}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
+          {sortedAssets.map((asset) => (
+            <AssetOutlookCard key={asset.id} asset={asset} propertyId={activePropertyId} />
+          ))}
         </div>
 
         {data.assets.length === 0 && (
           <div className="text-center py-16 border border-dashed rounded-xl">
             <TrendingUp className="mx-auto h-10 w-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">No assets to analyze</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">Add assets to your property to see capital projections</p>
+            <p className="text-sm font-medium text-muted-foreground">{t("capitalOutlook.noAssets")}</p>
+            <p className="text-xs text-muted-foreground/70 mt-1">{t("capitalOutlook.noAssetsDesc")}</p>
           </div>
         )}
       </div>
 
       {/* Disclaimer */}
       <p className="text-xs text-muted-foreground text-center pb-2">
-        Replacement timelines are estimates based on industry-standard lifespans. Actual lifespans vary with maintenance, climate, and usage.
-        Costs are in today's dollars and do not account for inflation.
+        {t("capitalOutlook.disclaimer")}
       </p>
     </div>
   );

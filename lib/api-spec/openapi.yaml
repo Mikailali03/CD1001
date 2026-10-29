@@ -230,6 +230,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: includeRetired
+          in: query
+          description: Include retired (decommissioned) assets
+          schema:
+            type: boolean
       responses:
         "200":
           description: List of assets
@@ -489,6 +494,25 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Guide"
+    post:
+      operationId: createGuide
+      tags: [guides]
+      summary: Publish a new DIY guide and notify all users (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGuideBody"
+      responses:
+        "201":
+          description: Guide created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Guide"
+        "403":
+          description: Admin only
 
   /guides/{guideId}:
     get:
@@ -1358,6 +1382,865 @@ paths:
               schema:
                 $ref: "#/components/schemas/AdminAnalytics"
 
+  # ─── Property lookup (RentCast) ─────────────────────────────────────────────
+  /properties/autocomplete:
+    get:
+      operationId: autocompletePropertyAddress
+      tags: [properties]
+      summary: Address suggestions as the user types (empty list when unavailable)
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 3
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 5
+      responses:
+        "200":
+          description: Address suggestions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressAutocompleteResult"
+
+  /properties/lookup:
+    get:
+      operationId: lookupProperty
+      tags: [properties]
+      summary: Look up public property details for an address
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 5
+      responses:
+        "200":
+          description: Property details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyLookupResult"
+        "404":
+          description: No property found for that address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Lookup provider not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /properties/{propertyId}/scout:
+    post:
+      operationId: generateStewardshipPlan
+      tags: [properties]
+      summary: Generate (or return the existing) AI whole-home stewardship plan
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stewardship asset and its tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StewardshipPlan"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many AI requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: AI response could not be parsed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /properties/{propertyId}/capital-outlook:
+    get:
+      operationId: getCapitalOutlook
+      tags: [properties]
+      summary: Projected replacement timeline and costs (basic+ tier)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Capital outlook
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CapitalOutlook"
+        "403":
+          description: Upgrade required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpgradeRequiredError"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /properties/{propertyId}/ledger:
+    get:
+      operationId: getInvestmentLedger
+      tags: [properties]
+      summary: Actual vs expected maintenance spend for a date range (basic+ tier)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: range
+          in: query
+          description: Unknown values fall back to this_year
+          schema:
+            type: string
+            enum: [this_month, last_month, this_quarter, last_quarter, this_year, last_year, all_time]
+      responses:
+        "200":
+          description: Investment ledger
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvestmentLedger"
+        "403":
+          description: Upgrade required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpgradeRequiredError"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /properties/{propertyId}/report:
+    get:
+      operationId: getPropertyReport
+      tags: [properties]
+      summary: Full property history report (assets with their service records)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Property report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyReport"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /properties/{propertyId}/inbox:
+    get:
+      operationId: getPropertyMaintenanceInbox
+      tags: [maintenance]
+      summary: Open maintenance tasks for a property that are overdue or due within 30 days
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Maintenance inbox
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyMaintenanceInbox"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  # ─── Deed transfer ──────────────────────────────────────────────────────────
+  /properties/{propertyId}/transfer:
+    get:
+      operationId: getPendingPropertyTransfer
+      tags: [properties]
+      summary: The property's pending deed transfer, or null (owner only)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pending transfer or null
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/PropertyTransfer"
+                  - type: "null"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    post:
+      operationId: initiatePropertyTransfer
+      tags: [properties]
+      summary: Start a deed transfer to another email (cancels any pending one)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitiatePropertyTransferBody"
+      responses:
+        "201":
+          description: Transfer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyTransfer"
+        "400":
+          description: Cannot transfer to yourself
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Sender email not verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Property not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /transfers/{transferId}:
+    delete:
+      operationId: cancelPropertyTransfer
+      tags: [properties]
+      summary: Cancel a pending deed transfer (owner only)
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelled transfer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PropertyTransfer"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Transfer not found or already resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /transfers/claim/{token}:
+    get:
+      operationId: getTransferClaim
+      tags: [properties]
+      summary: Public details of a pending transfer for the claim page
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Transfer and property summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferClaimDetails"
+        "404":
+          description: Invalid link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "410":
+          description: Transfer completed, cancelled or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransferGoneError"
+    post:
+      operationId: claimPropertyTransfer
+      tags: [properties]
+      summary: Accept a transfer; the signed-in user (matching verified email) becomes the owner
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Send `{}` if there is nothing to include
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimPropertyTransferBody"
+      responses:
+        "200":
+          description: Transfer completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClaimPropertyTransferResult"
+        "403":
+          description: Wrong recipient email or property limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Invalid link
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "410":
+          description: Transfer completed, cancelled or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  # ─── AI Lens ────────────────────────────────────────────────────────────────
+  /assets/scan:
+    post:
+      operationId: scanAssetDataPlate
+      tags: [assets]
+      summary: Read an appliance data plate photo with AI
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanAssetDataPlateBody"
+      responses:
+        "200":
+          description: Extracted fields (any may be null)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssetScanResult"
+        "403":
+          description: Free-tier scan allowance used up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many AI requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: Label could not be read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /assets/{assetId}/generate-tasks:
+    post:
+      operationId: generateAssetMaintenanceTasks
+      tags: [assets]
+      summary: Generate an AI maintenance plan for an asset (owner only)
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Created tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedMaintenanceTasks"
+        "403":
+          description: Free-tier plan allowance used up
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many AI requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: AI response could not be parsed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  # ─── Maintenance (completion / upcoming) ────────────────────────────────────
+  /maintenance/{taskId}/complete:
+    post:
+      operationId: completeMaintenanceTask
+      tags: [maintenance]
+      summary: Complete a task — schedules the next occurrence and logs a service record
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Send `{}` to complete with defaults
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteMaintenanceTaskBody"
+      responses:
+        "200":
+          description: Completed task, next task and service record
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompleteMaintenanceTaskResult"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Task not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Task already completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /maintenance/upcoming:
+    get:
+      operationId: listUpcomingMaintenance
+      tags: [maintenance]
+      summary: Open tasks due in the next 7 days across the user's own properties
+      responses:
+        "200":
+          description: Upcoming tasks
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpcomingMaintenance"
+
+  # ─── Subscription & billing ─────────────────────────────────────────────────
+  /subscription:
+    get:
+      operationId: getSubscription
+      tags: [user]
+      summary: Current user's subscription tier and AI usage
+      responses:
+        "200":
+          description: Subscription
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+
+  /subscription/downgrade:
+    post:
+      operationId: downgradeSubscription
+      tags: [user]
+      summary: Move back to the free tier (only when there is no live Stripe subscription)
+      responses:
+        "200":
+          description: Downgraded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionTierResult"
+        "409":
+          description: Active Stripe subscription — cancel via the billing portal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /stripe/plans:
+    get:
+      operationId: listStripePlans
+      tags: [user]
+      summary: Available paid plans and prices (public; empty on Stripe errors)
+      responses:
+        "200":
+          description: Plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripePlans"
+
+  /stripe/checkout:
+    post:
+      operationId: createStripeCheckout
+      tags: [user]
+      summary: Create a Stripe Checkout session for a paid tier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStripeCheckoutBody"
+      responses:
+        "200":
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripeRedirect"
+        "400":
+          description: Invalid tier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No active price for this tier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /stripe/sync:
+    post:
+      operationId: syncStripeCheckout
+      tags: [user]
+      summary: Confirm a completed checkout session and apply the tier
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncStripeCheckoutBody"
+      responses:
+        "200":
+          description: Applied tier
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionTierResult"
+        "400":
+          description: Missing/incomplete session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Session belongs to another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /stripe/portal:
+    post:
+      operationId: createStripePortalSession
+      tags: [user]
+      summary: Open the Stripe billing portal for an existing customer
+      responses:
+        "200":
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StripeRedirect"
+        "400":
+          description: No Stripe customer yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  # ─── Account & devices ──────────────────────────────────────────────────────
+  /user:
+    delete:
+      operationId: deleteUserAccount
+      tags: [user]
+      summary: Permanently delete the current user's account and data
+      responses:
+        "204":
+          description: Account deleted
+        "403":
+          description: Demo account cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "500":
+          description: Deletion failed; safe to retry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /push-tokens:
+    post:
+      operationId: registerPushToken
+      tags: [user]
+      summary: Register (or re-assign) an Expo push token for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenBody"
+      responses:
+        "200":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+    delete:
+      operationId: unregisterPushToken
+      tags: [user]
+      summary: Remove one of the current user's push tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenBody"
+      responses:
+        "200":
+          description: Removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+
+  /storage/public-objects/{filePath}:
+    get:
+      tags: [Storage]
+      operationId: getPublicStorageObject
+      summary: Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS (no auth)
+      parameters:
+        - name: filePath
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Object content streamed.
+          content:
+            '*/*':
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+
+  # ─── QR Identity Protocol ──────────────────────────────────────────────────
+  /properties/{propertyId}/qr-labels:
+    get:
+      operationId: listPropertyQrLabels
+      tags: [properties]
+      summary: Printable QR label data for a property's active assets (or one asset)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: assetId
+          in: query
+          required: false
+          description: Return only this asset's label (retired assets allowed)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Label data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrLabelSheet"
+        "404":
+          description: Property or asset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /qr/assets/{assetId}:
+    get:
+      operationId: getPublicQrAsset
+      tags: [assets]
+      summary: Public, non-sensitive info for a scanned asset label (no auth)
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: Full asset UUID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public asset label info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrPublicAsset"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
+  /qr/assets/{assetId}/access:
+    get:
+      operationId: getQrAssetAccess
+      tags: [assets]
+      summary: Whether the signed-in user can open the scanned asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Access info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QrAssetAccess"
+
+  /tech/assets/{ref}:
+    get:
+      operationId: getTechnicianScannedAsset
+      tags: [technician]
+      summary: Technician scan result for an asset (UUID, registry ID, CDA protocol string or label URL)
+      parameters:
+        - name: ref
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TechnicianScanResult"
+        "400":
+          description: Not a recognised asset code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Technician access required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Asset not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Registry ID matches more than one asset
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
 components:
   schemas:
     HealthStatus:
@@ -1498,6 +2381,12 @@ components:
           type: number
         photoUrl:
           type: string
+        userId:
+          type: string
+          description: Owner's user id
+        ownerEmail:
+          type: string
+          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -1611,10 +2500,14 @@ components:
           type: integer
         overdueTaskCount:
           type: integer
+        overdueTasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceTaskWithAsset"
         upcomingTasks:
           type: array
           items:
-            $ref: "#/components/schemas/MaintenanceTask"
+            $ref: "#/components/schemas/MaintenanceTaskWithAsset"
         assetsByCategory:
           type: array
           items:
@@ -1643,7 +2536,7 @@ components:
         recentRecords:
           type: array
           items:
-            $ref: "#/components/schemas/ServiceRecord"
+            $ref: "#/components/schemas/ServiceRecordWithAsset"
 
     # ─── Asset ─────────────────────────────────────────────────────────────────
     Asset:
@@ -1730,21 +2623,27 @@ components:
           enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
         brand:
           type: string
+          nullable: true
         model:
           type: string
+          nullable: true
         serialNumber:
           type: string
+          nullable: true
         installDate:
           type: string
           format: date
+          nullable: true
         warrantyExpiry:
           type: string
           format: date
+          nullable: true
         status:
           type: string
           enum: [verified, unverified, needs_attention]
         notes:
           type: string
+          nullable: true
         photoUrl:
           type: string
           nullable: true
@@ -1754,6 +2653,7 @@ components:
           nullable: true
         replacementCost:
           type: number
+          nullable: true
 
     # ─── Service Record ─────────────────────────────────────────────────────────
     ServiceRecord:
@@ -1942,17 +2842,20 @@ components:
 
     UpsertUserProfileBody:
       type: object
-      required: [firstName, lastName, role]
+      required: [firstName]
       properties:
         firstName:
           type: string
+          minLength: 1
         lastName:
           type: string
+          description: Defaults to an empty string
         email:
           type: string
         role:
           type: string
           enum: [homeowner, technician, admin]
+          description: Ignored — roles are assigned by admins
         phone:
           type: string
 
@@ -1984,7 +2887,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, completed]
+          enum: [open, claimed, en_route, arrived, completed]
         city:
           type: string
         state:
@@ -2034,7 +2937,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, completed]
+          enum: [open, claimed, en_route, arrived, completed]
         city:
           type: string
         state:
@@ -2066,7 +2969,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, completed]
+          enum: [open, claimed, en_route, arrived, completed]
         assetId:
           type: string
         assetName:
@@ -2131,7 +3034,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, completed]
+          enum: [open, claimed, en_route, arrived, completed]
         assetName:
           type: string
         assetCategory:
@@ -2393,7 +3296,7 @@ components:
           type: string
         triggerEvent:
           type: string
-          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, new_feature_announcement, monthly_update, custom]
+          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, collaborator_invited, new_feature_announcement, monthly_update, custom]
         conditions:
           type: object
           additionalProperties: true
@@ -2418,7 +3321,7 @@ components:
           type: string
         triggerEvent:
           type: string
-          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, new_feature_announcement, monthly_update, custom]
+          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, collaborator_invited, new_feature_announcement, monthly_update, custom]
         conditions:
           type: object
           additionalProperties: true
@@ -2496,6 +3399,12 @@ components:
           type: integer
         photoUrl:
           type: string
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
         userId:
           type: string
         ownerName:
@@ -2643,3 +3552,919 @@ components:
         folderId:
           type: string
           nullable: true
+
+    # ─── Shared results ─────────────────────────────────────────────────────────
+    OkResult:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+
+    UpgradeRequiredError:
+      type: object
+      required: [error, requiredTier]
+      properties:
+        error:
+          type: string
+          enum: [upgrade_required]
+        requiredTier:
+          type: string
+          enum: [essential, basic, managed, concierge]
+
+    # ─── Property lookup ────────────────────────────────────────────────────────
+    AddressSuggestion:
+      type: object
+      required: [address, city, state, zipCode]
+      properties:
+        address:
+          type: string
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          nullable: true
+
+    AddressAutocompleteResult:
+      type: object
+      required: [suggestions]
+      properties:
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddressSuggestion"
+
+    PropertyLookupResult:
+      type: object
+      required: [address, city, state, zipCode, yearBuilt, sqft, bedrooms, bathrooms, lotSize, latitude, longitude]
+      properties:
+        address:
+          type: string
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          nullable: true
+        yearBuilt:
+          type: integer
+          nullable: true
+        sqft:
+          type: number
+          nullable: true
+        bedrooms:
+          type: number
+          nullable: true
+        bathrooms:
+          type: number
+          nullable: true
+        lotSize:
+          type: number
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+
+    StewardshipPlan:
+      type: object
+      required: [asset, tasks, taskCount]
+      properties:
+        asset:
+          $ref: "#/components/schemas/Asset"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceTask"
+        taskCount:
+          type: integer
+
+    # ─── Capital outlook ────────────────────────────────────────────────────────
+    CapitalOutlookAsset:
+      type: object
+      required: [id, name, category, brand, model, installDate, installYear, replacementCost, expectedLifespanYears, replacementYear, yearsRemaining, urgency, ageYears, percentLifeUsed]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        installDate:
+          type: string
+          nullable: true
+        installYear:
+          type: integer
+          nullable: true
+        replacementCost:
+          type: number
+          nullable: true
+        expectedLifespanYears:
+          type: integer
+        replacementYear:
+          type: integer
+          nullable: true
+        yearsRemaining:
+          type: integer
+          nullable: true
+        urgency:
+          type: string
+          enum: [critical, warning, good, unknown]
+        ageYears:
+          type: integer
+          nullable: true
+        percentLifeUsed:
+          type: integer
+          nullable: true
+
+    CapitalTimelineEntry:
+      type: object
+      required: [year, projectedCost, assetNames]
+      properties:
+        year:
+          type: integer
+        projectedCost:
+          type: number
+        assetNames:
+          type: array
+          items:
+            type: string
+
+    CapitalNextReplacement:
+      type: object
+      required: [name, year, cost]
+      properties:
+        name:
+          type: string
+        year:
+          type: integer
+        cost:
+          type: number
+
+    CapitalOutlook:
+      type: object
+      required: [totalTrackedValue, assets, timeline, summary]
+      properties:
+        totalTrackedValue:
+          type: number
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/CapitalOutlookAsset"
+        timeline:
+          type: array
+          description: One entry per year from the current year through +20
+          items:
+            $ref: "#/components/schemas/CapitalTimelineEntry"
+        summary:
+          type: object
+          required: [nextReplacement, next5YearCost, next10YearCost]
+          properties:
+            nextReplacement:
+              allOf:
+                - $ref: "#/components/schemas/CapitalNextReplacement"
+              nullable: true
+            next5YearCost:
+              type: number
+            next10YearCost:
+              type: number
+
+    # ─── Investment ledger ──────────────────────────────────────────────────────
+    LedgerRecord:
+      allOf:
+        - $ref: "#/components/schemas/ServiceRecord"
+        - type: object
+          required: [assetName, assetCategory]
+          properties:
+            assetName:
+              type: string
+            assetCategory:
+              type: string
+
+    LedgerCategoryTotal:
+      type: object
+      required: [category, actual, expected]
+      properties:
+        category:
+          type: string
+        actual:
+          type: number
+        expected:
+          type: number
+
+    InvestmentLedger:
+      type: object
+      required: [records, byCategory, totals]
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/LedgerRecord"
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/LedgerCategoryTotal"
+        totals:
+          type: object
+          required: [actual, expected]
+          properties:
+            actual:
+              type: number
+            expected:
+              type: number
+
+    # ─── Property report ────────────────────────────────────────────────────────
+    ReportAsset:
+      allOf:
+        - $ref: "#/components/schemas/Asset"
+        - type: object
+          required: [records]
+          properties:
+            records:
+              type: array
+              items:
+                $ref: "#/components/schemas/ServiceRecord"
+
+    PropertyReport:
+      type: object
+      required: [property, activeAssets, retiredAssets, totalEvents, generatedAt]
+      properties:
+        property:
+          $ref: "#/components/schemas/Property"
+        activeAssets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportAsset"
+        retiredAssets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportAsset"
+        totalEvents:
+          type: integer
+        generatedAt:
+          type: string
+          format: date-time
+
+    # ─── Maintenance inbox / completion / upcoming ──────────────────────────────
+    MaintenanceInboxTask:
+      type: object
+      required: [id, assetId, title, description, intervalDays, nextDueDate, isDiy, estimatedCost, assetName, assetCategory]
+      properties:
+        id:
+          type: string
+        assetId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        intervalDays:
+          type: integer
+        nextDueDate:
+          type: string
+          format: date
+        isDiy:
+          type: boolean
+        estimatedCost:
+          type: string
+          nullable: true
+          description: Decimal string (e.g. "45.00")
+        assetName:
+          type: string
+        assetCategory:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other]
+
+    PropertyMaintenanceInbox:
+      type: object
+      required: [overdue, upcoming, totalCount]
+      properties:
+        overdue:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceInboxTask"
+        upcoming:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceInboxTask"
+        totalCount:
+          type: integer
+
+    CompleteMaintenanceTaskBody:
+      type: object
+      properties:
+        notes:
+          type: string
+        isDiy:
+          type: boolean
+        cost:
+          type: number
+        technicianName:
+          type: string
+        companyName:
+          type: string
+        receiptUrl:
+          type: string
+        completedDate:
+          type: string
+          description: YYYY-MM-DD; defaults to today
+
+    CompleteMaintenanceTaskResult:
+      type: object
+      required: [completedTask, nextTask, serviceRecord]
+      properties:
+        completedTask:
+          $ref: "#/components/schemas/MaintenanceTask"
+        nextTask:
+          $ref: "#/components/schemas/MaintenanceTask"
+        serviceRecord:
+          $ref: "#/components/schemas/ServiceRecord"
+
+    UpcomingMaintenanceTask:
+      type: object
+      required: [id, title, nextDueDate, assetId, assetName]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        nextDueDate:
+          type: string
+          format: date
+        assetId:
+          type: string
+        assetName:
+          type: string
+
+    UpcomingMaintenance:
+      type: object
+      required: [tasks]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpcomingMaintenanceTask"
+
+    # ─── AI Lens ────────────────────────────────────────────────────────────────
+    ScanAssetDataPlateBody:
+      type: object
+      required: [imageBase64]
+      properties:
+        imageBase64:
+          type: string
+          minLength: 10
+        mimeType:
+          type: string
+          default: image/jpeg
+
+    AssetScanResult:
+      type: object
+      description: Parsed straight from the AI response; fields are best-effort
+      properties:
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serialNumber:
+          type: string
+          nullable: true
+        manufactureDate:
+          type: string
+          nullable: true
+          description: YYYY-MM
+        estimatedReplacementCost:
+          type: number
+          nullable: true
+        category:
+          type: string
+          nullable: true
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Structural, Other, null]
+        suggestedName:
+          type: string
+          nullable: true
+
+    GeneratedMaintenanceTasks:
+      type: object
+      required: [tasks, taskCount]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MaintenanceTask"
+        taskCount:
+          type: integer
+
+    # ─── Guides ─────────────────────────────────────────────────────────────────
+    CreateGuideBody:
+      type: object
+      required: [category, title, difficulty, estimatedMinutes]
+      properties:
+        category:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        difficulty:
+          type: string
+          enum: [easy, medium, hard]
+        estimatedMinutes:
+          type: integer
+        toolsNeeded:
+          type: string
+          nullable: true
+          description: JSON-encoded array of strings
+        steps:
+          type: string
+          nullable: true
+          description: 'JSON-encoded array of { step, instruction }'
+
+    # ─── Deed transfer ──────────────────────────────────────────────────────────
+    PropertyTransfer:
+      type: object
+      required: [id, propertyId, fromUserId, fromEmail, toEmail, toUserId, status, token, createdAt, expiresAt, completedAt, cancelledAt]
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        fromUserId:
+          type: string
+        fromEmail:
+          type: string
+        toEmail:
+          type: string
+        toUserId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, completed, cancelled]
+        token:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    InitiatePropertyTransferBody:
+      type: object
+      required: [toEmail]
+      properties:
+        toEmail:
+          type: string
+          format: email
+        fromEmail:
+          type: string
+          format: email
+          description: Ignored — the sender's verified email is used
+
+    TransferClaimProperty:
+      type: object
+      required: [id, name, address, city, state, yearBuilt, sqft]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        yearBuilt:
+          type: integer
+          nullable: true
+        sqft:
+          type: integer
+          nullable: true
+
+    TransferClaimDetails:
+      type: object
+      required: [transfer, property]
+      properties:
+        transfer:
+          type: object
+          required: [id, status, fromEmail, toEmail, expiresAt, createdAt]
+          properties:
+            id:
+              type: string
+            status:
+              type: string
+            fromEmail:
+              type: string
+            toEmail:
+              type: string
+            expiresAt:
+              type: string
+              format: date-time
+              nullable: true
+            createdAt:
+              type: string
+              format: date-time
+        property:
+          allOf:
+            - $ref: "#/components/schemas/TransferClaimProperty"
+          nullable: true
+
+    TransferGoneError:
+      type: object
+      required: [error, status]
+      properties:
+        error:
+          type: string
+        status:
+          type: string
+
+    ClaimPropertyTransferBody:
+      type: object
+      properties:
+        newOwnerName:
+          type: string
+
+    ClaimPropertyTransferResult:
+      type: object
+      required: [transfer, newUserId]
+      properties:
+        transfer:
+          $ref: "#/components/schemas/PropertyTransfer"
+        newUserId:
+          type: string
+
+    # ─── Subscription & billing ─────────────────────────────────────────────────
+    Subscription:
+      type: object
+      required: [tier, propertyLimit, stripeCustomerId, stripeSubscriptionId, aiScansUsed, aiPlansUsed]
+      properties:
+        tier:
+          type: string
+          enum: [essential, basic, managed, concierge]
+        propertyLimit:
+          type: integer
+        stripeCustomerId:
+          type: string
+          nullable: true
+        stripeSubscriptionId:
+          type: string
+          nullable: true
+        aiScansUsed:
+          type: integer
+        aiPlansUsed:
+          type: integer
+
+    SubscriptionTierResult:
+      type: object
+      required: [tier, propertyLimit]
+      properties:
+        tier:
+          type: string
+          enum: [essential, basic, managed, concierge]
+        propertyLimit:
+          type: integer
+
+    StripePrice:
+      type: object
+      required: [id, unitAmount, currency]
+      properties:
+        id:
+          type: string
+        unitAmount:
+          type: integer
+          nullable: true
+          description: Smallest currency unit (cents)
+        currency:
+          type: string
+        interval:
+          type: string
+          enum: [day, week, month, year]
+
+    StripePlan:
+      type: object
+      required: [productId, name, description, tier, prices]
+      properties:
+        productId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        tier:
+          type: string
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/StripePrice"
+
+    StripePlans:
+      type: object
+      required: [plans]
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/StripePlan"
+
+    CreateStripeCheckoutBody:
+      type: object
+      required: [tier]
+      properties:
+        tier:
+          type: string
+          enum: [basic, managed, concierge]
+
+    SyncStripeCheckoutBody:
+      type: object
+      required: [sessionId]
+      properties:
+        sessionId:
+          type: string
+
+    StripeRedirect:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          nullable: true
+
+    # ─── Devices ────────────────────────────────────────────────────────────────
+    PushTokenBody:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          minLength: 1
+        platform:
+          type: string
+          description: Ignored on DELETE
+
+    # ─── QR Identity Protocol ───────────────────────────────────────────────────
+    QrLabel:
+      type: object
+      required: [assetId, name, category, registryId, protocol]
+      properties:
+        assetId:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        registryId:
+          type: string
+          description: Short stable ID, CDA- plus the first 8 hex chars of the asset UUID
+        protocol:
+          type: string
+          description: "CDA|<uuid>|<registryId>"
+
+    QrLabelSheet:
+      type: object
+      required: [propertyId, propertyName, labels]
+      properties:
+        propertyId:
+          type: string
+        propertyName:
+          type: string
+        labels:
+          type: array
+          items:
+            $ref: "#/components/schemas/QrLabel"
+
+    QrPublicAsset:
+      type: object
+      required: [registryId, category]
+      properties:
+        registryId:
+          type: string
+        category:
+          type: string
+
+    QrAssetAccess:
+      type: object
+      required: [hasAccess, propertyId, assetId, isTechnician]
+      properties:
+        hasAccess:
+          type: boolean
+        propertyId:
+          type: string
+          nullable: true
+        assetId:
+          type: string
+          nullable: true
+        isTechnician:
+          type: boolean
+
+    TechnicianScanJob:
+      type: object
+      required: [id, description, urgency, status, createdAt]
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+        status:
+          type: string
+        scheduledAt:
+          type: string
+          format: date-time
+          nullable: true
+        acceptedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        propertyAddress:
+          type: string
+          nullable: true
+          description: Only while the job is active and assigned to the caller
+        propertyCity:
+          type: string
+          nullable: true
+        propertyState:
+          type: string
+          nullable: true
+        contactPhone:
+          type: string
+          nullable: true
+          description: Only while the job is active and assigned to the caller
+
+    TechnicianScanOpenJob:
+      type: object
+      required: [id, description, urgency, status, assetName, assetCategory, createdAt]
+      properties:
+        id:
+          type: string
+        description:
+          type: string
+        urgency:
+          type: string
+        status:
+          type: string
+        assetName:
+          type: string
+        assetCategory:
+          type: string
+        city:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        zipCode:
+          type: string
+          nullable: true
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    TechnicianScanAsset:
+      type: object
+      required: [id, name, category]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        brand:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        serialNumber:
+          type: string
+          nullable: true
+        installDate:
+          type: string
+          nullable: true
+        warrantyExpiry:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        retiredAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    TechnicianScanServiceRecord:
+      type: object
+      required: [id, date, description, verified]
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+        description:
+          type: string
+        companyName:
+          type: string
+          nullable: true
+        technicianName:
+          type: string
+          nullable: true
+        cost:
+          type: string
+          nullable: true
+        nextServiceDate:
+          type: string
+          nullable: true
+        verified:
+          type: boolean
+
+    TechnicianScanResult:
+      type: object
+      required: [assetId, registryId, category, hasActiveJob, myJobs, openJobs, asset, serviceHistory]
+      properties:
+        assetId:
+          type: string
+        registryId:
+          type: string
+        category:
+          type: string
+        hasActiveJob:
+          type: boolean
+        myJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TechnicianScanJob"
+        openJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/TechnicianScanOpenJob"
+        asset:
+          allOf:
+            - $ref: "#/components/schemas/TechnicianScanAsset"
+          nullable: true
+          description: Only when the caller has an active job on this asset
+        serviceHistory:
+          type: array
+          nullable: true
+          items:
+            $ref: "#/components/schemas/TechnicianScanServiceRecord"
+
+    MaintenanceTaskWithAsset:
+      allOf:
+        - $ref: "#/components/schemas/MaintenanceTask"
+        - type: object
+          required: [assetName]
+          properties:
+            assetName:
+              type: string
+
+    ServiceRecordWithAsset:
+      allOf:
+        - $ref: "#/components/schemas/ServiceRecord"
+        - type: object
+          required: [assetName]
+          properties:
+            assetName:
+              type: string

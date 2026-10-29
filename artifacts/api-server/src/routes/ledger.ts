@@ -5,6 +5,7 @@ import { eq, and, gte, lte, isNull, inArray, desc } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty } from "../lib/access.js";
+import { requireTier } from "../lib/subscription.js";
 
 const LedgerParams = z.object({ propertyId: z.string() });
 const RANGES = ["this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year", "all_time"] as const;
@@ -42,11 +43,14 @@ function getDateRange(range: string): { start: string | null; end: string | null
 
 const router = Router();
 
-router.get("/properties/:propertyId/ledger", requireAuth(), async (req, res) => {
+router.get("/properties/:propertyId/ledger", requireAuth(), requireTier("basic"), async (req, res) => {
   const { propertyId } = LedgerParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
   const range = (RANGES as readonly string[]).includes(String(req.query["range"]))
     ? String(req.query["range"])
@@ -59,7 +63,8 @@ router.get("/properties/:propertyId/ledger", requireAuth(), async (req, res) => 
     .where(eq(assetsTable.propertyId, propertyId));
 
   if (assets.length === 0) {
-    return res.json({ records: [], byCategory: [], totals: { actual: 0, expected: 0 } });
+    res.json({ records: [], byCategory: [], totals: { actual: 0, expected: 0 } });
+    return;
   }
 
   const assetIds = assets.map((a) => a.id);

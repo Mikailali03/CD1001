@@ -4,10 +4,11 @@ import { useTranslation } from "react-i18next";
 import {
   ShieldCheck, Wrench, FileText, TrendingUp, Star, ArrowRight,
   CheckCircle2, Home, Package, ChevronLeft, ChevronRight,
-  Hash, Cpu, ClipboardList, Quote,
+  Hash, Cpu, ClipboardList, Quote, Pause, Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageToggle } from "@/components/language-toggle";
+import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
 
 const FEATURE_META = [
   { icon: ShieldCheck, accent: "from-blue-500/20 to-indigo-500/10", iconBg: "bg-blue-500/15", iconColor: "text-blue-600 dark:text-blue-400" },
@@ -22,22 +23,39 @@ const TECH_ICONS = [Hash, ClipboardList, Cpu] as const;
 
 const INTERVAL_MS = 4000;
 
+// Scroll-reveal for landing sections. Content must never stay hidden: it
+// shows immediately for reduced-motion users or without IntersectionObserver,
+// and a timeout reveals it anyway if the observer never fires.
 function useFadeIn() {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const reducedMotion = usePrefersReducedMotion();
+  const [visible, setVisible] = useState(
+    () => reducedMotion || typeof IntersectionObserver === "undefined",
+  );
 
   useEffect(() => {
+    if (reducedMotion) { setVisible(true); return; }
     const el = ref.current;
-    if (!el) return;
+    if (!el || typeof IntersectionObserver === "undefined") { setVisible(true); return; }
     const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+      ([entry]) => { if (entry?.isIntersecting) { setVisible(true); observer.disconnect(); } },
       { threshold: 0.15 }
     );
     observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    const fallback = setTimeout(() => setVisible(true), 3000);
+    return () => { observer.disconnect(); clearTimeout(fallback); };
+  }, [reducedMotion]);
 
-  return { ref, visible };
+  const style = (distance: number, easing = "cubic-bezier(0.22,1,0.36,1)", duration = "0.7s"): React.CSSProperties =>
+    reducedMotion
+      ? {}
+      : {
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : `translateY(${distance}px)`,
+          transition: `opacity ${duration} ${easing}, transform ${duration} ${easing}`,
+        };
+
+  return { ref, visible, style };
 }
 
 function FeatureCarousel() {
@@ -45,7 +63,14 @@ function FeatureCarousel() {
   const [current, setCurrent] = useState(0);
   const [animKey, setAnimKey] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { ref, visible } = useFadeIn();
+  const { ref, style } = useFadeIn();
+  const reducedMotion = usePrefersReducedMotion();
+  // Autoplay is off for reduced-motion users; everyone else can pause it.
+  // It also holds while the pointer or keyboard focus is inside the carousel.
+  const [paused, setPaused] = useState(reducedMotion);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const autoplay = !paused && !reducedMotion && !hovered && !focused;
 
   const features = FEATURE_META.map((meta, i) => ({
     ...meta,
@@ -55,11 +80,12 @@ function FeatureCarousel() {
 
   const resetTimer = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
+    if (!autoplay) return;
     timerRef.current = setInterval(() => {
       setCurrent((c) => (c + 1) % features.length);
       setAnimKey((k) => k + 1);
     }, INTERVAL_MS);
-  }, [features.length]);
+  }, [features.length, autoplay]);
 
   const go = useCallback((next: number) => {
     setCurrent(next);
@@ -88,14 +114,7 @@ function FeatureCarousel() {
 
   return (
     <section className="max-w-6xl mx-auto px-6 py-24">
-      <div
-        ref={ref}
-        style={{
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(48px)",
-          transition: "opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)",
-        }}
-      >
+      <div ref={ref} style={style(48)}>
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-bold mb-3">{t("landing.featuresSectionTitle")}</h2>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto">
@@ -103,12 +122,25 @@ function FeatureCarousel() {
           </p>
         </div>
 
-        <div className="max-w-2xl mx-auto">
+        <div
+          className="max-w-2xl mx-auto"
+          role="region"
+          aria-roledescription="carousel"
+          aria-label={t("landing.carouselLabel")}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
+          onFocus={() => setFocused(true)}
+          onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false); }}
+        >
           <div className="relative overflow-hidden rounded-2xl border bg-card shadow-xl">
             <div
               key={animKey}
               className={`bg-gradient-to-br ${f.accent}`}
-              style={{ animation: "fadeUp 1.5s cubic-bezier(0.22,1,0.36,1) both" }}
+              style={reducedMotion ? undefined : { animation: "fadeUp 1.5s cubic-bezier(0.22,1,0.36,1) both" }}
+              role="group"
+              aria-roledescription="slide"
+              aria-label={`${current + 1} / ${features.length}`}
+              aria-live={autoplay ? "off" : "polite"}
             >
               <div className="flex flex-col items-center text-center min-h-[320px] py-10 px-8 justify-center gap-6">
                 <div className={`${f.iconBg} rounded-2xl p-6 shadow-inner`}>
@@ -127,29 +159,40 @@ function FeatureCarousel() {
             <button
               onClick={prev}
               className="absolute left-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur border rounded-full p-2 shadow-sm hover:bg-background transition-colors"
-              aria-label="Previous"
+              aria-label={t("landing.previousSlide")}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
             <button
               onClick={next}
               className="absolute right-3 top-1/2 -translate-y-1/2 bg-background/80 backdrop-blur border rounded-full p-2 shadow-sm hover:bg-background transition-colors"
-              aria-label="Next"
+              aria-label={t("landing.nextSlide")}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
           <div className="flex items-center justify-center gap-2 mt-6">
+            {!reducedMotion && (
+              <button
+                onClick={() => setPaused((p) => !p)}
+                aria-label={paused ? t("landing.playCarousel") : t("landing.pauseCarousel")}
+                aria-pressed={paused}
+                className="mr-2 rounded-full border p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+              </button>
+            )}
             {features.map((_, i) => (
               <button
                 key={i}
                 onClick={() => goTo(i)}
-                aria-label={`Go to slide ${i + 1}`}
+                aria-label={t("landing.goToSlide", { n: i + 1 })}
+                aria-current={i === current ? "true" : undefined}
                 style={{
                   width: i === current ? "28px" : "8px",
                   opacity: i === current ? 1 : 0.35,
-                  transition: "width 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease",
+                  transition: reducedMotion ? undefined : "width 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease",
                 }}
                 className="h-2 rounded-full bg-primary"
               />
@@ -170,7 +213,7 @@ function FeatureCarousel() {
 
 function BenefitsStrip() {
   const { t } = useTranslation();
-  const { ref, visible } = useFadeIn();
+  const { ref, style } = useFadeIn();
 
   const benefits = [
     t("landing.benefit1"),
@@ -184,11 +227,7 @@ function BenefitsStrip() {
       <div
         ref={ref}
         className="max-w-6xl mx-auto px-6"
-        style={{
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(24px)",
-          transition: "opacity 0.6s ease, transform 0.6s ease",
-        }}
+        style={style(24, "ease", "0.6s")}
       >
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {benefits.map((b) => (
@@ -205,7 +244,7 @@ function BenefitsStrip() {
 
 function TechQuoteSection() {
   const { t } = useTranslation();
-  const { ref, visible } = useFadeIn();
+  const { ref, style } = useFadeIn();
 
   const techDetails = TECH_ICONS.map((Icon, i) => ({
     icon: Icon,
@@ -218,17 +257,13 @@ function TechQuoteSection() {
       <div
         ref={ref}
         className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center"
-        style={{
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(32px)",
-          transition: "opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)",
-        }}
+        style={style(32)}
       >
         <div className="relative">
           <div className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-2xl">
             <img
               src="https://images.unsplash.com/photo-1621905251918-48416bd8575a?q=80&w=900&auto=format&fit=crop"
-              alt="HVAC technician servicing a home unit"
+              alt={t("landing.techImageAlt")}
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
@@ -289,12 +324,12 @@ function TechQuoteSection() {
             ))}
           </div>
 
-          <Link href="/sign-up">
-            <Button className="gap-2 mt-2">
+          <Button asChild className="gap-2 mt-2">
+            <Link href="/sign-up">
               {t("landing.startDocumenting")}
               <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </div>
     </section>
@@ -303,17 +338,13 @@ function TechQuoteSection() {
 
 function CtaSection() {
   const { t } = useTranslation();
-  const { ref, visible } = useFadeIn();
+  const { ref, style } = useFadeIn();
   return (
     <section className="bg-primary text-primary-foreground py-20">
       <div
         ref={ref}
         className="max-w-3xl mx-auto px-6 text-center"
-        style={{
-          opacity: visible ? 1 : 0,
-          transform: visible ? "translateY(0)" : "translateY(32px)",
-          transition: "opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)",
-        }}
+        style={style(32)}
       >
         <h2 className="text-3xl md:text-4xl font-bold mb-4">
           {t("landing.ctaTitle")}
@@ -321,12 +352,12 @@ function CtaSection() {
         <p className="text-primary-foreground/80 text-lg mb-8">
           {t("landing.ctaSubtitle")}
         </p>
-        <Link href="/sign-up">
-          <Button size="lg" variant="secondary" className="gap-2 px-8 h-12 text-base font-semibold">
+        <Button asChild size="lg" variant="secondary" className="gap-2 px-8 h-12 text-base font-semibold">
+          <Link href="/sign-up">
             {t("landing.createFreeAccount")}
             <ArrowRight className="h-4 w-4" />
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
     </section>
   );
@@ -347,14 +378,14 @@ export default function Landing() {
           </div>
           <div className="flex items-center gap-3">
             <LanguageToggle />
-            <Link href="/sign-in">
-              <Button variant="ghost" size="sm">{t("landing.logIn")}</Button>
-            </Link>
-            <Link href="/sign-up">
-              <Button size="sm" className="gap-1.5">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/sign-in">{t("landing.logIn")}</Link>
+            </Button>
+            <Button asChild size="sm" className="gap-1.5">
+              <Link href="/sign-up">
                 {t("landing.getStarted")} <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </nav>
@@ -374,18 +405,18 @@ export default function Landing() {
           {t("landing.heroSubtitle")}
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/sign-up">
-            <Button size="lg" className="gap-2 px-8 h-12 text-base font-semibold">
+          <Button asChild size="lg" className="gap-2 px-8 h-12 text-base font-semibold">
+            <Link href="/sign-up">
               {t("landing.createFreeAccount")}
               <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Link href="/demo">
-            <Button size="lg" variant="outline" className="gap-2 px-8 h-12 text-base font-medium">
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" className="gap-2 px-8 h-12 text-base font-medium">
+            <Link href="/demo">
               <Star className="h-4 w-4 text-amber-500" />
               {t("landing.seeDemo")}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground mt-4">{t("landing.noCreditCard")}</p>
       </section>

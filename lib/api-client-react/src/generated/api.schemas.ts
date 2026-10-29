@@ -24,6 +24,9 @@ export interface Property {
   latitude?: number;
   longitude?: number;
   photoUrl?: string;
+  /** Owner's user id */
+  userId?: string;
+  ownerEmail?: string | null;
   createdAt: string;
   updatedAt?: string;
 }
@@ -159,6 +162,10 @@ export interface MaintenanceTask {
   createdAt: string;
 }
 
+export type MaintenanceTaskWithAsset = MaintenanceTask & {
+  assetName: string;
+};
+
 export interface ServiceRecord {
   id: string;
   assetId: string;
@@ -173,6 +180,10 @@ export interface ServiceRecord {
   createdAt: string;
 }
 
+export type ServiceRecordWithAsset = ServiceRecord & {
+  assetName: string;
+};
+
 export interface PropertySummary {
   propertyId: string;
   /** 0–100 score based on asset age vs lifespan and overdue maintenance tasks */
@@ -182,11 +193,12 @@ export interface PropertySummary {
   totalAssets: number;
   verifiedAssets: number;
   overdueTaskCount: number;
-  upcomingTasks: MaintenanceTask[];
+  overdueTasks?: MaintenanceTaskWithAsset[];
+  upcomingTasks: MaintenanceTaskWithAsset[];
   assetsByCategory: PropertySummaryAssetsByCategoryItem[];
   assetScores: AssetHealthScore[];
   scoringBreakdown?: PropertySummaryScoringBreakdown;
-  recentRecords?: ServiceRecord[];
+  recentRecords?: ServiceRecordWithAsset[];
 }
 
 export type AssetCategory = (typeof AssetCategory)[keyof typeof AssetCategory];
@@ -280,16 +292,16 @@ export const UpdateAssetBodyStatus = {
 export interface UpdateAssetBody {
   name?: string;
   category?: UpdateAssetBodyCategory;
-  brand?: string;
-  model?: string;
-  serialNumber?: string;
-  installDate?: string;
-  warrantyExpiry?: string;
+  brand?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  installDate?: string | null;
+  warrantyExpiry?: string | null;
   status?: UpdateAssetBodyStatus;
-  notes?: string;
+  notes?: string | null;
   photoUrl?: string | null;
   retiredAt?: string | null;
-  replacementCost?: number;
+  replacementCost?: number | null;
 }
 
 export interface CreateServiceRecordBody {
@@ -381,6 +393,9 @@ export interface UserProfile {
   updatedAt?: string;
 }
 
+/**
+ * Ignored — roles are assigned by admins
+ */
 export type UpsertUserProfileBodyRole =
   (typeof UpsertUserProfileBodyRole)[keyof typeof UpsertUserProfileBodyRole];
 
@@ -391,10 +406,13 @@ export const UpsertUserProfileBodyRole = {
 } as const;
 
 export interface UpsertUserProfileBody {
+  /** @minLength 1 */
   firstName: string;
-  lastName: string;
+  /** Defaults to an empty string */
+  lastName?: string;
   email?: string;
-  role: UpsertUserProfileBodyRole;
+  /** Ignored — roles are assigned by admins */
+  role?: UpsertUserProfileBodyRole;
   phone?: string;
 }
 
@@ -414,6 +432,8 @@ export type MarketplaceJobStatus =
 export const MarketplaceJobStatus = {
   open: "open",
   claimed: "claimed",
+  en_route: "en_route",
+  arrived: "arrived",
   completed: "completed",
 } as const;
 
@@ -473,6 +493,8 @@ export type TechJobSummaryStatus =
 export const TechJobSummaryStatus = {
   open: "open",
   claimed: "claimed",
+  en_route: "en_route",
+  arrived: "arrived",
   completed: "completed",
 } as const;
 
@@ -507,6 +529,8 @@ export type TechJobDetailStatus =
 export const TechJobDetailStatus = {
   open: "open",
   claimed: "claimed",
+  en_route: "en_route",
+  arrived: "arrived",
   completed: "completed",
 } as const;
 
@@ -556,6 +580,8 @@ export type AssignedJobSummaryStatus =
 export const AssignedJobSummaryStatus = {
   open: "open",
   claimed: "claimed",
+  en_route: "en_route",
+  arrived: "arrived",
   completed: "completed",
 } as const;
 
@@ -762,6 +788,7 @@ export const EmailTriggerTriggerEvent = {
   overdue_maintenance: "overdue_maintenance",
   asset_end_of_life: "asset_end_of_life",
   property_transfer_initiated: "property_transfer_initiated",
+  collaborator_invited: "collaborator_invited",
   new_feature_announcement: "new_feature_announcement",
   monthly_update: "monthly_update",
   custom: "custom",
@@ -790,6 +817,7 @@ export const UpsertEmailTriggerBodyTriggerEvent = {
   overdue_maintenance: "overdue_maintenance",
   asset_end_of_life: "asset_end_of_life",
   property_transfer_initiated: "property_transfer_initiated",
+  collaborator_invited: "collaborator_invited",
   new_feature_announcement: "new_feature_announcement",
   monthly_update: "monthly_update",
   custom: "custom",
@@ -839,6 +867,8 @@ export interface AdminProperty {
   yearBuilt?: number;
   sqft?: number;
   photoUrl?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   userId: string;
   ownerName?: string;
   ownerEmail?: string;
@@ -911,8 +941,546 @@ export interface UpdateLockerFileBody {
   folderId?: string | null;
 }
 
+export interface OkResult {
+  ok: boolean;
+}
+
+export type UpgradeRequiredErrorError =
+  (typeof UpgradeRequiredErrorError)[keyof typeof UpgradeRequiredErrorError];
+
+export const UpgradeRequiredErrorError = {
+  upgrade_required: "upgrade_required",
+} as const;
+
+export type UpgradeRequiredErrorRequiredTier =
+  (typeof UpgradeRequiredErrorRequiredTier)[keyof typeof UpgradeRequiredErrorRequiredTier];
+
+export const UpgradeRequiredErrorRequiredTier = {
+  essential: "essential",
+  basic: "basic",
+  managed: "managed",
+  concierge: "concierge",
+} as const;
+
+export interface UpgradeRequiredError {
+  error: UpgradeRequiredErrorError;
+  requiredTier: UpgradeRequiredErrorRequiredTier;
+}
+
+export interface AddressSuggestion {
+  address: string;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+}
+
+export interface AddressAutocompleteResult {
+  suggestions: AddressSuggestion[];
+}
+
+export interface PropertyLookupResult {
+  address: string;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  yearBuilt: number | null;
+  sqft: number | null;
+  bedrooms: number | null;
+  bathrooms: number | null;
+  lotSize: number | null;
+  latitude: number | null;
+  longitude: number | null;
+}
+
+export interface StewardshipPlan {
+  asset: Asset;
+  tasks: MaintenanceTask[];
+  taskCount: number;
+}
+
+export type CapitalOutlookAssetCategory =
+  (typeof CapitalOutlookAssetCategory)[keyof typeof CapitalOutlookAssetCategory];
+
+export const CapitalOutlookAssetCategory = {
+  HVAC: "HVAC",
+  Plumbing: "Plumbing",
+  Electrical: "Electrical",
+  Roof: "Roof",
+  Appliance: "Appliance",
+  Structural: "Structural",
+  Other: "Other",
+} as const;
+
+export type CapitalOutlookAssetUrgency =
+  (typeof CapitalOutlookAssetUrgency)[keyof typeof CapitalOutlookAssetUrgency];
+
+export const CapitalOutlookAssetUrgency = {
+  critical: "critical",
+  warning: "warning",
+  good: "good",
+  unknown: "unknown",
+} as const;
+
+export interface CapitalOutlookAsset {
+  id: string;
+  name: string;
+  category: CapitalOutlookAssetCategory;
+  brand: string | null;
+  model: string | null;
+  installDate: string | null;
+  installYear: number | null;
+  replacementCost: number | null;
+  expectedLifespanYears: number;
+  replacementYear: number | null;
+  yearsRemaining: number | null;
+  urgency: CapitalOutlookAssetUrgency;
+  ageYears: number | null;
+  percentLifeUsed: number | null;
+}
+
+export interface CapitalTimelineEntry {
+  year: number;
+  projectedCost: number;
+  assetNames: string[];
+}
+
+export interface CapitalNextReplacement {
+  name: string;
+  year: number;
+  cost: number;
+}
+
+export type CapitalOutlookSummary = {
+  nextReplacement: CapitalNextReplacement | null;
+  next5YearCost: number;
+  next10YearCost: number;
+};
+
+export interface CapitalOutlook {
+  totalTrackedValue: number;
+  assets: CapitalOutlookAsset[];
+  /** One entry per year from the current year through +20 */
+  timeline: CapitalTimelineEntry[];
+  summary: CapitalOutlookSummary;
+}
+
+export type LedgerRecord = ServiceRecord & {
+  assetName: string;
+  assetCategory: string;
+};
+
+export interface LedgerCategoryTotal {
+  category: string;
+  actual: number;
+  expected: number;
+}
+
+export type InvestmentLedgerTotals = {
+  actual: number;
+  expected: number;
+};
+
+export interface InvestmentLedger {
+  records: LedgerRecord[];
+  byCategory: LedgerCategoryTotal[];
+  totals: InvestmentLedgerTotals;
+}
+
+export type ReportAsset = Asset & {
+  records: ServiceRecord[];
+};
+
+export interface PropertyReport {
+  property: Property;
+  activeAssets: ReportAsset[];
+  retiredAssets: ReportAsset[];
+  totalEvents: number;
+  generatedAt: string;
+}
+
+export type MaintenanceInboxTaskAssetCategory =
+  (typeof MaintenanceInboxTaskAssetCategory)[keyof typeof MaintenanceInboxTaskAssetCategory];
+
+export const MaintenanceInboxTaskAssetCategory = {
+  HVAC: "HVAC",
+  Plumbing: "Plumbing",
+  Electrical: "Electrical",
+  Roof: "Roof",
+  Appliance: "Appliance",
+  Structural: "Structural",
+  Other: "Other",
+} as const;
+
+export interface MaintenanceInboxTask {
+  id: string;
+  assetId: string;
+  title: string;
+  description: string | null;
+  intervalDays: number;
+  nextDueDate: string;
+  isDiy: boolean;
+  /** Decimal string (e.g. "45.00") */
+  estimatedCost: string | null;
+  assetName: string;
+  assetCategory: MaintenanceInboxTaskAssetCategory;
+}
+
+export interface PropertyMaintenanceInbox {
+  overdue: MaintenanceInboxTask[];
+  upcoming: MaintenanceInboxTask[];
+  totalCount: number;
+}
+
+export interface CompleteMaintenanceTaskBody {
+  notes?: string;
+  isDiy?: boolean;
+  cost?: number;
+  technicianName?: string;
+  companyName?: string;
+  receiptUrl?: string;
+  /** YYYY-MM-DD; defaults to today */
+  completedDate?: string;
+}
+
+export interface CompleteMaintenanceTaskResult {
+  completedTask: MaintenanceTask;
+  nextTask: MaintenanceTask;
+  serviceRecord: ServiceRecord;
+}
+
+export interface UpcomingMaintenanceTask {
+  id: string;
+  title: string;
+  nextDueDate: string;
+  assetId: string;
+  assetName: string;
+}
+
+export interface UpcomingMaintenance {
+  tasks: UpcomingMaintenanceTask[];
+}
+
+export interface ScanAssetDataPlateBody {
+  /** @minLength 10 */
+  imageBase64: string;
+  mimeType?: string;
+}
+
+export type AssetScanResultCategory =
+  | (typeof AssetScanResultCategory)[keyof typeof AssetScanResultCategory]
+  | null;
+
+export const AssetScanResultCategory = {
+  HVAC: "HVAC",
+  Plumbing: "Plumbing",
+  Electrical: "Electrical",
+  Roof: "Roof",
+  Appliance: "Appliance",
+  Structural: "Structural",
+  Other: "Other",
+} as const;
+
+/**
+ * Parsed straight from the AI response; fields are best-effort
+ */
+export interface AssetScanResult {
+  brand?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  /** YYYY-MM */
+  manufactureDate?: string | null;
+  estimatedReplacementCost?: number | null;
+  category?: AssetScanResultCategory;
+  suggestedName?: string | null;
+}
+
+export interface GeneratedMaintenanceTasks {
+  tasks: MaintenanceTask[];
+  taskCount: number;
+}
+
+export type CreateGuideBodyDifficulty =
+  (typeof CreateGuideBodyDifficulty)[keyof typeof CreateGuideBodyDifficulty];
+
+export const CreateGuideBodyDifficulty = {
+  easy: "easy",
+  medium: "medium",
+  hard: "hard",
+} as const;
+
+export interface CreateGuideBody {
+  category: string;
+  title: string;
+  description?: string | null;
+  difficulty: CreateGuideBodyDifficulty;
+  estimatedMinutes: number;
+  /** JSON-encoded array of strings */
+  toolsNeeded?: string | null;
+  /** JSON-encoded array of { step, instruction } */
+  steps?: string | null;
+}
+
+export type PropertyTransferStatus =
+  (typeof PropertyTransferStatus)[keyof typeof PropertyTransferStatus];
+
+export const PropertyTransferStatus = {
+  pending: "pending",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface PropertyTransfer {
+  id: string;
+  propertyId: string;
+  fromUserId: string;
+  fromEmail: string;
+  toEmail: string;
+  toUserId: string | null;
+  status: PropertyTransferStatus;
+  token: string;
+  createdAt: string;
+  expiresAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+}
+
+export interface InitiatePropertyTransferBody {
+  toEmail: string;
+  /** Ignored — the sender's verified email is used */
+  fromEmail?: string;
+}
+
+export interface TransferClaimProperty {
+  id: string;
+  name: string;
+  address: string;
+  city: string | null;
+  state: string | null;
+  yearBuilt: number | null;
+  sqft: number | null;
+}
+
+export type TransferClaimDetailsTransfer = {
+  id: string;
+  status: string;
+  fromEmail: string;
+  toEmail: string;
+  expiresAt: string | null;
+  createdAt: string;
+};
+
+export interface TransferClaimDetails {
+  transfer: TransferClaimDetailsTransfer;
+  property: TransferClaimProperty | null;
+}
+
+export interface TransferGoneError {
+  error: string;
+  status: string;
+}
+
+export interface ClaimPropertyTransferBody {
+  newOwnerName?: string;
+}
+
+export interface ClaimPropertyTransferResult {
+  transfer: PropertyTransfer;
+  newUserId: string;
+}
+
+export type SubscriptionTier =
+  (typeof SubscriptionTier)[keyof typeof SubscriptionTier];
+
+export const SubscriptionTier = {
+  essential: "essential",
+  basic: "basic",
+  managed: "managed",
+  concierge: "concierge",
+} as const;
+
+export interface Subscription {
+  tier: SubscriptionTier;
+  propertyLimit: number;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  aiScansUsed: number;
+  aiPlansUsed: number;
+}
+
+export type SubscriptionTierResultTier =
+  (typeof SubscriptionTierResultTier)[keyof typeof SubscriptionTierResultTier];
+
+export const SubscriptionTierResultTier = {
+  essential: "essential",
+  basic: "basic",
+  managed: "managed",
+  concierge: "concierge",
+} as const;
+
+export interface SubscriptionTierResult {
+  tier: SubscriptionTierResultTier;
+  propertyLimit: number;
+}
+
+export type StripePriceInterval =
+  (typeof StripePriceInterval)[keyof typeof StripePriceInterval];
+
+export const StripePriceInterval = {
+  day: "day",
+  week: "week",
+  month: "month",
+  year: "year",
+} as const;
+
+export interface StripePrice {
+  id: string;
+  /** Smallest currency unit (cents) */
+  unitAmount: number | null;
+  currency: string;
+  interval?: StripePriceInterval;
+}
+
+export interface StripePlan {
+  productId: string;
+  name: string;
+  description: string | null;
+  tier: string;
+  prices: StripePrice[];
+}
+
+export interface StripePlans {
+  plans: StripePlan[];
+}
+
+export type CreateStripeCheckoutBodyTier =
+  (typeof CreateStripeCheckoutBodyTier)[keyof typeof CreateStripeCheckoutBodyTier];
+
+export const CreateStripeCheckoutBodyTier = {
+  basic: "basic",
+  managed: "managed",
+  concierge: "concierge",
+} as const;
+
+export interface CreateStripeCheckoutBody {
+  tier: CreateStripeCheckoutBodyTier;
+}
+
+export interface SyncStripeCheckoutBody {
+  sessionId: string;
+}
+
+export interface StripeRedirect {
+  url: string | null;
+}
+
+export interface PushTokenBody {
+  /** @minLength 1 */
+  token: string;
+  /** Ignored on DELETE */
+  platform?: string;
+}
+
+export interface QrLabel {
+  assetId: string;
+  name: string;
+  category: string;
+  /** Short stable ID, CDA- plus the first 8 hex chars of the asset UUID */
+  registryId: string;
+  /** CDA|<uuid>|<registryId> */
+  protocol: string;
+}
+
+export interface QrLabelSheet {
+  propertyId: string;
+  propertyName: string;
+  labels: QrLabel[];
+}
+
+export interface QrPublicAsset {
+  registryId: string;
+  category: string;
+}
+
+export interface QrAssetAccess {
+  hasAccess: boolean;
+  propertyId: string | null;
+  assetId: string | null;
+  isTechnician: boolean;
+}
+
+export interface TechnicianScanJob {
+  id: string;
+  description: string;
+  urgency: string;
+  status: string;
+  scheduledAt?: string | null;
+  acceptedAt?: string | null;
+  createdAt: string;
+  /** Only while the job is active and assigned to the caller */
+  propertyAddress?: string | null;
+  propertyCity?: string | null;
+  propertyState?: string | null;
+  /** Only while the job is active and assigned to the caller */
+  contactPhone?: string | null;
+}
+
+export interface TechnicianScanOpenJob {
+  id: string;
+  description: string;
+  urgency: string;
+  status: string;
+  assetName: string;
+  assetCategory: string;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  createdAt: string;
+}
+
+export interface TechnicianScanAsset {
+  id: string;
+  name: string;
+  category: string;
+  brand?: string | null;
+  model?: string | null;
+  serialNumber?: string | null;
+  installDate?: string | null;
+  warrantyExpiry?: string | null;
+  notes?: string | null;
+  retiredAt?: string | null;
+}
+
+export interface TechnicianScanServiceRecord {
+  id: string;
+  date: string;
+  description: string;
+  companyName?: string | null;
+  technicianName?: string | null;
+  cost?: string | null;
+  nextServiceDate?: string | null;
+  verified: boolean;
+}
+
+export interface TechnicianScanResult {
+  assetId: string;
+  registryId: string;
+  category: string;
+  hasActiveJob: boolean;
+  myJobs: TechnicianScanJob[];
+  openJobs: TechnicianScanOpenJob[];
+  /** Only when the caller has an active job on this asset */
+  asset: TechnicianScanAsset | null;
+  serviceHistory: TechnicianScanServiceRecord[] | null;
+}
+
 export type ListAssetsParams = {
   category?: string;
+  /**
+   * Include retired (decommissioned) assets
+   */
+  includeRetired?: boolean;
 };
 
 export type ListGuidesParams = {
@@ -958,4 +1526,50 @@ export const ListAdminUsersRole = {
 
 export type ListAdminPropertiesParams = {
   search?: string;
+};
+
+export type AutocompletePropertyAddressParams = {
+  /**
+   * @minLength 3
+   */
+  query: string;
+  /**
+   * @minimum 1
+   * @maximum 10
+   */
+  limit?: number;
+};
+
+export type LookupPropertyParams = {
+  /**
+   * @minLength 5
+   */
+  address: string;
+};
+
+export type GetInvestmentLedgerParams = {
+  /**
+   * Unknown values fall back to this_year
+   */
+  range?: GetInvestmentLedgerRange;
+};
+
+export type GetInvestmentLedgerRange =
+  (typeof GetInvestmentLedgerRange)[keyof typeof GetInvestmentLedgerRange];
+
+export const GetInvestmentLedgerRange = {
+  this_month: "this_month",
+  last_month: "last_month",
+  this_quarter: "this_quarter",
+  last_quarter: "last_quarter",
+  this_year: "this_year",
+  last_year: "last_year",
+  all_time: "all_time",
+} as const;
+
+export type ListPropertyQrLabelsParams = {
+  /**
+   * Return only this asset's label (retired assets allowed)
+   */
+  assetId?: string;
 };

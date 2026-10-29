@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, userProfilesTable, emailTemplatesTable, emailTriggersTable } from "@workspace/db";
+import { db, userProfilesTable, emailTemplatesTable, emailTriggersTable, TRIGGER_EVENTS } from "@workspace/db";
 import { eq, ilike, or, count, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth.js";
@@ -70,9 +70,19 @@ router.patch("/admin/users/:userId", ...adminAuth, async (req, res) => {
   const { userId } = UpdateUserParams.parse(req.params);
   const { role } = UpdateUserBody.parse(req.body);
 
+  const [existing] = await db
+    .select({ technicianNumber: userProfilesTable.technicianNumber })
+    .from(userProfilesTable)
+    .where(eq(userProfilesTable.userId, userId));
+  if (!existing) { res.status(404).json({ error: "User not found" }); return; }
+
+  const technicianNumber =
+    existing.technicianNumber ??
+    (role === "technician" ? `TECH-${Math.floor(100000 + Math.random() * 900000)}` : null);
+
   const [updated] = await db
     .update(userProfilesTable)
-    .set({ role, updatedAt: new Date() })
+    .set({ role, technicianNumber, updatedAt: new Date() })
     .where(eq(userProfilesTable.userId, userId))
     .returning();
 
@@ -130,17 +140,6 @@ router.delete("/admin/email-templates/:templateId", ...adminAuth, async (req, re
 });
 
 // ─── Email Triggers ───────────────────────────────────────────────────────────
-
-const TRIGGER_EVENTS = [
-  "technician_accepted_job",
-  "job_completed",
-  "overdue_maintenance",
-  "asset_end_of_life",
-  "property_transfer_initiated",
-  "new_feature_announcement",
-  "monthly_update",
-  "custom",
-] as const;
 
 const TriggerBody = z.object({
   name: z.string().min(1),

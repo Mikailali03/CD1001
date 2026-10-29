@@ -15,103 +15,29 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useUser, useAuth, useClerk } from "@clerk/expo";
+import { useUser, useAuth } from "@clerk/expo";
 import * as Notifications from "expo-notifications";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { useColors } from "@/hooks/useColors";
-
-function SectionLabel({ label, colors }: { label: string; colors: ReturnType<typeof useColors> }) {
-  return (
-    <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-      {label}
-    </Text>
-  );
-}
-
-function SettingsCard({ children, colors }: { children: React.ReactNode; colors: ReturnType<typeof useColors> }) {
-  return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {children}
-    </View>
-  );
-}
-
-function FieldRow({
-  label,
-  colors,
-  children,
-  last,
-}: {
-  label: string;
-  colors: ReturnType<typeof useColors>;
-  children: React.ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <View style={[styles.fieldRow, !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }]}>
-      <Text style={[styles.fieldLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function ActionRow({
-  icon,
-  label,
-  sublabel,
-  onPress,
-  danger,
-  colors,
-  last,
-  rightEl,
-  disabled,
-}: {
-  icon: keyof typeof Feather.glyphMap;
-  label: string;
-  sublabel?: string;
-  onPress?: () => void;
-  danger?: boolean;
-  colors: ReturnType<typeof useColors>;
-  last?: boolean;
-  rightEl?: React.ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      style={[
-        styles.actionRow,
-        !last && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-        disabled && { opacity: 0.5 },
-      ]}
-      onPress={onPress}
-      activeOpacity={onPress && !disabled ? 0.6 : 1}
-      disabled={disabled}
-    >
-      <View style={[styles.rowIcon, { backgroundColor: danger ? colors.destructive + "15" : colors.muted }]}>
-        <Feather name={icon} size={17} color={danger ? colors.destructive : colors.foreground} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.actionLabel, { color: danger ? colors.destructive : colors.foreground, fontFamily: "Inter_500Medium" }]}>
-          {label}
-        </Text>
-        {sublabel && (
-          <Text style={[styles.actionSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {sublabel}
-          </Text>
-        )}
-      </View>
-      {rightEl ?? (onPress && <Feather name="chevron-right" size={15} color={colors.mutedForeground} />)}
-    </TouchableOpacity>
-  );
-}
+import { useSignOut } from "@/hooks/useSignOut";
+import { deleteUserAccount } from "@workspace/api-client-react";
+import { apiErrorMessage } from "@/hooks/useRole";
+import { requestNotificationPermission, syncNotifications } from "@/lib/notifications";
+import { ActionRow } from "@/components/settings/ActionRow";
+import { FieldRow } from "@/components/settings/FieldRow";
+import { SectionLabel } from "@/components/settings/SectionLabel";
+import { SettingsCard } from "@/components/settings/SettingsCard";
 
 export default function SettingsScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useUser();
-  const { getToken } = useAuth();
-  const { signOut } = useClerk();
+  const { getToken, userId } = useAuth();
+  const signOut = useSignOut();
   const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
@@ -147,7 +73,7 @@ export default function SettingsScreen() {
       setProfileDirty(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      Alert.alert("Error", "Could not save profile. Please try again.");
+      Alert.alert(t("common.error"), t("settings.profileSaveError"));
     } finally {
       setSavingProfile(false);
     }
@@ -164,11 +90,12 @@ export default function SettingsScreen() {
 
   const requestNotifPermission = async () => {
     Haptics.selectionAsync();
-    type Perm = { granted: boolean; canAskAgain: boolean };
-    const { granted, canAskAgain } = (await Notifications.requestPermissionsAsync()) as unknown as Perm;
+    const { granted, canAskAgain } = await requestNotificationPermission();
     setNotifStatus(granted ? "granted" : canAskAgain ? "undetermined" : "denied");
     if (granted) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Register the push token and schedule reminders right away
+      if (userId) syncNotifications(getToken, userId, { force: true });
     }
   };
 
@@ -177,29 +104,18 @@ export default function SettingsScreen() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30_000);
     try {
-      const token = await getToken();
-      const domain = process.env.EXPO_PUBLIC_DOMAIN;
-      const baseUrl = domain ? `https://${domain}` : "";
-      const res = await fetch(`${baseUrl}/api/user`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.error ?? `Server error ${res.status}`);
-      }
+      await deleteUserAccount({ signal: controller.signal });
       await signOut();
       router.replace("/");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setDeletingAccount(false);
-      const isTimeout = err?.name === "AbortError";
+      const isTimeout = err instanceof Error && err.name === "AbortError";
       Alert.alert(
-        "Delete Account Failed",
+        t("settings.deleteFailedTitle"),
         isTimeout
-          ? "The request timed out. Please check your connection and try again."
-          : (err?.message ?? "Could not delete your account. Please try again."),
-        [{ text: "OK" }]
+          ? t("settings.deleteTimeout")
+          : (apiErrorMessage(err) ?? t("settings.deleteFailed")),
+        [{ text: t("common.ok") }]
       );
     } finally {
       clearTimeout(timeoutId);
@@ -210,22 +126,22 @@ export default function SettingsScreen() {
     if (deletingAccount) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     Alert.alert(
-      "Delete Account",
-      "This will permanently delete your account and ALL property data — assets, documents, service records, and subscriptions. This cannot be undone.",
+      t("settings.deleteAccount"),
+      t("settings.deleteConfirmBody"),
       [
-        { text: "Cancel", style: "cancel" },
+        { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete My Account",
+          text: t("settings.deleteMyAccount"),
           style: "destructive",
           onPress: () => {
             // Second confirmation
             Alert.alert(
-              "Are you absolutely sure?",
-              "Your account and all associated data will be permanently erased. You will not be able to recover it.",
+              t("settings.deleteSureTitle"),
+              t("settings.deleteSureBody"),
               [
-                { text: "Cancel", style: "cancel" },
+                { text: t("common.cancel"), style: "cancel" },
                 {
-                  text: "Yes, Delete Everything",
+                  text: t("settings.deleteEverything"),
                   style: "destructive",
                   onPress: performAccountDeletion,
                 },
@@ -239,10 +155,10 @@ export default function SettingsScreen() {
 
   const notifBadge =
     notifStatus === "granted"
-      ? { label: "Enabled", color: colors.success }
+      ? { label: t("settings.notifEnabled"), color: colors.success }
       : notifStatus === "denied"
-      ? { label: "Disabled", color: colors.destructive }
-      : { label: "Not set", color: colors.warning };
+      ? { label: t("settings.notifDisabled"), color: colors.destructive }
+      : { label: t("settings.notifNotSet"), color: colors.warning };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -250,16 +166,16 @@ export default function SettingsScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 8, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{t("settings.title")}</Text>
         {profileDirty ? (
           <TouchableOpacity onPress={handleSaveProfile} style={styles.saveBtn} disabled={savingProfile}>
             {savingProfile ? (
               <ActivityIndicator size="small" color={colors.primaryForeground} />
             ) : (
-              <Text style={[styles.saveBtnText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>Save</Text>
+              <Text style={[styles.saveBtnText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>{t("common.save")}</Text>
             )}
           </TouchableOpacity>
         ) : (
@@ -273,31 +189,31 @@ export default function SettingsScreen() {
       >
         {/* Profile */}
         <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
-          <SectionLabel label="PROFILE" colors={colors} />
+          <SectionLabel label={t("settings.sections.profile")} colors={colors} />
         </View>
         <SettingsCard colors={colors}>
-          <FieldRow label="First name" colors={colors}>
+          <FieldRow label={t("settings.firstName")} colors={colors}>
             <TextInput
               value={firstName}
               onChangeText={handleFirstNameChange}
               style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
               placeholderTextColor={colors.mutedForeground}
-              placeholder="First name"
+              placeholder={t("settings.firstName")}
               returnKeyType="next"
             />
           </FieldRow>
-          <FieldRow label="Last name" colors={colors}>
+          <FieldRow label={t("settings.lastName")} colors={colors}>
             <TextInput
               value={lastName}
               onChangeText={handleLastNameChange}
               style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
               placeholderTextColor={colors.mutedForeground}
-              placeholder="Last name"
+              placeholder={t("settings.lastName")}
               returnKeyType="done"
               onSubmitEditing={handleSaveProfile}
             />
           </FieldRow>
-          <FieldRow label="Email" colors={colors} last>
+          <FieldRow label={t("settings.email")} colors={colors} last>
             <Text style={[styles.input, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
               {user?.primaryEmailAddress?.emailAddress ?? "—"}
             </Text>
@@ -306,13 +222,13 @@ export default function SettingsScreen() {
 
         {/* Notifications */}
         <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
-          <SectionLabel label="NOTIFICATIONS" colors={colors} />
+          <SectionLabel label={t("settings.sections.notifications")} colors={colors} />
         </View>
         <SettingsCard colors={colors}>
           <ActionRow
             icon="bell"
-            label="Push Notifications"
-            sublabel="Maintenance reminders & job updates"
+            label={t("settings.push")}
+            sublabel={t("settings.pushDesc")}
             colors={colors}
             onPress={notifStatus === "granted" ? openNotifSettings : requestNotifPermission}
             rightEl={
@@ -328,34 +244,48 @@ export default function SettingsScreen() {
           />
           <ActionRow
             icon="settings"
-            label="Open Device Settings"
-            sublabel="Manage all notification permissions"
+            label={t("settings.deviceSettings")}
+            sublabel={t("settings.deviceSettingsDesc")}
             colors={colors}
             onPress={openNotifSettings}
             last
           />
         </SettingsCard>
 
+        {/* Language */}
+        <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
+          <SectionLabel label={t("settings.sections.language")} colors={colors} />
+        </View>
+        <SettingsCard colors={colors}>
+          <ActionRow
+            icon="globe"
+            label={t("language.label")}
+            colors={colors}
+            last
+            rightEl={<LanguageToggle />}
+          />
+        </SettingsCard>
+
         {/* About */}
         <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
-          <SectionLabel label="ABOUT" colors={colors} />
+          <SectionLabel label={t("settings.sections.about")} colors={colors} />
         </View>
         <SettingsCard colors={colors}>
           <ActionRow
             icon="file-text"
-            label="Privacy Policy"
+            label={t("settings.privacy")}
             colors={colors}
             onPress={() => Linking.openURL("https://casadossier.com/privacy")}
           />
           <ActionRow
             icon="info"
-            label="Terms of Service"
+            label={t("settings.terms")}
             colors={colors}
             onPress={() => Linking.openURL("https://casadossier.com/terms")}
           />
           <ActionRow
             icon="tag"
-            label="App Version"
+            label={t("settings.version")}
             colors={colors}
             last
             rightEl={
@@ -368,13 +298,13 @@ export default function SettingsScreen() {
 
         {/* Danger zone */}
         <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
-          <SectionLabel label="DANGER ZONE" colors={colors} />
+          <SectionLabel label={t("settings.sections.danger")} colors={colors} />
         </View>
         <SettingsCard colors={colors}>
           <ActionRow
             icon="trash-2"
-            label="Delete Account"
-            sublabel="Permanently remove all your data"
+            label={t("settings.deleteAccount")}
+            sublabel={t("settings.deleteAccountDesc")}
             danger
             colors={colors}
             onPress={handleDeleteAccount}
@@ -391,7 +321,6 @@ export default function SettingsScreen() {
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
@@ -412,38 +341,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   saveBtnText: { fontSize: 14 },
-  sectionLabel: { fontSize: 11, letterSpacing: 0.8, marginBottom: 4 },
-  card: {
-    marginHorizontal: 20,
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
-  },
-  fieldRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  fieldLabel: { fontSize: 13, width: 82 },
   input: { flex: 1, fontSize: 15, textAlign: "right" },
-  actionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  rowIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionLabel: { fontSize: 15 },
-  actionSub: { fontSize: 12, marginTop: 1 },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 3,

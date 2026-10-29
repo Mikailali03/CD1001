@@ -56,20 +56,20 @@ function PropertyRow({ property }: { property: AdminProperty }) {
             <Layers className="h-2.5 w-2.5" />
             {property.assetCount} asset{property.assetCount !== 1 ? "s" : ""}
           </Badge>
-          {property.yearBuilt && (
+          {!!property.yearBuilt && (
             <Badge variant="outline" className="text-[10px] gap-1 px-1.5">
               <Calendar className="h-2.5 w-2.5" />
               {property.yearBuilt}
             </Badge>
           )}
-          {(property as any).latitude && (
+          {property.latitude != null && (
             <Badge variant="outline" className="text-[10px] gap-1 px-1.5 text-green-600 border-green-200">
               <Navigation className="h-2.5 w-2.5" />
               Geocoded
             </Badge>
           )}
         </div>
-        <span className="text-[11px] text-muted-foreground">Added {added}</span>
+        <span className="text-xs text-muted-foreground">Added {added}</span>
       </div>
     </div>
   );
@@ -115,7 +115,7 @@ function BackfillResultCard({ result }: { result: BackfillResult }) {
                 {result.rows
                   .filter((r) => r.error)
                   .map((r) => (
-                    <p key={r.id} className="text-[11px] text-amber-700">
+                    <p key={r.id} className="text-xs text-amber-700">
                       <span className="font-medium">{r.address}:</span> {r.error}
                     </p>
                   ))}
@@ -153,7 +153,7 @@ export function PropertiesTab() {
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
+          <Input aria-label="Search properties"
             className="pl-9"
             placeholder="Search by address, name, or city…"
             value={search}

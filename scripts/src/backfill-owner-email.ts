@@ -40,7 +40,7 @@ async function run() {
     .select({ id: propertiesTable.id, userId: propertiesTable.userId })
     .from(propertiesTable)
     .where(
-      eq(propertiesTable.ownerEmail, null as any)
+      isNull(propertiesTable.ownerEmail)
     );
 
   const toBackfill = rows.filter((r) => r.userId !== "demo-user");

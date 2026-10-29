@@ -5,6 +5,31 @@ async function seedProducts() {
 
   console.log('Seeding Casa Dossier subscription products...\n');
 
+  // --- Basic Plan ---
+  const existingBasic = await stripe.products.search({
+    query: "metadata['tier']:'basic' AND active:'true'",
+  });
+
+  if (existingBasic.data.length > 0) {
+    console.log(`✓ Basic Plan already exists (${existingBasic.data[0].id})`);
+  } else {
+    const basic = await stripe.products.create({
+      name: 'Casa Dossier Basic',
+      description: 'Unlimited AI asset scans and maintenance plans, Investment Ledger, Capital Outlook, Digital Locker.',
+      metadata: { tier: 'basic' },
+    });
+
+    const basicPrice = await stripe.prices.create({
+      product: basic.id,
+      unit_amount: 999,
+      currency: 'usd',
+      recurring: { interval: 'month' },
+    });
+
+    console.log(`✓ Created Basic Plan: ${basic.id}`);
+    console.log(`  Price: $9.99/mo → ${basicPrice.id}`);
+  }
+
   // --- Managed Plan ---
   const existingManaged = await stripe.products.search({
     query: "metadata['tier']:'managed' AND active:'true'",

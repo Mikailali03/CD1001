@@ -23,6 +23,8 @@ import adminRouter from "./admin";
 import adminExtendedRouter from "./admin-extended";
 import lockerRouter from "./locker";
 import pushTokensRouter from "./push-tokens";
+import internalRouter from "./internal";
+import qrRouter from "./qr";
 
 const router: IRouter = Router();
 
@@ -50,5 +52,7 @@ router.use(adminRouter);
 router.use(adminExtendedRouter);
 router.use(lockerRouter);
 router.use(pushTokensRouter);
+router.use(internalRouter);
+router.use(qrRouter);
 
 export default router;

@@ -13,16 +13,19 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { useGetGuide, getGetGuideQueryKey } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useTranslation } from "react-i18next";
 
+// Labels: guides.difficulty.<key>
 const DIFFICULTY_CONFIG = {
-  easy:   { label: "Easy",   color: "#3d7a5f", bg: "#3d7a5f18" },
-  medium: { label: "Medium", color: "#c8853a", bg: "#c8853a18" },
-  hard:   { label: "Hard",   color: "#c0392b", bg: "#c0392b18" },
+  easy:   { color: "#3d7a5f", bg: "#3d7a5f18" },
+  medium: { color: "#c8853a", bg: "#c8853a18" },
+  hard:   { color: "#c0392b", bg: "#c0392b18" },
 } as const;
 
 export default function GuideDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -31,17 +34,18 @@ export default function GuideDetailScreen() {
     query: { queryKey: getGetGuideQueryKey(id!) },
   });
 
-  const diff = guide ? (DIFFICULTY_CONFIG[(guide.difficulty as keyof typeof DIFFICULTY_CONFIG)] ?? DIFFICULTY_CONFIG.medium) : null;
+  const diffKey = guide && guide.difficulty in DIFFICULTY_CONFIG ? guide.difficulty : "medium";
+  const diff = guide ? DIFFICULTY_CONFIG[diffKey] : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} hitSlop={8} onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[s.headerLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]} numberOfLines={1}>
-          {guide?.title ?? "Guide"}
+          {guide?.title ?? t("guides.guide")}
         </Text>
       </View>
 
@@ -51,7 +55,7 @@ export default function GuideDetailScreen() {
         </View>
       ) : !guide ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: colors.mutedForeground }}>Guide not found.</Text>
+          <Text style={{ color: colors.mutedForeground }}>{t("guides.notFound")}</Text>
         </View>
       ) : (
         <ScrollView
@@ -61,17 +65,17 @@ export default function GuideDetailScreen() {
           {/* Meta */}
           <View style={{ flexDirection: "row", gap: 6, marginBottom: 12 }}>
             <View style={[s.badge, { backgroundColor: colors.muted }]}>
-              <Text style={[s.badgeText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{guide.category}</Text>
+              <Text style={[s.badgeText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{t(`categories.${guide.category}`, { defaultValue: guide.category })}</Text>
             </View>
             {diff && (
               <View style={[s.badge, { backgroundColor: diff.bg }]}>
-                <Text style={[s.badgeText, { color: diff.color, fontFamily: "Inter_600SemiBold" }]}>{diff.label}</Text>
+                <Text style={[s.badgeText, { color: diff.color, fontFamily: "Inter_600SemiBold" }]}>{t(`guides.difficulty.${diffKey}`)}</Text>
               </View>
             )}
             <View style={[s.badge, { backgroundColor: colors.muted }]}>
               <Feather name="clock" size={11} color={colors.mutedForeground} />
               <Text style={[s.badgeText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {guide.estimatedMinutes}m
+                {t("guides.minutesShort", { count: guide.estimatedMinutes })}
               </Text>
             </View>
           </View>
@@ -91,7 +95,7 @@ export default function GuideDetailScreen() {
               <View style={s.sectionHeader}>
                 <Feather name="tool" size={15} color={colors.primary} />
                 <Text style={[s.sectionTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  Tools Needed
+                  {t("guides.toolsNeeded")}
                 </Text>
               </View>
               <View style={{ gap: 6, marginTop: 10 }}>
@@ -109,12 +113,12 @@ export default function GuideDetailScreen() {
           {(guide.steps?.length ?? 0) > 0 && (
             <View style={{ marginTop: 20, gap: 10 }}>
               <Text style={[s.stepsLabel, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                Steps
+                {t("guides.steps")}
               </Text>
               {guide.steps!.map((step, i) => (
                 <View key={i} style={[s.stepCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <View style={[s.stepNum, { backgroundColor: colors.primary }]}>
-                    <Text style={[s.stepNumText, { fontFamily: "Inter_700Bold" }]}>{step.step}</Text>
+                    <Text style={[s.stepNumText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>{step.step}</Text>
                   </View>
                   <Text style={[s.stepDesc, { color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1 }]}>
                     {step.instruction}
@@ -146,7 +150,7 @@ const s = StyleSheet.create({
   stepsLabel: { fontSize: 18 },
   stepCard: { flexDirection: "row", alignItems: "flex-start", gap: 12, borderRadius: 12, borderWidth: 1, padding: 14 },
   stepNum: { width: 26, height: 26, borderRadius: 99, alignItems: "center", justifyContent: "center", marginTop: 1 },
-  stepNumText: { color: "#fff", fontSize: 12 },
+  stepNumText: { fontSize: 12 },
   stepTitle: { fontSize: 14 },
   stepDesc: { fontSize: 13, lineHeight: 19 },
   tipBox: { flexDirection: "row", alignItems: "flex-start", gap: 6, borderRadius: 8, borderWidth: 1, padding: 8, marginTop: 4 },

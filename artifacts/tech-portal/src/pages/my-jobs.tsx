@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useListAssignedJobs,
   useGetMarketplaceJobDetails,
@@ -12,7 +12,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth, useUser } from "@clerk/react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -160,6 +160,14 @@ export default function MyJobsPage() {
     setSchedulingValue(job?.scheduledAt ? toDatetimeLocal(job.scheduledAt as string) : "");
   }
 
+  // Deep link from the QR scanner: /my-jobs?job=<id> opens that job's panel.
+  const search = useSearch();
+  const deepLinkJobId = new URLSearchParams(search).get("job");
+  useEffect(() => {
+    if (deepLinkJobId && assignedJobs.some((j) => j.id === deepLinkJobId)) openJob(deepLinkJobId);
+    // Only react to the link and to the job list arriving, not to openJob's identity.
+  }, [deepLinkJobId, assignedJobs.length]);
+
   function handleSaveSchedule() {
     if (!selectedJobId || !schedulingValue) return;
     scheduleMutation.mutate({
@@ -212,6 +220,11 @@ export default function MyJobsPage() {
           <Button size="sm" variant="ghost" className="text-sidebar-foreground bg-sidebar-accent h-8 text-xs font-semibold">
             My Jobs
           </Button>
+          <Link href="/scan">
+            <Button size="sm" variant="ghost" className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs">
+              Scan
+            </Button>
+          </Link>
         </nav>
         <div className="ml-auto flex items-center gap-2">
           {profile && (

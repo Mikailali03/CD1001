@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, index, text, timestamp, pgEnum } from "drizzle-orm/pg-core";
 import { propertiesTable } from "./properties";
 
 export const collaboratorStatusEnum = pgEnum("collaborator_status", ["pending", "accepted"]);
@@ -11,6 +11,10 @@ export const propertyCollaboratorsTable = pgTable("property_collaborators", {
   acceptedUserId: text("accepted_user_id"),
   status: collaboratorStatusEnum("status").notNull().default("pending"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("property_collaborators_property_id_idx").on(t.propertyId),
+  index("property_collaborators_invited_email_idx").on(t.invitedEmail),
+  index("property_collaborators_accepted_user_id_idx").on(t.acceptedUserId),
+]);
 
 export type PropertyCollaborator = typeof propertyCollaboratorsTable.$inferSelect;

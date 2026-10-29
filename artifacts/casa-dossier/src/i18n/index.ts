@@ -17,4 +17,12 @@ i18n
     interpolation: { escapeValue: false },
   });
 
+// Keep <html lang> in sync so screen readers and the browser's spellcheck and
+// hyphenation use the right language.
+function syncHtmlLang(lng: string) {
+  if (typeof document !== "undefined") document.documentElement.lang = lng;
+}
+syncHtmlLang(i18n.language);
+i18n.on("languageChanged", syncHtmlLang);
+
 export default i18n;

@@ -1,17 +1,23 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { assetsTable, serviceRecordsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty } from "../lib/access.js";
+import { z } from "zod";
 
 const router = Router();
 
+const ReportParams = z.object({ propertyId: z.string() });
+
 router.get("/properties/:propertyId/report", requireAuth(), async (req, res) => {
-  const { propertyId } = req.params;
+  const { propertyId } = ReportParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
   const allAssets = await db
     .select()
@@ -21,15 +27,13 @@ router.get("/properties/:propertyId/report", requireAuth(), async (req, res) => 
 
   const assetIds = allAssets.map((a) => a.id);
 
-  let allRecords: (typeof serviceRecordsTable.$inferSelect)[] = [];
-  for (const assetId of assetIds) {
-    const records = await db
-      .select()
-      .from(serviceRecordsTable)
-      .where(eq(serviceRecordsTable.assetId, assetId))
-      .orderBy(serviceRecordsTable.date);
-    allRecords.push(...records);
-  }
+  const allRecords = assetIds.length
+    ? await db
+        .select()
+        .from(serviceRecordsTable)
+        .where(inArray(serviceRecordsTable.assetId, assetIds))
+        .orderBy(serviceRecordsTable.date)
+    : [];
 
   const recordsByAsset: Record<string, typeof allRecords> = {};
   for (const record of allRecords) {

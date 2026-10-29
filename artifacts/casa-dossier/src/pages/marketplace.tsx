@@ -5,6 +5,7 @@ import {
   useCreateMarketplaceJob,
   useListProperties,
   useListAssets,
+  getListAssetsQueryKey,
   getListMarketplaceJobsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,7 +45,7 @@ import {
   Phone,
   Calendar,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format } from "@/lib/date";
 
 // ── Service area check ────────────────────────────────────────────────────────
 // CasaService currently serves the Atlanta metro within a 50-mile radius.
@@ -98,7 +99,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
 
   const { data: properties } = useListProperties();
   const { data: assets } = useListAssets(propertyId, undefined, {
-    query: { enabled: !!propertyId, queryKey: ["assets", propertyId] },
+    query: { enabled: !!propertyId, queryKey: getListAssetsQueryKey(propertyId) },
   });
 
   const queryClient = useQueryClient();
@@ -121,7 +122,7 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           setContactPhone("");
         },
         onError: () => {
-          toast({ title: "Error", description: "Could not post your request. Please try again.", variant: "destructive" });
+          toast({ title: t("common.error"), description: t("marketplace.postFailed"), variant: "destructive" });
         },
       }
     );
@@ -149,17 +150,19 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           <DialogTitle>{t("marketplace.postServiceRequest")}</DialogTitle>
           <DialogDescription>
             {selectedAsset
-              ? `${t("marketplace.postRequest")}: ${selectedAsset.name}${selectedProperty ? ` — ${selectedProperty.name}` : ""}. ${t("marketplace.subtitle")}`
+              ? selectedProperty
+                ? t("marketplace.dialogDescAssetProperty", { asset: selectedAsset.name, property: selectedProperty.name })
+                : t("marketplace.dialogDescAsset", { asset: selectedAsset.name })
               : t("marketplace.subtitle")}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="property-select">Property</Label>
+            <Label htmlFor="property-select">{t("marketplace.propertyLabel")}</Label>
             <Select value={propertyId} onValueChange={(v) => { setPropertyId(v); setAssetId(""); }}>
               <SelectTrigger id="property-select" data-testid="select-property" className="h-auto min-h-10 whitespace-normal [&>span]:whitespace-normal [&>span]:break-words [&>span]:text-left">
-                <SelectValue placeholder="Choose a property..." />
+                <SelectValue placeholder={t("marketplace.chooseProperty")} />
               </SelectTrigger>
               <SelectContent>
                 {properties?.map((p) => (
@@ -170,10 +173,10 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="asset-select">Which item needs service?</Label>
+            <Label htmlFor="asset-select">{t("marketplace.assetLabel")}</Label>
             <Select value={assetId} onValueChange={setAssetId} disabled={!propertyId}>
               <SelectTrigger id="asset-select" data-testid="select-asset" className="h-auto min-h-10 whitespace-normal [&>span]:whitespace-normal [&>span]:break-words [&>span]:text-left">
-                <SelectValue placeholder={propertyId ? "Choose an asset..." : "Select a property first"} />
+                <SelectValue placeholder={propertyId ? t("marketplace.chooseAsset") : t("marketplace.selectPropertyFirst")} />
               </SelectTrigger>
               <SelectContent>
                 {assets?.map((a) => (
@@ -186,37 +189,37 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="urgency-select">How urgent is this?</Label>
+            <Label htmlFor="urgency-select">{t("marketplace.urgencyLabel")}</Label>
             <Select value={urgency} onValueChange={setUrgency}>
               <SelectTrigger id="urgency-select" data-testid="select-urgency">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="low">Not urgent — just planning ahead</SelectItem>
-                <SelectItem value="medium">Moderate — within the next few weeks</SelectItem>
-                <SelectItem value="high">Soon — within the next few days</SelectItem>
-                <SelectItem value="emergency">Emergency — needs immediate attention</SelectItem>
+                <SelectItem value="low">{t("marketplace.urgencyOption.low")}</SelectItem>
+                <SelectItem value="medium">{t("marketplace.urgencyOption.medium")}</SelectItem>
+                <SelectItem value="high">{t("marketplace.urgencyOption.high")}</SelectItem>
+                <SelectItem value="emergency">{t("marketplace.urgencyOption.emergency")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone-input">Your contact phone <span className="text-muted-foreground font-normal">(shown to the pro after they accept)</span></Label>
+            <Label htmlFor="phone-input">{t("marketplace.phoneLabel")} <span className="text-muted-foreground font-normal">{t("marketplace.phoneHint")}</span></Label>
             <Input
               id="phone-input"
               type="tel"
-              placeholder="e.g. (555) 123-4567"
+              placeholder={t("marketplace.phonePlaceholder")}
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description-input">Describe what's going on</Label>
+            <Label htmlFor="description-input">{t("marketplace.descriptionLabel")}</Label>
             <Textarea
               id="description-input"
               data-testid="textarea-description"
-              placeholder="e.g. My AC unit stopped cooling. It runs but only blows warm air."
+              placeholder={t("marketplace.descriptionPlaceholder")}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="resize-none"
@@ -229,10 +232,9 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <TriangleAlert className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
             <div>
-              <p className="font-semibold">Outside our service area</p>
+              <p className="font-semibold">{t("marketplace.outsideAreaTitle")}</p>
               <p className="text-xs mt-0.5 text-amber-700">
-                CasaService currently serves the Atlanta metro area (within 50 miles of Atlanta, GA).
-                We're not yet available at this property's location. We'll let you know when we expand!
+                {t("marketplace.outsideAreaBody")}
               </p>
             </div>
           </div>
@@ -253,11 +255,12 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
   );
 }
 
+// `label` is a translation key.
 const urgencyConfig: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
-  emergency: { label: "Emergency", className: "border-l-destructive", icon: <AlertCircle className="h-3.5 w-3.5 text-destructive" /> },
-  high:      { label: "High",      className: "border-l-orange-500",  icon: <AlertCircle className="h-3.5 w-3.5 text-orange-500" /> },
-  medium:    { label: "Medium",    className: "border-l-chart-3",     icon: <Clock className="h-3.5 w-3.5 text-chart-3" /> },
-  low:       { label: "Low",       className: "border-l-muted-foreground/30", icon: <Clock className="h-3.5 w-3.5 text-muted-foreground" /> },
+  emergency: { label: "marketplace.urgencyEmergency", className: "border-l-destructive", icon: <AlertCircle className="h-3.5 w-3.5 text-destructive" /> },
+  high:      { label: "marketplace.urgencyHigh",      className: "border-l-orange-500",  icon: <AlertCircle className="h-3.5 w-3.5 text-orange-500" /> },
+  medium:    { label: "marketplace.urgencyMedium",    className: "border-l-chart-3",     icon: <Clock className="h-3.5 w-3.5 text-chart-3" /> },
+  low:       { label: "marketplace.urgencyLow",       className: "border-l-muted-foreground/30", icon: <Clock className="h-3.5 w-3.5 text-muted-foreground" /> },
 };
 
 export default function Marketplace() {
@@ -328,11 +331,11 @@ export default function Marketplace() {
                       <Badge variant={status.variant} className={status.className}>{status.label}</Badge>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
                         {urgency.icon}
-                        {urgency.label} {t("marketplace.priority")}
+                        {t("marketplace.priorityLabel", { level: t(urgency.label) })}
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {t("marketplace.posted")} {format(new Date(job.createdAt), "MMM d, yyyy")}
+                      {t("marketplace.postedOn", { date: format(new Date(job.createdAt), "PP") })}
                     </span>
                   </div>
 
@@ -343,12 +346,12 @@ export default function Marketplace() {
                       <Wrench className="h-4 w-4 text-primary" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">
                         {t("marketplace.assetOnFile")}
                       </p>
                       <p className="font-medium text-sm">{job.assetName}</p>
                       <p className="text-xs text-muted-foreground font-mono mt-0.5">
-                        {[job.assetBrand, job.assetModel, job.assetSerialNumber && `S/N ${job.assetSerialNumber}`]
+                        {[job.assetBrand, job.assetModel, job.assetSerialNumber && `${t("assets.serialNumber")} ${job.assetSerialNumber}`]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
@@ -363,9 +366,9 @@ export default function Marketplace() {
 
                   {(job.status === "claimed" || (job.status as string) === "en_route" || (job.status as string) === "arrived") && (
                     <div className="rounded-lg border border-dashed bg-muted/30 p-3.5 space-y-2">
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t("marketplace.assignedPro")}</p>
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t("marketplace.assignedPro")}</p>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-                        <span className="font-medium text-foreground">{job.technicianName ?? "Pro assigned"}</span>
+                        <span className="font-medium text-foreground">{job.technicianName ?? t("marketplace.proAssigned")}</span>
                         {job.technicianPhone ? (
                           <a
                             href={`tel:${job.technicianPhone}`}
@@ -380,7 +383,10 @@ export default function Marketplace() {
                         <Calendar className="h-3.5 w-3.5 shrink-0" />
                         {job.scheduledAt ? (
                           <span className="font-medium text-foreground">
-                            {t("marketplace.serviceScheduledFor")} {format(new Date(job.scheduledAt), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                            {t("marketplace.scheduledFor", {
+                              date: format(new Date(job.scheduledAt), "PPPP"),
+                              time: format(new Date(job.scheduledAt), "p"),
+                            })}
                           </span>
                         ) : (
                           <span className="italic">{t("marketplace.serviceDatePending")}</span>

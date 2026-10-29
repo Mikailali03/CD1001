@@ -1,4 +1,4 @@
-import { pgTable, text, boolean, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, index, text, boolean, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { assetsTable } from "./assets";
@@ -17,7 +17,9 @@ export const serviceRecordsTable = pgTable("service_records", {
   verified: boolean("verified").notNull().default(false),
   casaServiceTechId: text("casa_service_tech_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("service_records_asset_id_idx").on(t.assetId),
+]);
 
 export const insertServiceRecordSchema = createInsertSchema(serviceRecordsTable).omit({ id: true, createdAt: true });
 export type InsertServiceRecord = z.infer<typeof insertServiceRecordSchema>;

@@ -2,10 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { propertiesTable, assetsTable, maintenanceTasksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty } from "../lib/access.js";
+import { aiRateLimit } from "../lib/subscription.js";
+import { parseAiTasks } from "../lib/aiTasks.js";
 
 const router = Router();
 
@@ -20,13 +22,17 @@ const AutocompleteQuery = z.object({
 
 router.get("/properties/autocomplete", requireAuth(), async (req, res) => {
   const parsed = AutocompleteQuery.safeParse(req.query);
-  if (!parsed.success) return res.json({ suggestions: [] });
+  if (!parsed.success) {
+    res.json({ suggestions: [] });
+    return;
+  }
   const { query, limit } = parsed.data;
 
   const apiKey = process.env.RENTCAST_API_KEY;
   if (!apiKey) {
     req.log.warn("RentCast API key not configured — autocomplete unavailable");
-    return res.json({ suggestions: [] });
+    res.json({ suggestions: [] });
+    return;
   }
 
   try {
@@ -37,7 +43,8 @@ router.get("/properties/autocomplete", requireAuth(), async (req, res) => {
 
     if (!response.ok) {
       req.log.warn({ status: response.status }, "RentCast autocomplete failed — degrading gracefully");
-      return res.json({ suggestions: [] });
+      res.json({ suggestions: [] });
+      return;
     }
 
     const data = await response.json() as any[];
@@ -50,10 +57,12 @@ router.get("/properties/autocomplete", requireAuth(), async (req, res) => {
       }))
       .filter((s) => s.address);
 
-    return res.json({ suggestions });
+    res.json({ suggestions });
+    return;
   } catch (err) {
     req.log.warn({ err }, "RentCast autocomplete error — degrading gracefully");
-    return res.json({ suggestions: [] });
+    res.json({ suggestions: [] });
+    return;
   }
 });
 
@@ -67,7 +76,10 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
   const { address } = LookupQuery.parse(req.query);
 
   const apiKey = process.env.RENTCAST_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "RentCast API key not configured" });
+  if (!apiKey) {
+    res.status(500).json({ error: "RentCast API key not configured" });
+    return;
+  }
 
   const url = `https://api.rentcast.io/v1/properties?address=${encodeURIComponent(address)}&limit=1`;
   const response = await fetch(url, {
@@ -77,12 +89,14 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
   if (!response.ok) {
     const text = await response.text();
     req.log.warn({ status: response.status, body: text }, "RentCast lookup failed");
-    return res.status(response.status).json({ error: "Property lookup failed", detail: text });
+    res.status(response.status).json({ error: "Property lookup failed", detail: text });
+    return;
   }
 
   const data = await response.json() as any[];
   if (!data || data.length === 0) {
-    return res.status(404).json({ error: "No property found for that address" });
+    res.status(404).json({ error: "No property found for that address" });
+    return;
   }
 
   const p = data[0];
@@ -103,11 +117,38 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
 
 const ScoutParams = z.object({ propertyId: z.string() });
 
-router.post("/properties/:propertyId/scout", requireAuth(), async (req, res) => {
+router.post("/properties/:propertyId/scout", requireAuth(), aiRateLimit(), async (req, res) => {
   const { propertyId } = ScoutParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
+
+  // One stewardship plan per property: if it already exists, return it rather
+  // than paying for another AI call and piling duplicate tasks onto the asset.
+  const [existingPlan] = await db
+    .select()
+    .from(assetsTable)
+    .where(
+      and(
+        eq(assetsTable.propertyId, propertyId),
+        eq(assetsTable.category, "Structural"),
+        eq(assetsTable.name, "Home Stewardship"),
+      ),
+    )
+    .limit(1);
+  if (existingPlan) {
+    const existingTasks = await db
+      .select()
+      .from(maintenanceTasksTable)
+      .where(eq(maintenanceTasksTable.assetId, existingPlan.id));
+    if (existingTasks.length > 0) {
+      res.json({ asset: existingPlan, tasks: existingTasks, taskCount: existingTasks.length });
+      return;
+    }
+  }
 
   const homeAge = property.yearBuilt ? new Date().getFullYear() - property.yearBuilt : null;
 
@@ -170,21 +211,14 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
 
   const raw = completion.choices[0]?.message?.content ?? "[]";
 
-  let tasks: any[];
-  try {
-    const cleaned = raw.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-    tasks = JSON.parse(cleaned);
-  } catch {
+  const tasks = parseAiTasks(raw);
+  if (!tasks) {
     req.log.error({ raw }, "Failed to parse AI scout response");
-    return res.status(500).json({ error: "AI response could not be parsed", raw });
+    res.status(502).json({ error: "Couldn't generate a plan right now. Please try again." });
+    return;
   }
 
-  let [stewardshipAsset] = await db
-    .select()
-    .from(assetsTable)
-    .where(eq(assetsTable.propertyId, propertyId))
-    .then((rows) => rows.filter((r) => r.category === "Structural" && r.name === "Home Stewardship"));
-
+  let stewardshipAsset = existingPlan;
   if (!stewardshipAsset) {
     [stewardshipAsset] = await db
       .insert(assetsTable)
@@ -193,7 +227,7 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
         name: "Home Stewardship",
         category: "Structural",
         status: "verified",
-        description: "General home-wide maintenance tasks not tied to a specific appliance or system.",
+        notes: "General home-wide maintenance tasks not tied to a specific appliance or system.",
       })
       .returning();
   }
@@ -201,7 +235,6 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
   const today = new Date();
   const insertedTasks = await Promise.all(
     tasks
-      .filter((t) => t.title && typeof t.intervalDays === "number")
       .map((t) => {
         const due = new Date(today);
         due.setDate(due.getDate() + Math.min(t.intervalDays, 90));

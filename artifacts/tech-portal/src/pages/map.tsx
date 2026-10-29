@@ -214,6 +214,11 @@ export default function MapPage() {
               My Jobs
             </Button>
           </Link>
+          <Link href="/scan">
+            <Button size="sm" variant="ghost" className="text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent h-8 text-xs">
+              Scan
+            </Button>
+          </Link>
         </nav>
         <div className="ml-auto flex items-center gap-2">
           {profile && (

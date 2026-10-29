@@ -25,9 +25,11 @@ const router = Router();
 
 const UpsertBody = z.object({
   firstName: z.string().min(1),
-  lastName: z.string().min(1),
+  lastName: z.string().default(""),
   email: z.string().optional(),
-  role: z.enum(["homeowner", "technician", "admin"]),
+  // Ignored: roles are assigned by admins via PATCH /admin/users/:userId.
+  // Still accepted so older clients that send it don't get a 400.
+  role: z.enum(["homeowner", "technician", "admin"]).optional(),
   phone: z.string().optional(),
 });
 
@@ -37,40 +39,30 @@ router.get("/user/profile", requireAuth(), async (req, res) => {
     .from(userProfilesTable)
     .where(eq(userProfilesTable.userId, req.userId));
 
-  if (!profile) return res.status(404).json({ error: "Profile not found" });
+  if (!profile) {
+    res.status(404).json({ error: "Profile not found" });
+    return;
+  }
   res.json(profile);
 });
 
 router.put("/user/profile", requireAuth(), async (req, res) => {
   const body = UpsertBody.parse(req.body);
 
-  const [existing] = await db
-    .select()
-    .from(userProfilesTable)
-    .where(eq(userProfilesTable.userId, req.userId));
-
-  let technicianNumber: string | undefined;
-  if (body.role === "technician" && (!existing || !existing.technicianNumber)) {
-    const digits = Math.floor(100000 + Math.random() * 900000).toString();
-    technicianNumber = `TECH-${digits}`;
-  } else if (existing?.technicianNumber) {
-    technicianNumber = existing.technicianNumber;
-  }
-
   const values = {
     userId: req.userId,
     firstName: body.firstName,
     lastName: body.lastName,
     email: body.email,
-    role: body.role,
     phone: body.phone,
-    technicianNumber: technicianNumber ?? null,
     updatedAt: new Date(),
   };
 
+  // role and technicianNumber are left untouched on update; new profiles
+  // always start as homeowners.
   const [profile] = await db
     .insert(userProfilesTable)
-    .values({ ...values, createdAt: new Date() })
+    .values({ ...values, role: "homeowner", createdAt: new Date() })
     .onConflictDoUpdate({
       target: userProfilesTable.userId,
       set: values,

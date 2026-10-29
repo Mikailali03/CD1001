@@ -5,26 +5,24 @@ import {
   propertyCollaboratorsTable,
   propertiesTable,
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { clerkClient } from "@clerk/express";
+import { getVerifiedEmail } from "../lib/access.js";
+import { claimTransfer } from "../lib/transfers.js";
+import { z } from "zod";
 
 const router = Router();
 
-async function getUserEmail(userId: string): Promise<string | null> {
-  try {
-    const user = await clerkClient.users.getUser(userId);
-    return user.emailAddresses[0]?.emailAddress ?? null;
-  } catch {
-    return null;
-  }
-}
+const IdParams = z.object({ id: z.string() });
 
 // GET /api/inbox — pending transfers + collaborator invites addressed to the current user
 router.get("/inbox", requireAuth(), async (req, res) => {
   const userId = req.userId!;
-  const email = await getUserEmail(userId);
-  if (!email) return res.json({ transfers: [], collaboratorInvites: [] });
+  const email = await getVerifiedEmail(userId);
+  if (!email) {
+    res.json({ transfers: [], collaboratorInvites: [] });
+    return;
+  }
 
   const [transfers, collaboratorInvites] = await Promise.all([
     db
@@ -33,7 +31,7 @@ router.get("/inbox", requireAuth(), async (req, res) => {
       .innerJoin(propertiesTable, eq(propertyTransfersTable.propertyId, propertiesTable.id))
       .where(
         and(
-          eq(propertyTransfersTable.toEmail, email.toLowerCase()),
+          sql`lower(${propertyTransfersTable.toEmail}) = ${email}`,
           eq(propertyTransfersTable.status, "pending"),
         )
       ),
@@ -49,7 +47,7 @@ router.get("/inbox", requireAuth(), async (req, res) => {
       ),
   ]);
 
-  return res.json({
+  res.json({
     transfers: transfers.map((r) => ({ ...r.transfer, property: r.property })),
     collaboratorInvites: collaboratorInvites.map((r) => ({ ...r.collab, property: r.property })),
   });
@@ -57,10 +55,13 @@ router.get("/inbox", requireAuth(), async (req, res) => {
 
 // POST /api/inbox/transfers/:id/claim — accept a deed transfer
 router.post("/inbox/transfers/:id/claim", requireAuth(), async (req, res) => {
-  const { id } = req.params;
+  const { id } = IdParams.parse(req.params);
   const userId = req.userId!;
-  const email = await getUserEmail(userId);
-  if (!email) return res.status(403).json({ error: "Could not verify your email." });
+  const email = await getVerifiedEmail(userId);
+  if (!email) {
+    res.status(403).json({ error: "Could not verify your email." });
+    return;
+  }
 
   const [transfer] = await db
     .select()
@@ -68,38 +69,39 @@ router.post("/inbox/transfers/:id/claim", requireAuth(), async (req, res) => {
     .where(
       and(
         eq(propertyTransfersTable.id, id),
-        eq(propertyTransfersTable.toEmail, email.toLowerCase()),
-        eq(propertyTransfersTable.status, "pending"),
+        // Older transfers stored toEmail as typed; compare case-insensitively.
+        sql`lower(${propertyTransfersTable.toEmail}) = ${email}`,
       )
     );
 
-  if (!transfer) return res.status(404).json({ error: "Transfer not found or already resolved." });
+  if (!transfer) {
+    res.status(404).json({ error: "Transfer not found or already resolved." });
+    return;
+  }
 
-  await db.transaction(async (tx) => {
-    await tx
-      .update(propertiesTable)
-      .set({ userId })
-      .where(eq(propertiesTable.id, transfer.propertyId));
-    await tx
-      .update(propertyTransfersTable)
-      .set({ status: "completed", toUserId: userId, completedAt: new Date() })
-      .where(eq(propertyTransfersTable.id, id));
-  });
+  const result = await claimTransfer(transfer, userId);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
 
   const [property] = await db
     .select()
     .from(propertiesTable)
     .where(eq(propertiesTable.id, transfer.propertyId));
 
-  return res.json({ property });
+  res.json({ property });
 });
 
 // POST /api/inbox/collaborators/:id/accept — accept a collaborator invite
 router.post("/inbox/collaborators/:id/accept", requireAuth(), async (req, res) => {
-  const { id } = req.params;
+  const { id } = IdParams.parse(req.params);
   const userId = req.userId!;
-  const email = await getUserEmail(userId);
-  if (!email) return res.status(403).json({ error: "Could not verify your email." });
+  const email = await getVerifiedEmail(userId);
+  if (!email) {
+    res.status(403).json({ error: "Could not verify your email." });
+    return;
+  }
 
   const [collab] = await db
     .select()
@@ -112,22 +114,28 @@ router.post("/inbox/collaborators/:id/accept", requireAuth(), async (req, res) =
       )
     );
 
-  if (!collab) return res.status(404).json({ error: "Invite not found or already resolved." });
+  if (!collab) {
+    res.status(404).json({ error: "Invite not found or already resolved." });
+    return;
+  }
 
   await db
     .update(propertyCollaboratorsTable)
     .set({ acceptedUserId: userId, status: "accepted" })
     .where(eq(propertyCollaboratorsTable.id, id));
 
-  return res.json({ ok: true });
+  res.json({ ok: true });
 });
 
 // DELETE /api/inbox/collaborators/:id — decline a collaborator invite
 router.delete("/inbox/collaborators/:id", requireAuth(), async (req, res) => {
-  const { id } = req.params;
+  const { id } = IdParams.parse(req.params);
   const userId = req.userId!;
-  const email = await getUserEmail(userId);
-  if (!email) return res.status(403).json({ error: "Could not verify your email." });
+  const email = await getVerifiedEmail(userId);
+  if (!email) {
+    res.status(403).json({ error: "Could not verify your email." });
+    return;
+  }
 
   await db
     .delete(propertyCollaboratorsTable)
@@ -138,7 +146,7 @@ router.delete("/inbox/collaborators/:id", requireAuth(), async (req, res) => {
       )
     );
 
-  return res.status(204).send();
+  res.status(204).send();
 });
 
 export default router;

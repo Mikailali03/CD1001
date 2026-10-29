@@ -1,54 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "wouter";
+import { useTranslation } from "react-i18next";
 import { ShieldCheck, Wrench, FileText, Loader2 } from "lucide-react";
-import { format, parseISO } from "date-fns";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type ServiceRecord = {
-  id: string;
-  date: string;
-  description: string;
-  technicianName: string | null;
-  companyName: string | null;
-  verified: boolean;
-};
-
-type ReportAsset = {
-  id: string;
-  name: string;
-  category: string;
-  brand: string | null;
-  model: string | null;
-  serialNumber: string | null;
-  installDate: string | null;
-  status: string;
-  retiredAt: string | null;
-  notes: string | null;
-  records: ServiceRecord[];
-};
-
-type ReportData = {
-  property: {
-    name: string;
-    address: string;
-    city: string | null;
-    state: string | null;
-    zipCode: string | null;
-    yearBuilt: number | null;
-    sqft: number | null;
-    bedrooms: number | null;
-    bathrooms: number | null;
-  };
-  activeAssets: ReportAsset[];
-  retiredAssets: ReportAsset[];
-  totalEvents: number;
-  generatedAt: string;
-};
+import { parseISO } from "date-fns";
+import {
+  useGetPropertyReport,
+  getGetPropertyReportQueryKey,
+  type ReportAsset,
+  type ServiceRecord,
+} from "@workspace/api-client-react";
+import { format } from "@/lib/date";
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
-  try { return format(parseISO(d), "MMM d, yyyy"); } catch { return d; }
+  try { return format(parseISO(d), "PP"); } catch { return d; }
 }
 
 function TechSpec({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -62,6 +27,7 @@ function TechSpec({ label, value }: { label: string; value: string | number | nu
 }
 
 function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: boolean }) {
+  const { t } = useTranslation();
   const renderPerformer = (r: ServiceRecord) => {
     if (r.companyName === "CasaService") {
       return (
@@ -71,7 +37,7 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
         </>
       );
     }
-    return r.companyName ?? r.technicianName ?? "Homeowner (DIY)";
+    return r.companyName ?? r.technicianName ?? t("report.homeownerDiy");
   };
 
   return (
@@ -91,14 +57,14 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {retired && asset.retiredAt && (
             <span className="inline-flex items-center gap-1 bg-gray-800 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded">
-              DECOMMISSIONED {fmtDate(asset.retiredAt)}
+              {t("report.decommissioned", { date: fmtDate(asset.retiredAt) })}
             </span>
           )}
           {(asset.installDate || asset.serialNumber) && (
             <div className="bg-gray-900 text-white text-[9px] px-2 py-1 rounded flex items-center gap-2 font-mono">
-              {asset.installDate && <span>MFR: {asset.installDate}</span>}
+              {asset.installDate && <span>{t("report.mfr", { date: asset.installDate })}</span>}
               {asset.installDate && asset.serialNumber && <span className="opacity-40">|</span>}
-              {asset.serialNumber && <span>S/N: {asset.serialNumber}</span>}
+              {asset.serialNumber && <span>{t("report.serial", { serial: asset.serialNumber })}</span>}
             </div>
           )}
         </div>
@@ -109,9 +75,9 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 w-24">Date</th>
-              <th className="text-left px-4 py-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400">Service Item</th>
-              <th className="text-left px-4 py-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 w-36">Performer</th>
+              <th className="text-left px-4 py-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 w-24">{t("report.colDate")}</th>
+              <th className="text-left px-4 py-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400">{t("report.colService")}</th>
+              <th className="text-left px-4 py-1.5 text-[9px] uppercase tracking-widest font-bold text-gray-400 w-36">{t("report.colPerformer")}</th>
             </tr>
           </thead>
           <tbody>
@@ -125,12 +91,12 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
           </tbody>
         </table>
       ) : (
-        <p className="px-4 py-3 text-xs text-gray-400 italic">No service events recorded.</p>
+        <p className="px-4 py-3 text-xs text-gray-400 italic">{t("report.noEvents")}</p>
       )}
 
       {asset.notes && (
         <div className="px-4 py-2 border-t border-gray-200 bg-amber-50">
-          <p className="text-[10px] text-amber-800"><span className="font-bold uppercase tracking-wide">Notes:</span> {asset.notes}</p>
+          <p className="text-[10px] text-amber-800"><span className="font-bold uppercase tracking-wide">{t("report.notes")}</span> {asset.notes}</p>
         </div>
       )}
     </div>
@@ -139,30 +105,22 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
 
 export default function PropertyReport() {
   const { id } = useParams<{ id: string }>();
-  const [data, setData] = useState<ReportData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!id) return;
-    fetch(`${BASE}/api/properties/${id}/report`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load report");
-        return r.json();
-      })
-      .then(setData)
-      .catch((e) => setError(e.message));
-  }, [id]);
+  const { t } = useTranslation();
+  const { data, isError } = useGetPropertyReport(id ?? "", {
+    query: { queryKey: getGetPropertyReportQueryKey(id ?? ""), enabled: !!id },
+  });
+  const error = isError ? t("report.loadFailed") : null;
 
   useEffect(() => {
     if (data) {
-      document.title = `Property Dossier – ${data.property.address}`;
+      document.title = t("report.documentTitle", { address: data.property.address });
     }
-  }, [data]);
+  }, [data, t]);
 
   if (error) {
     return (
       <div className="flex items-center justify-center min-h-screen text-red-600">
-        Error: {error}
+        {t("report.errorPrefix", { error })}
       </div>
     );
   }
@@ -171,7 +129,7 @@ export default function PropertyReport() {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen gap-3 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <p className="text-sm">Generating your Official Property Dossier…</p>
+        <p className="text-sm">{t("report.generating")}</p>
       </div>
     );
   }
@@ -179,8 +137,8 @@ export default function PropertyReport() {
   const { property, activeAssets, retiredAssets, totalEvents, generatedAt } = data;
   const fullAddress = [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(", ");
   const config = [
-    property.bedrooms ? `${property.bedrooms} BD` : null,
-    property.bathrooms ? `${property.bathrooms} BA` : null,
+    property.bedrooms ? t("report.bedrooms", { count: Number(property.bedrooms) }) : null,
+    property.bathrooms ? t("report.bathrooms", { count: Number(property.bathrooms) }) : null,
   ].filter(Boolean).join(" / ") || null;
 
   return (
@@ -188,7 +146,7 @@ export default function PropertyReport() {
       {/* Print trigger bar — hidden when printing */}
       <div className="print:hidden sticky top-0 z-50 flex items-center justify-between gap-4 bg-gray-900 text-white px-6 py-3">
         <div>
-          <p className="font-bold text-sm">Official Property Dossier</p>
+          <p className="font-bold text-sm">{t("report.officialTitle")}</p>
           <p className="text-xs text-gray-400">{fullAddress}</p>
         </div>
         <button
@@ -196,7 +154,7 @@ export default function PropertyReport() {
           className="flex items-center gap-2 bg-white text-gray-900 text-sm font-bold px-4 py-2 rounded hover:bg-gray-100 transition-colors"
         >
           <FileText className="h-4 w-4" />
-          Print / Save PDF
+          {t("report.print")}
         </button>
       </div>
 
@@ -207,7 +165,7 @@ export default function PropertyReport() {
           {/* ── 1. Document Header ── */}
           <div className="flex items-start justify-between border-b-2 border-gray-900 pb-5 mb-5">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-500 mb-2">Official Property Dossier</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-500 mb-2">{t("report.officialTitle")}</p>
               <h1 className="text-3xl font-black text-gray-900 leading-tight tracking-tight">{property.address}</h1>
               {(property.city || property.state) && (
                 <p className="text-sm text-gray-500 mt-1">{[property.city, property.state, property.zipCode].filter(Boolean).join(", ")}</p>
@@ -218,7 +176,7 @@ export default function PropertyReport() {
               style={{ boxShadow: "3px 3px 0 #111" }}
             >
               <ShieldCheck className="h-7 w-7 text-gray-900 mb-1" />
-              <p className="font-black text-xs uppercase tracking-widest text-gray-900">Verified</p>
+              <p className="font-black text-xs uppercase tracking-widest text-gray-900">{t("report.verified")}</p>
               <p className="font-mono text-[8px] text-gray-500 mt-0.5">Casa Dossier</p>
             </div>
           </div>
@@ -226,10 +184,10 @@ export default function PropertyReport() {
           {/* ── 2. Technical Specifications Strip ── */}
           <div className="flex gap-0 border border-gray-300 rounded mb-8 overflow-hidden">
             {[
-              { label: "Built", value: property.yearBuilt },
-              { label: "Structure", value: property.sqft ? `${property.sqft.toLocaleString()} sqft` : null },
-              { label: "Configuration", value: config },
-              { label: "Registry", value: `${totalEvents} Audited Events` },
+              { label: t("report.specBuilt"), value: property.yearBuilt },
+              { label: t("report.specStructure"), value: property.sqft ? t("report.sqft", { sqft: property.sqft.toLocaleString() }) : null },
+              { label: t("report.specConfiguration"), value: config },
+              { label: t("report.specRegistry"), value: t("report.auditedEvents", { count: totalEvents }) },
             ].map((spec, i) => (
               spec.value != null ? (
                 <div key={i} className="flex-1 px-5 py-3 border-l border-gray-300 first:border-l-0 bg-gray-50">
@@ -245,7 +203,7 @@ export default function PropertyReport() {
             <section className="mb-10">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-gray-900" />
-                <h2 className="font-black text-xs uppercase tracking-[0.2em] text-gray-900 px-2">Current Operational Inventory</h2>
+                <h2 className="font-black text-xs uppercase tracking-[0.2em] text-gray-900 px-2">{t("report.activeInventory")}</h2>
                 <div className="h-px flex-1 bg-gray-900" />
               </div>
               {activeAssets.map((a) => <AssetBlock key={a.id} asset={a} />)}
@@ -257,11 +215,11 @@ export default function PropertyReport() {
             <section className="mb-10" style={{ opacity: 0.7 }}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-gray-500" />
-                <h2 className="font-black text-xs uppercase tracking-[0.2em] text-gray-500 px-2">Property Systems Archive</h2>
+                <h2 className="font-black text-xs uppercase tracking-[0.2em] text-gray-500 px-2">{t("report.archive")}</h2>
                 <div className="h-px flex-1 bg-gray-500" />
               </div>
               <p className="text-[10px] text-gray-400 italic mb-4">
-                Decommissioned systems are preserved below to demonstrate the continuous chain of care for this property.
+                {t("report.archiveNote")}
               </p>
               {retiredAssets.map((a) => <AssetBlock key={a.id} asset={a} retired />)}
             </section>
@@ -272,17 +230,20 @@ export default function PropertyReport() {
             <div className="flex items-start justify-between gap-6">
               <div>
                 <p className="text-[10px] font-mono text-gray-500">
-                  Report generated: {format(parseISO(generatedAt), "MMMM d, yyyy 'at' h:mm a")}
+                  {t("report.generatedAt", {
+                    date: format(parseISO(generatedAt), "PPP"),
+                    time: format(parseISO(generatedAt), "p"),
+                  })}
                 </p>
                 <p className="text-[10px] font-mono text-gray-400 mt-0.5">
-                  Property: {fullAddress}
+                  {t("report.propertyLine", { address: fullAddress })}
                 </p>
               </div>
               <div className="flex items-center gap-4 shrink-0">
                 {[
-                  { icon: Wrench, label: "Technical Specification" },
-                  { icon: ShieldCheck, label: "Verified Logic" },
-                  { icon: FileText, label: "Chain of Custody" },
+                  { icon: Wrench, label: t("report.badgeSpec") },
+                  { icon: ShieldCheck, label: t("report.badgeVerified") },
+                  { icon: FileText, label: t("report.badgeCustody") },
                 ].map(({ icon: Icon, label }) => (
                   <div key={label} className="flex flex-col items-center gap-1">
                     <Icon className="h-4 w-4 text-gray-400" />
@@ -292,7 +253,7 @@ export default function PropertyReport() {
               </div>
             </div>
             <p className="text-[9px] text-gray-300 font-mono mt-3">
-              This document was generated via the Casa Dossier Protocol. All service data reflects events recorded by the homeowner or verified third parties.
+              {t("report.disclaimer")}
             </p>
           </div>
 

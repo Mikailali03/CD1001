@@ -1,8 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { bootstrapUserProfiles } from "./lib/bootstrapUserProfiles";
-import { sendMaintenanceReminders } from "./lib/maintenanceReminders.js";
-import { sendMonthlyTips } from "./lib/monthlyTips.js";
+import { runScheduledJobs } from "./lib/scheduler.js";
 
 const rawPort = process.env["PORT"];
 
@@ -30,23 +29,11 @@ app.listen(port, (err) => {
     logger.error({ err }, "bootstrapUserProfiles failed"),
   );
 
-  // Maintenance reminder cron — runs every hour, sends push at 8am
-  setInterval(() => {
-    const hour = new Date().getHours();
-    if (hour === 8) {
-      sendMaintenanceReminders().catch((err) =>
-        logger.error({ err }, "Maintenance reminders failed"),
-      );
-    }
-  }, 60 * 60 * 1000);
-
-  // Monthly tips cron — runs every 24h, fires on the 1st of the month at 9am
-  setInterval(() => {
-    const now = new Date();
-    if (now.getDate() === 1 && now.getHours() === 9) {
-      sendMonthlyTips().catch((err) =>
-        logger.error({ err }, "Monthly tips failed"),
-      );
-    }
-  }, 60 * 60 * 1000);
+  // Reminders and monthly tips. runScheduledJobs is idempotent across
+  // instances, so every instance can tick; on autoscale (which can sleep),
+  // also point an external hourly cron at POST /api/internal/run-scheduled-jobs.
+  const tick = () =>
+    runScheduledJobs().catch((err) => logger.error({ err }, "Scheduled jobs failed"));
+  tick();
+  setInterval(tick, 15 * 60 * 1000);
 });

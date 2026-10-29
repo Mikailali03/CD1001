@@ -1,5 +1,10 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "@clerk/react";
+import { useState } from "react";
+import { Trans, useTranslation } from "react-i18next";
+import {
+  useGetInvestmentLedger,
+  getGetInvestmentLedgerQueryKey,
+  type GetInvestmentLedgerRange,
+} from "@workspace/api-client-react";
 import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import {
   Dialog,
@@ -12,27 +17,23 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { format } from "date-fns";
+import { format } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import {
   TrendingUp, TrendingDown, Minus, Receipt, DollarSign,
   Wrench, Calendar, Lock, Sparkles,
 } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-// ── Date range options ────────────────────────────────────────────────────────
-const RANGES = [
-  { key: "this_month",    label: "This Month" },
-  { key: "last_month",    label: "Last Month" },
-  { key: "this_quarter",  label: "This Quarter" },
-  { key: "last_quarter",  label: "Last Quarter" },
-  { key: "this_year",     label: "This Year" },
-  { key: "last_year",     label: "Last Year" },
-  { key: "all_time",      label: "All Time" },
-] as const;
-
-type RangeKey = typeof RANGES[number]["key"];
+// ── Date range options (labels live under `ledger.range.<key>`) ───────────────
+const RANGES: GetInvestmentLedgerRange[] = [
+  "this_month",
+  "last_month",
+  "this_quarter",
+  "last_quarter",
+  "this_year",
+  "last_year",
+  "all_time",
+];
 
 // ── Category colours (matches asset-detail) ───────────────────────────────────
 const CAT_COLORS: Record<string, string> = {
@@ -57,13 +58,14 @@ function fmt$(n: number) {
 
 // ── Custom donut label ────────────────────────────────────────────────────────
 function DonutCenter({ total }: { total: number }) {
+  const { t } = useTranslation();
   return (
     <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle">
       <tspan x="50%" dy="-0.4em" fontSize={18} fontWeight={700} fill="currentColor">
         {fmt$(total)}
       </tspan>
       <tspan x="50%" dy="1.4em" fontSize={10} fill="#94a3b8">
-        total spent
+        {t("ledger.totalSpent")}
       </tspan>
     </text>
   );
@@ -76,14 +78,16 @@ function CompareBar({ actual, expected }: { actual: number; expected: number }) 
   const under = actual < expected && expected > 0;
   const diff = Math.abs(actual - expected);
   const diffPct = expected > 0 ? Math.round((diff / expected) * 100) : 0;
+  const { t } = useTranslation();
+  const diffAmount = diff.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
   return (
     <div className="rounded-xl border bg-muted/30 p-4 space-y-3">
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Expected vs Actual</p>
+      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t("ledger.expectedVsActual")}</p>
       <div className="space-y-2">
         <div className="space-y-1">
           <div className="flex justify-between text-xs font-medium">
-            <span className="text-muted-foreground">Expected</span>
+            <span className="text-muted-foreground">{t("ledger.expected")}</span>
             <span>${expected.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -95,7 +99,7 @@ function CompareBar({ actual, expected }: { actual: number; expected: number }) 
         </div>
         <div className="space-y-1">
           <div className="flex justify-between text-xs font-medium">
-            <span className="text-muted-foreground">Actual</span>
+            <span className="text-muted-foreground">{t("ledger.actual")}</span>
             <span>${actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
@@ -116,25 +120,20 @@ function CompareBar({ actual, expected }: { actual: number; expected: number }) 
         }`}>
           {over ? <TrendingUp className="h-3.5 w-3.5" /> : under ? <TrendingDown className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}
           {over
-            ? `${diffPct}% over budget ($${diff.toLocaleString(undefined, { maximumFractionDigits: 0 })} more than estimated)`
+            ? t("ledger.overBudget", { pct: diffPct, amount: diffAmount })
             : under
-            ? `${diffPct}% under budget ($${diff.toLocaleString(undefined, { maximumFractionDigits: 0 })} saved)`
-            : "On budget"}
+            ? t("ledger.underBudget", { pct: diffPct, amount: diffAmount })
+            : t("ledger.onBudget")}
         </div>
       )}
       {expected === 0 && actual > 0 && (
-        <p className="text-xs text-muted-foreground">No estimated costs found for this period.</p>
+        <p className="text-xs text-muted-foreground">{t("ledger.noEstimates")}</p>
       )}
     </div>
   );
 }
 
 // ── Main modal ────────────────────────────────────────────────────────────────
-interface LedgerData {
-  records: any[];
-  byCategory: { category: string; actual: number; expected: number }[];
-  totals: { actual: number; expected: number };
-}
 
 export function InvestmentLedgerModal({
   open,
@@ -145,36 +144,17 @@ export function InvestmentLedgerModal({
   onOpenChange: (v: boolean) => void;
   propertyId: string;
 }) {
-  const { getToken } = useAuth();
-  const { subscription, openUpgradeModal } = useSubscription();
-  const locked = !isBasicPlus(subscription?.tier);
-  const [range, setRange] = useState<RangeKey>("this_year");
-  const [data, setData] = useState<LedgerData | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!open || !propertyId) return;
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const token = await getToken();
-        const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const r = await fetch(
-          `${BASE}/api/properties/${propertyId}/ledger?range=${range}`,
-          { headers },
-        );
-        const d = await r.json();
-        if (!cancelled) setData(d);
-      } catch {
-        if (!cancelled) setData(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [open, propertyId, range, getToken]);
+  const { t } = useTranslation();
+  const { subscription, isLoading: subscriptionLoading, openUpgradeModal } = useSubscription();
+  const locked = !subscriptionLoading && !isBasicPlus(subscription?.tier);
+  const [range, setRange] = useState<GetInvestmentLedgerRange>("this_year");
+  const params = { range };
+  const { data, isLoading: loading } = useGetInvestmentLedger(propertyId, params, {
+    query: {
+      queryKey: getGetInvestmentLedgerQueryKey(propertyId, params),
+      enabled: open && !!propertyId,
+    },
+  });
 
   const pieData = (data?.byCategory ?? [])
     .filter((c) => c.actual > 0)
@@ -192,9 +172,9 @@ export function InvestmentLedgerModal({
               <Lock className="h-8 w-8 text-amber-600" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold mb-1">Investment Ledger</DialogTitle>
+              <DialogTitle className="text-lg font-bold mb-1">{t("dashboard.investmentLedger")}</DialogTitle>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Track your maintenance spend vs expectations — available on the <strong>Basic</strong> plan and above.
+                <Trans i18nKey="ledger.lockedDesc" components={{ strong: <strong /> }} />
               </p>
             </div>
             <div className="flex flex-col gap-2 w-full">
@@ -203,10 +183,10 @@ export function InvestmentLedgerModal({
                 className="w-full gap-2"
               >
                 <Sparkles className="h-4 w-4" />
-                Upgrade to Basic — $9.99/mo
+                {t("healthScore.upgradeToBasic", { price: "$9.99" })}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-                Maybe later
+                {t("healthScore.maybeLater")}
               </Button>
             </div>
           </div>
@@ -224,27 +204,28 @@ export function InvestmentLedgerModal({
             <div className="bg-primary/10 rounded-lg p-1.5">
               <Receipt className="h-4 w-4 text-primary" />
             </div>
-            Investment Ledger
+            {t("dashboard.investmentLedger")}
           </DialogTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            Maintenance spend by category — expected vs actual
+            {t("ledger.subtitle")}
           </p>
         </DialogHeader>
 
         {/* Range selector */}
         <div className="px-6 pt-4 shrink-0">
           <div className="flex flex-wrap gap-1.5">
-            {RANGES.map((r) => (
+            {RANGES.map((key) => (
               <button
-                key={r.key}
-                onClick={() => setRange(r.key)}
+                key={key}
+                onClick={() => setRange(key)}
+                aria-pressed={range === key}
                 className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-colors ${
-                  range === r.key
+                  range === key
                     ? "bg-primary text-primary-foreground border-primary"
                     : "border-border hover:bg-muted text-muted-foreground hover:text-foreground"
                 }`}
               >
-                {r.label}
+                {t(`ledger.range.${key}`)}
               </button>
             ))}
           </div>
@@ -252,7 +233,7 @@ export function InvestmentLedgerModal({
 
         {/* Scrollable body */}
         <div className="overflow-y-auto flex-1 px-6 pt-4 pb-6 space-y-5">
-          {loading ? (
+          {loading || subscriptionLoading ? (
             <div className="space-y-4">
               <Skeleton className="h-48 w-full rounded-xl" />
               <Skeleton className="h-20 w-full rounded-xl" />
@@ -261,7 +242,7 @@ export function InvestmentLedgerModal({
           ) : !data ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Wrench className="h-10 w-10 opacity-20 mb-3" />
-              <p className="text-sm font-medium">Could not load ledger data</p>
+              <p className="text-sm font-medium">{t("ledger.loadFailed")}</p>
             </div>
           ) : (
             <>
@@ -269,7 +250,7 @@ export function InvestmentLedgerModal({
               {hasSpend ? (
                 <div className="rounded-xl border bg-card p-4">
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">
-                    Spend by Category
+                    {t("ledger.spendByCategory")}
                   </p>
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                     <div className="w-full sm:w-56 h-48 shrink-0">
@@ -290,7 +271,7 @@ export function InvestmentLedgerModal({
                             ))}
                           </Pie>
                           <Tooltip
-                            formatter={(value: number) => [`$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, "Spent"]}
+                            formatter={(value: number) => [`$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`, t("ledger.spent")]}
                           />
                         </PieChart>
                       </ResponsiveContainer>
@@ -304,7 +285,7 @@ export function InvestmentLedgerModal({
                         return (
                           <div key={c.category} className="flex items-center gap-2.5">
                             <div className="h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: catColor(c.category) }} />
-                            <span className="text-xs font-medium flex-1">{c.category}</span>
+                            <span className="text-xs font-medium flex-1">{t(`assets.category.${c.category}`, { defaultValue: c.category })}</span>
                             <span className="text-xs text-muted-foreground">{pct}%</span>
                             <span className="text-xs font-bold tabular-nums">
                               ${c.actual.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -314,7 +295,7 @@ export function InvestmentLedgerModal({
                       })}
                       <div className="border-t pt-2 flex items-center gap-2.5">
                         <div className="h-2.5 w-2.5 shrink-0" />
-                        <span className="text-xs font-bold flex-1">Total</span>
+                        <span className="text-xs font-bold flex-1">{t("ledger.total")}</span>
                         <span className="text-xs font-black tabular-nums text-primary">
                           ${data.totals.actual.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                         </span>
@@ -325,8 +306,8 @@ export function InvestmentLedgerModal({
               ) : (
                 <div className="rounded-xl border bg-muted/20 flex flex-col items-center gap-2 py-10 text-muted-foreground">
                   <DollarSign className="h-8 w-8 opacity-20" />
-                  <p className="text-sm font-medium">No spend recorded for this period</p>
-                  <p className="text-xs text-center max-w-xs">Log service records with costs on your asset pages to track spending here.</p>
+                  <p className="text-sm font-medium">{t("ledger.noSpend")}</p>
+                  <p className="text-xs text-center max-w-xs">{t("ledger.noSpendDesc")}</p>
                 </div>
               )}
 
@@ -336,20 +317,20 @@ export function InvestmentLedgerModal({
               {/* Running ledger */}
               <div className="space-y-2">
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-                  Maintenance Ledger
+                  {t("ledger.maintenanceLedger")}
                   {records.length > 0 && (
                     <span className="ml-2 font-normal normal-case text-muted-foreground">
-                      {records.length} record{records.length !== 1 ? "s" : ""} with costs
+                      {t("ledger.recordsWithCosts", { count: records.length })}
                     </span>
                   )}
                 </p>
                 {records.length === 0 ? (
                   <div className="rounded-xl border bg-muted/20 flex items-center justify-center py-8 text-muted-foreground">
-                    <p className="text-sm">No cost records in this period</p>
+                    <p className="text-sm">{t("ledger.noCostRecords")}</p>
                   </div>
                 ) : (
                   <div className="rounded-xl border overflow-hidden divide-y">
-                    {records.map((r: any) => (
+                    {records.map((r) => (
                       <div key={r.id} className="flex items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
                         <div
                           className="mt-0.5 h-2.5 w-2.5 rounded-sm shrink-0 mt-1.5"
@@ -365,7 +346,7 @@ export function InvestmentLedgerModal({
                               className="text-[9px] px-1.5 h-4 font-medium"
                               style={{ background: catColor(r.assetCategory) + "20", color: catColor(r.assetCategory) }}
                             >
-                              {r.assetCategory}
+                              {t(`assets.category.${r.assetCategory}`, { defaultValue: r.assetCategory })}
                             </Badge>
                             {(r.companyName || r.technicianName) && (
                               <>
@@ -388,7 +369,7 @@ export function InvestmentLedgerModal({
                           <p className="text-sm font-bold text-foreground">
                             ${Number(r.cost).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                           </p>
-                          <p className="text-[10px] text-muted-foreground flex items-center gap-0.5 justify-end">
+                          <p className="text-xs text-muted-foreground flex items-center gap-0.5 justify-end">
                             <Calendar className="h-2.5 w-2.5" />
                             {format(new Date(r.date), "MMM d, yyyy")}
                           </p>
@@ -397,7 +378,7 @@ export function InvestmentLedgerModal({
                     ))}
                     {/* Ledger total */}
                     <div className="flex items-center justify-between px-4 py-3 bg-muted/40">
-                      <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Period Total</span>
+                      <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("ledger.periodTotal")}</span>
                       <span className="text-sm font-black text-primary">
                         ${data.totals.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </span>

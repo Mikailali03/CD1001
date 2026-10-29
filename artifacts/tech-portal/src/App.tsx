@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import MapPage from "@/pages/map";
 import MyJobsPage from "@/pages/my-jobs";
+import ScanPage from "@/pages/scan";
 import ProfileSetup from "@/pages/profile-setup";
 import NotFound from "@/pages/not-found";
 
@@ -57,6 +58,7 @@ function AuthGate() {
       <Route path="/" component={() => <Redirect to="/map" />} />
       <Route path="/map" component={MapPage} />
       <Route path="/my-jobs" component={MyJobsPage} />
+      <Route path="/scan" component={ScanPage} />
       <Route path="/profile" component={ProfileSetup} />
       <Route component={NotFound} />
     </Switch>

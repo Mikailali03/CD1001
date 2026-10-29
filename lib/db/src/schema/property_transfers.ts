@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, index, text, timestamp } from "drizzle-orm/pg-core";
 
 export const propertyTransfersTable = pgTable("property_transfers", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -13,6 +13,9 @@ export const propertyTransfersTable = pgTable("property_transfers", {
   expiresAt: timestamp("expires_at"),
   completedAt: timestamp("completed_at"),
   cancelledAt: timestamp("cancelled_at"),
-});
+}, (t) => [
+  index("property_transfers_property_id_idx").on(t.propertyId),
+  index("property_transfers_to_email_idx").on(t.toEmail),
+]);
 
 export type PropertyTransfer = typeof propertyTransfersTable.$inferSelect;

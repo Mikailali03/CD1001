@@ -8,8 +8,11 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import { InboxProvider, useInboxPendingCount } from "@/context/InboxContext";
+import { RoleGuard } from "@/components/tech/RoleGuard";
+import { useTranslation } from "react-i18next";
 
 function NativeTabLayout() {
+  const { t } = useTranslation();
   const pendingCount = useInboxPendingCount();
   return (
     <NativeTabs>
@@ -18,25 +21,26 @@ function NativeTabLayout() {
         options={pendingCount > 0 ? { badgeValue: String(pendingCount) } : undefined}
       >
         <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>Home</Label>
+        <Label>{t("tabs.home")}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="assets">
         <Icon sf={{ default: "list.bullet.rectangle", selected: "list.bullet.rectangle.fill" }} />
-        <Label>Assets</Label>
+        <Label>{t("tabs.assets")}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="find-a-pro">
         <Icon sf={{ default: "person.badge.plus", selected: "person.badge.plus.fill" }} />
-        <Label>Find a Pro</Label>
+        <Label>{t("tabs.findPro")}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more">
         <Icon sf={{ default: "ellipsis.circle", selected: "ellipsis.circle.fill" }} />
-        <Label>More</Label>
+        <Label>{t("tabs.more")}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
 
 function ClassicTabLayout() {
+  const { t } = useTranslation();
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -75,7 +79,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Home",
+          title: t("tabs.home"),
           tabBarBadge: pendingCount > 0 ? pendingCount : undefined,
           tabBarIcon: ({ color }) =>
             isIOS ? (
@@ -88,7 +92,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="assets"
         options={{
-          title: "Assets",
+          title: t("tabs.assets"),
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="list.bullet.rectangle" tintColor={color} size={24} />
@@ -100,7 +104,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="find-a-pro"
         options={{
-          title: "Find a Pro",
+          title: t("tabs.findPro"),
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="person.badge.plus" tintColor={color} size={24} />
@@ -112,7 +116,7 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="more"
         options={{
-          title: "More",
+          title: t("tabs.more"),
           tabBarIcon: ({ color }) =>
             isIOS ? (
               <SymbolView name="ellipsis.circle" tintColor={color} size={24} />
@@ -133,9 +137,12 @@ function TabLayoutInner() {
 }
 
 export default function TabLayout() {
+  // Technicians are redirected to the technician app (app/(tech)); see RoleGuard.
   return (
-    <InboxProvider>
-      <TabLayoutInner />
-    </InboxProvider>
+    <RoleGuard app="homeowner">
+      <InboxProvider>
+        <TabLayoutInner />
+      </InboxProvider>
+    </RoleGuard>
   );
 }

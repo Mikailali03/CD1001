@@ -31,6 +31,8 @@ export const ListPropertiesResponseItem = zod.object({
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   photoUrl: zod.string().optional(),
+  userId: zod.string().optional().describe("Owner's user id"),
+  ownerEmail: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
 });
@@ -75,6 +77,8 @@ export const GetPropertyResponse = zod.object({
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   photoUrl: zod.string().optional(),
+  userId: zod.string().optional().describe("Owner's user id"),
+  ownerEmail: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
 });
@@ -115,6 +119,8 @@ export const UpdatePropertyResponse = zod.object({
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   photoUrl: zod.string().optional(),
+  userId: zod.string().optional().describe("Owner's user id"),
+  ownerEmail: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
 });
@@ -139,19 +145,47 @@ export const GetPropertySummaryResponse = zod.object({
   totalAssets: zod.number(),
   verifiedAssets: zod.number(),
   overdueTaskCount: zod.number(),
+  overdueTasks: zod
+    .array(
+      zod
+        .object({
+          id: zod.string(),
+          assetId: zod.string(),
+          title: zod.string(),
+          description: zod.string().optional(),
+          intervalDays: zod.number(),
+          nextDueDate: zod.coerce.date(),
+          completedAt: zod.coerce.date().optional(),
+          isDiy: zod.boolean(),
+          estimatedCost: zod.number().optional(),
+          createdAt: zod.coerce.date(),
+        })
+        .and(
+          zod.object({
+            assetName: zod.string(),
+          }),
+        ),
+    )
+    .optional(),
   upcomingTasks: zod.array(
-    zod.object({
-      id: zod.string(),
-      assetId: zod.string(),
-      title: zod.string(),
-      description: zod.string().optional(),
-      intervalDays: zod.number(),
-      nextDueDate: zod.coerce.date(),
-      completedAt: zod.coerce.date().optional(),
-      isDiy: zod.boolean(),
-      estimatedCost: zod.number().optional(),
-      createdAt: zod.coerce.date(),
-    }),
+    zod
+      .object({
+        id: zod.string(),
+        assetId: zod.string(),
+        title: zod.string(),
+        description: zod.string().optional(),
+        intervalDays: zod.number(),
+        nextDueDate: zod.coerce.date(),
+        completedAt: zod.coerce.date().optional(),
+        isDiy: zod.boolean(),
+        estimatedCost: zod.number().optional(),
+        createdAt: zod.coerce.date(),
+      })
+      .and(
+        zod.object({
+          assetName: zod.string(),
+        }),
+      ),
   ),
   assetsByCategory: zod.array(
     zod.object({
@@ -199,19 +233,25 @@ export const GetPropertySummaryResponse = zod.object({
     .optional(),
   recentRecords: zod
     .array(
-      zod.object({
-        id: zod.string(),
-        assetId: zod.string(),
-        date: zod.coerce.date(),
-        technicianName: zod.string().optional(),
-        companyName: zod.string().optional(),
-        description: zod.string(),
-        cost: zod.number().optional(),
-        nextServiceDate: zod.coerce.date().optional(),
-        receiptUrl: zod.string().optional(),
-        verified: zod.boolean().optional(),
-        createdAt: zod.coerce.date(),
-      }),
+      zod
+        .object({
+          id: zod.string(),
+          assetId: zod.string(),
+          date: zod.coerce.date(),
+          technicianName: zod.string().optional(),
+          companyName: zod.string().optional(),
+          description: zod.string(),
+          cost: zod.number().optional(),
+          nextServiceDate: zod.coerce.date().optional(),
+          receiptUrl: zod.string().optional(),
+          verified: zod.boolean().optional(),
+          createdAt: zod.coerce.date(),
+        })
+        .and(
+          zod.object({
+            assetName: zod.string(),
+          }),
+        ),
     )
     .optional(),
 });
@@ -264,6 +304,10 @@ export const ListAssetsParams = zod.object({
 
 export const ListAssetsQueryParams = zod.object({
   category: zod.coerce.string().optional(),
+  includeRetired: zod.coerce
+    .boolean()
+    .optional()
+    .describe("Include retired (decommissioned) assets"),
 });
 
 export const ListAssetsResponseItem = zod.object({
@@ -384,16 +428,16 @@ export const UpdateAssetBody = zod.object({
       "Other",
     ])
     .optional(),
-  brand: zod.string().optional(),
-  model: zod.string().optional(),
-  serialNumber: zod.string().optional(),
-  installDate: zod.coerce.date().optional(),
-  warrantyExpiry: zod.coerce.date().optional(),
+  brand: zod.string().nullish(),
+  model: zod.string().nullish(),
+  serialNumber: zod.string().nullish(),
+  installDate: zod.coerce.date().nullish(),
+  warrantyExpiry: zod.coerce.date().nullish(),
   status: zod.enum(["verified", "unverified", "needs_attention"]).optional(),
-  notes: zod.string().optional(),
+  notes: zod.string().nullish(),
   photoUrl: zod.string().nullish(),
   retiredAt: zod.coerce.date().nullish(),
-  replacementCost: zod.number().optional(),
+  replacementCost: zod.number().nullish(),
 });
 
 export const UpdateAssetResponse = zod.object({
@@ -610,6 +654,22 @@ export const ListGuidesResponseItem = zod.object({
 export const ListGuidesResponse = zod.array(ListGuidesResponseItem);
 
 /**
+ * @summary Publish a new DIY guide and notify all users (admin only)
+ */
+export const CreateGuideBody = zod.object({
+  category: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  difficulty: zod.enum(["easy", "medium", "hard"]),
+  estimatedMinutes: zod.number(),
+  toolsNeeded: zod.string().nullish().describe("JSON-encoded array of strings"),
+  steps: zod
+    .string()
+    .nullish()
+    .describe("JSON-encoded array of { step, instruction }"),
+});
+
+/**
  * @summary Get a single DIY guide
  */
 export const GetGuideParams = zod.object({
@@ -661,11 +721,15 @@ export const GetUserProfileResponse = zod.object({
 /**
  * @summary Create or update the current user's profile
  */
+
 export const UpsertUserProfileBody = zod.object({
-  firstName: zod.string(),
-  lastName: zod.string(),
+  firstName: zod.string().min(1),
+  lastName: zod.string().optional().describe("Defaults to an empty string"),
   email: zod.string().optional(),
-  role: zod.enum(["homeowner", "technician", "admin"]),
+  role: zod
+    .enum(["homeowner", "technician", "admin"])
+    .optional()
+    .describe("Ignored — roles are assigned by admins"),
   phone: zod.string().optional(),
 });
 
@@ -695,7 +759,7 @@ export const ListMarketplaceJobsResponseItem = zod.object({
   assetSerialNumber: zod.string().optional(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]).optional(),
-  status: zod.enum(["open", "claimed", "completed"]),
+  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
   city: zod.string().optional(),
   state: zod.string().optional(),
   latitude: zod.number().optional(),
@@ -727,7 +791,7 @@ export const ListOpenMarketplaceJobsResponseItem = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "completed"]),
+  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
   city: zod.string(),
   state: zod.string(),
   zipCode: zod.string().optional(),
@@ -752,7 +816,7 @@ export const GetMarketplaceJobDetailsResponse = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "completed"]),
+  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
   assetId: zod.string().optional(),
   assetName: zod.string(),
   assetCategory: zod.string(),
@@ -807,7 +871,7 @@ export const AcceptMarketplaceJobResponse = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "completed"]),
+  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
   assetId: zod.string().optional(),
   assetName: zod.string(),
   assetCategory: zod.string(),
@@ -858,7 +922,7 @@ export const ListAssignedJobsResponseItem = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "completed"]),
+  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
   assetName: zod.string(),
   assetCategory: zod.string(),
   assetBrand: zod.string().optional(),
@@ -969,6 +1033,8 @@ export const GetInboxResponse = zod.object({
         latitude: zod.number().optional(),
         longitude: zod.number().optional(),
         photoUrl: zod.string().optional(),
+        userId: zod.string().optional().describe("Owner's user id"),
+        ownerEmail: zod.string().nullish(),
         createdAt: zod.coerce.date(),
         updatedAt: zod.coerce.date().optional(),
       }),
@@ -999,6 +1065,8 @@ export const GetInboxResponse = zod.object({
         latitude: zod.number().optional(),
         longitude: zod.number().optional(),
         photoUrl: zod.string().optional(),
+        userId: zod.string().optional().describe("Owner's user id"),
+        ownerEmail: zod.string().nullish(),
         createdAt: zod.coerce.date(),
         updatedAt: zod.coerce.date().optional(),
       }),
@@ -1027,6 +1095,8 @@ export const ClaimInboxTransferResponse = zod.object({
   latitude: zod.number().optional(),
   longitude: zod.number().optional(),
   photoUrl: zod.string().optional(),
+  userId: zod.string().optional().describe("Owner's user id"),
+  ownerEmail: zod.string().nullish(),
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
 });
@@ -1414,6 +1484,7 @@ export const ListEmailTriggersResponseItem = zod.object({
     "overdue_maintenance",
     "asset_end_of_life",
     "property_transfer_initiated",
+    "collaborator_invited",
     "new_feature_announcement",
     "monthly_update",
     "custom",
@@ -1440,6 +1511,7 @@ export const CreateEmailTriggerBody = zod.object({
     "overdue_maintenance",
     "asset_end_of_life",
     "property_transfer_initiated",
+    "collaborator_invited",
     "new_feature_announcement",
     "monthly_update",
     "custom",
@@ -1465,6 +1537,7 @@ export const UpdateEmailTriggerBody = zod.object({
     "overdue_maintenance",
     "asset_end_of_life",
     "property_transfer_initiated",
+    "collaborator_invited",
     "new_feature_announcement",
     "monthly_update",
     "custom",
@@ -1484,6 +1557,7 @@ export const UpdateEmailTriggerResponse = zod.object({
     "overdue_maintenance",
     "asset_end_of_life",
     "property_transfer_initiated",
+    "collaborator_invited",
     "new_feature_announcement",
     "monthly_update",
     "custom",
@@ -1519,6 +1593,7 @@ export const ToggleEmailTriggerResponse = zod.object({
     "overdue_maintenance",
     "asset_end_of_life",
     "property_transfer_initiated",
+    "collaborator_invited",
     "new_feature_announcement",
     "monthly_update",
     "custom",
@@ -1576,6 +1651,8 @@ export const ListAdminPropertiesResponseItem = zod.object({
   yearBuilt: zod.number().optional(),
   sqft: zod.number().optional(),
   photoUrl: zod.string().optional(),
+  latitude: zod.number().nullish(),
+  longitude: zod.number().nullish(),
   userId: zod.string(),
   ownerName: zod.string().optional(),
   ownerEmail: zod.string().optional(),
@@ -1633,4 +1710,925 @@ export const GetAdminAnalyticsResponse = zod.object({
       count: zod.number(),
     }),
   ),
+});
+
+/**
+ * @summary Address suggestions as the user types (empty list when unavailable)
+ */
+export const autocompletePropertyAddressQueryQueryMin = 3;
+
+export const autocompletePropertyAddressQueryLimitDefault = 5;
+export const autocompletePropertyAddressQueryLimitMax = 10;
+
+export const AutocompletePropertyAddressQueryParams = zod.object({
+  query: zod.coerce.string().min(autocompletePropertyAddressQueryQueryMin),
+  limit: zod.coerce
+    .number()
+    .min(1)
+    .max(autocompletePropertyAddressQueryLimitMax)
+    .default(autocompletePropertyAddressQueryLimitDefault),
+});
+
+export const AutocompletePropertyAddressResponse = zod.object({
+  suggestions: zod.array(
+    zod.object({
+      address: zod.string(),
+      city: zod.string().nullable(),
+      state: zod.string().nullable(),
+      zipCode: zod.string().nullable(),
+    }),
+  ),
+});
+
+/**
+ * @summary Look up public property details for an address
+ */
+export const lookupPropertyQueryAddressMin = 5;
+
+export const LookupPropertyQueryParams = zod.object({
+  address: zod.coerce.string().min(lookupPropertyQueryAddressMin),
+});
+
+export const LookupPropertyResponse = zod.object({
+  address: zod.string(),
+  city: zod.string().nullable(),
+  state: zod.string().nullable(),
+  zipCode: zod.string().nullable(),
+  yearBuilt: zod.number().nullable(),
+  sqft: zod.number().nullable(),
+  bedrooms: zod.number().nullable(),
+  bathrooms: zod.number().nullable(),
+  lotSize: zod.number().nullable(),
+  latitude: zod.number().nullable(),
+  longitude: zod.number().nullable(),
+});
+
+/**
+ * @summary Generate (or return the existing) AI whole-home stewardship plan
+ */
+export const GenerateStewardshipPlanParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GenerateStewardshipPlanResponse = zod.object({
+  asset: zod.object({
+    id: zod.string(),
+    propertyId: zod.string(),
+    name: zod
+      .string()
+      .describe(
+        'Plain-language name (e.g. \"Central AC Unit\", \"Water Heater\")',
+      ),
+    category: zod.enum([
+      "HVAC",
+      "Plumbing",
+      "Electrical",
+      "Roof",
+      "Appliance",
+      "Structural",
+      "Other",
+    ]),
+    brand: zod.string().optional(),
+    model: zod.string().optional(),
+    serialNumber: zod.string().optional(),
+    installDate: zod.coerce.date().optional(),
+    warrantyExpiry: zod.coerce.date().optional(),
+    status: zod.enum(["verified", "unverified", "needs_attention"]),
+    notes: zod.string().optional(),
+    photoUrl: zod.string().optional(),
+    replacementCost: zod.number().optional(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date().optional(),
+    retiredAt: zod.coerce.date().nullish(),
+  }),
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      assetId: zod.string(),
+      title: zod.string(),
+      description: zod.string().optional(),
+      intervalDays: zod.number(),
+      nextDueDate: zod.coerce.date(),
+      completedAt: zod.coerce.date().optional(),
+      isDiy: zod.boolean(),
+      estimatedCost: zod.number().optional(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  taskCount: zod.number(),
+});
+
+/**
+ * @summary Projected replacement timeline and costs (basic+ tier)
+ */
+export const GetCapitalOutlookParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetCapitalOutlookResponse = zod.object({
+  totalTrackedValue: zod.number(),
+  assets: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      category: zod.enum([
+        "HVAC",
+        "Plumbing",
+        "Electrical",
+        "Roof",
+        "Appliance",
+        "Structural",
+        "Other",
+      ]),
+      brand: zod.string().nullable(),
+      model: zod.string().nullable(),
+      installDate: zod.string().nullable(),
+      installYear: zod.number().nullable(),
+      replacementCost: zod.number().nullable(),
+      expectedLifespanYears: zod.number(),
+      replacementYear: zod.number().nullable(),
+      yearsRemaining: zod.number().nullable(),
+      urgency: zod.enum(["critical", "warning", "good", "unknown"]),
+      ageYears: zod.number().nullable(),
+      percentLifeUsed: zod.number().nullable(),
+    }),
+  ),
+  timeline: zod
+    .array(
+      zod.object({
+        year: zod.number(),
+        projectedCost: zod.number(),
+        assetNames: zod.array(zod.string()),
+      }),
+    )
+    .describe("One entry per year from the current year through +20"),
+  summary: zod.object({
+    nextReplacement: zod
+      .object({
+        name: zod.string(),
+        year: zod.number(),
+        cost: zod.number(),
+      })
+      .nullable(),
+    next5YearCost: zod.number(),
+    next10YearCost: zod.number(),
+  }),
+});
+
+/**
+ * @summary Actual vs expected maintenance spend for a date range (basic+ tier)
+ */
+export const GetInvestmentLedgerParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetInvestmentLedgerQueryParams = zod.object({
+  range: zod
+    .enum([
+      "this_month",
+      "last_month",
+      "this_quarter",
+      "last_quarter",
+      "this_year",
+      "last_year",
+      "all_time",
+    ])
+    .optional()
+    .describe("Unknown values fall back to this_year"),
+});
+
+export const GetInvestmentLedgerResponse = zod.object({
+  records: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        assetId: zod.string(),
+        date: zod.coerce.date(),
+        technicianName: zod.string().optional(),
+        companyName: zod.string().optional(),
+        description: zod.string(),
+        cost: zod.number().optional(),
+        nextServiceDate: zod.coerce.date().optional(),
+        receiptUrl: zod.string().optional(),
+        verified: zod.boolean().optional(),
+        createdAt: zod.coerce.date(),
+      })
+      .and(
+        zod.object({
+          assetName: zod.string(),
+          assetCategory: zod.string(),
+        }),
+      ),
+  ),
+  byCategory: zod.array(
+    zod.object({
+      category: zod.string(),
+      actual: zod.number(),
+      expected: zod.number(),
+    }),
+  ),
+  totals: zod.object({
+    actual: zod.number(),
+    expected: zod.number(),
+  }),
+});
+
+/**
+ * @summary Full property history report (assets with their service records)
+ */
+export const GetPropertyReportParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetPropertyReportResponse = zod.object({
+  property: zod.object({
+    id: zod.string(),
+    name: zod
+      .string()
+      .describe('Friendly name (e.g. \"The Smith Family Home\")'),
+    address: zod.string(),
+    city: zod.string().optional(),
+    state: zod.string().optional(),
+    zipCode: zod.string().optional(),
+    yearBuilt: zod.number().optional(),
+    sqft: zod.number().optional(),
+    bedrooms: zod.number().optional(),
+    bathrooms: zod.number().optional(),
+    latitude: zod.number().optional(),
+    longitude: zod.number().optional(),
+    photoUrl: zod.string().optional(),
+    userId: zod.string().optional().describe("Owner's user id"),
+    ownerEmail: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    updatedAt: zod.coerce.date().optional(),
+  }),
+  activeAssets: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        propertyId: zod.string(),
+        name: zod
+          .string()
+          .describe(
+            'Plain-language name (e.g. \"Central AC Unit\", \"Water Heater\")',
+          ),
+        category: zod.enum([
+          "HVAC",
+          "Plumbing",
+          "Electrical",
+          "Roof",
+          "Appliance",
+          "Structural",
+          "Other",
+        ]),
+        brand: zod.string().optional(),
+        model: zod.string().optional(),
+        serialNumber: zod.string().optional(),
+        installDate: zod.coerce.date().optional(),
+        warrantyExpiry: zod.coerce.date().optional(),
+        status: zod.enum(["verified", "unverified", "needs_attention"]),
+        notes: zod.string().optional(),
+        photoUrl: zod.string().optional(),
+        replacementCost: zod.number().optional(),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date().optional(),
+        retiredAt: zod.coerce.date().nullish(),
+      })
+      .and(
+        zod.object({
+          records: zod.array(
+            zod.object({
+              id: zod.string(),
+              assetId: zod.string(),
+              date: zod.coerce.date(),
+              technicianName: zod.string().optional(),
+              companyName: zod.string().optional(),
+              description: zod.string(),
+              cost: zod.number().optional(),
+              nextServiceDate: zod.coerce.date().optional(),
+              receiptUrl: zod.string().optional(),
+              verified: zod.boolean().optional(),
+              createdAt: zod.coerce.date(),
+            }),
+          ),
+        }),
+      ),
+  ),
+  retiredAssets: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        propertyId: zod.string(),
+        name: zod
+          .string()
+          .describe(
+            'Plain-language name (e.g. \"Central AC Unit\", \"Water Heater\")',
+          ),
+        category: zod.enum([
+          "HVAC",
+          "Plumbing",
+          "Electrical",
+          "Roof",
+          "Appliance",
+          "Structural",
+          "Other",
+        ]),
+        brand: zod.string().optional(),
+        model: zod.string().optional(),
+        serialNumber: zod.string().optional(),
+        installDate: zod.coerce.date().optional(),
+        warrantyExpiry: zod.coerce.date().optional(),
+        status: zod.enum(["verified", "unverified", "needs_attention"]),
+        notes: zod.string().optional(),
+        photoUrl: zod.string().optional(),
+        replacementCost: zod.number().optional(),
+        createdAt: zod.coerce.date(),
+        updatedAt: zod.coerce.date().optional(),
+        retiredAt: zod.coerce.date().nullish(),
+      })
+      .and(
+        zod.object({
+          records: zod.array(
+            zod.object({
+              id: zod.string(),
+              assetId: zod.string(),
+              date: zod.coerce.date(),
+              technicianName: zod.string().optional(),
+              companyName: zod.string().optional(),
+              description: zod.string(),
+              cost: zod.number().optional(),
+              nextServiceDate: zod.coerce.date().optional(),
+              receiptUrl: zod.string().optional(),
+              verified: zod.boolean().optional(),
+              createdAt: zod.coerce.date(),
+            }),
+          ),
+        }),
+      ),
+  ),
+  totalEvents: zod.number(),
+  generatedAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Open maintenance tasks for a property that are overdue or due within 30 days
+ */
+export const GetPropertyMaintenanceInboxParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetPropertyMaintenanceInboxResponse = zod.object({
+  overdue: zod.array(
+    zod.object({
+      id: zod.string(),
+      assetId: zod.string(),
+      title: zod.string(),
+      description: zod.string().nullable(),
+      intervalDays: zod.number(),
+      nextDueDate: zod.coerce.date(),
+      isDiy: zod.boolean(),
+      estimatedCost: zod
+        .string()
+        .nullable()
+        .describe('Decimal string (e.g. \"45.00\")'),
+      assetName: zod.string(),
+      assetCategory: zod.enum([
+        "HVAC",
+        "Plumbing",
+        "Electrical",
+        "Roof",
+        "Appliance",
+        "Structural",
+        "Other",
+      ]),
+    }),
+  ),
+  upcoming: zod.array(
+    zod.object({
+      id: zod.string(),
+      assetId: zod.string(),
+      title: zod.string(),
+      description: zod.string().nullable(),
+      intervalDays: zod.number(),
+      nextDueDate: zod.coerce.date(),
+      isDiy: zod.boolean(),
+      estimatedCost: zod
+        .string()
+        .nullable()
+        .describe('Decimal string (e.g. \"45.00\")'),
+      assetName: zod.string(),
+      assetCategory: zod.enum([
+        "HVAC",
+        "Plumbing",
+        "Electrical",
+        "Roof",
+        "Appliance",
+        "Structural",
+        "Other",
+      ]),
+    }),
+  ),
+  totalCount: zod.number(),
+});
+
+/**
+ * @summary The property's pending deed transfer, or null (owner only)
+ */
+export const GetPendingPropertyTransferParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetPendingPropertyTransferResponse = zod.union([
+  zod.object({
+    id: zod.string(),
+    propertyId: zod.string(),
+    fromUserId: zod.string(),
+    fromEmail: zod.string(),
+    toEmail: zod.string(),
+    toUserId: zod.string().nullable(),
+    status: zod.enum(["pending", "completed", "cancelled"]),
+    token: zod.string(),
+    createdAt: zod.coerce.date(),
+    expiresAt: zod.coerce.date().nullable(),
+    completedAt: zod.coerce.date().nullable(),
+    cancelledAt: zod.coerce.date().nullable(),
+  }),
+  zod.null(),
+]);
+
+/**
+ * @summary Start a deed transfer to another email (cancels any pending one)
+ */
+export const InitiatePropertyTransferParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const InitiatePropertyTransferBody = zod.object({
+  toEmail: zod.string().email(),
+  fromEmail: zod
+    .string()
+    .email()
+    .optional()
+    .describe("Ignored — the sender's verified email is used"),
+});
+
+/**
+ * @summary Cancel a pending deed transfer (owner only)
+ */
+export const CancelPropertyTransferParams = zod.object({
+  transferId: zod.coerce.string(),
+});
+
+export const CancelPropertyTransferResponse = zod.object({
+  id: zod.string(),
+  propertyId: zod.string(),
+  fromUserId: zod.string(),
+  fromEmail: zod.string(),
+  toEmail: zod.string(),
+  toUserId: zod.string().nullable(),
+  status: zod.enum(["pending", "completed", "cancelled"]),
+  token: zod.string(),
+  createdAt: zod.coerce.date(),
+  expiresAt: zod.coerce.date().nullable(),
+  completedAt: zod.coerce.date().nullable(),
+  cancelledAt: zod.coerce.date().nullable(),
+});
+
+/**
+ * @summary Public details of a pending transfer for the claim page
+ */
+export const GetTransferClaimParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const GetTransferClaimResponse = zod.object({
+  transfer: zod.object({
+    id: zod.string(),
+    status: zod.string(),
+    fromEmail: zod.string(),
+    toEmail: zod.string(),
+    expiresAt: zod.coerce.date().nullable(),
+    createdAt: zod.coerce.date(),
+  }),
+  property: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      address: zod.string(),
+      city: zod.string().nullable(),
+      state: zod.string().nullable(),
+      yearBuilt: zod.number().nullable(),
+      sqft: zod.number().nullable(),
+    })
+    .nullable(),
+});
+
+/**
+ * @summary Accept a transfer; the signed-in user (matching verified email) becomes the owner
+ */
+export const ClaimPropertyTransferParams = zod.object({
+  token: zod.coerce.string(),
+});
+
+export const ClaimPropertyTransferBody = zod.object({
+  newOwnerName: zod.string().optional(),
+});
+
+export const ClaimPropertyTransferResponse = zod.object({
+  transfer: zod.object({
+    id: zod.string(),
+    propertyId: zod.string(),
+    fromUserId: zod.string(),
+    fromEmail: zod.string(),
+    toEmail: zod.string(),
+    toUserId: zod.string().nullable(),
+    status: zod.enum(["pending", "completed", "cancelled"]),
+    token: zod.string(),
+    createdAt: zod.coerce.date(),
+    expiresAt: zod.coerce.date().nullable(),
+    completedAt: zod.coerce.date().nullable(),
+    cancelledAt: zod.coerce.date().nullable(),
+  }),
+  newUserId: zod.string(),
+});
+
+/**
+ * @summary Read an appliance data plate photo with AI
+ */
+export const scanAssetDataPlateBodyImageBase64Min = 10;
+
+export const scanAssetDataPlateBodyMimeTypeDefault = `image/jpeg`;
+
+export const ScanAssetDataPlateBody = zod.object({
+  imageBase64: zod.string().min(scanAssetDataPlateBodyImageBase64Min),
+  mimeType: zod.string().default(scanAssetDataPlateBodyMimeTypeDefault),
+});
+
+export const ScanAssetDataPlateResponse = zod
+  .object({
+    brand: zod.string().nullish(),
+    model: zod.string().nullish(),
+    serialNumber: zod.string().nullish(),
+    manufactureDate: zod.string().nullish().describe("YYYY-MM"),
+    estimatedReplacementCost: zod.number().nullish(),
+    category: zod
+      .union([
+        zod.literal("HVAC"),
+        zod.literal("Plumbing"),
+        zod.literal("Electrical"),
+        zod.literal("Roof"),
+        zod.literal("Appliance"),
+        zod.literal("Structural"),
+        zod.literal("Other"),
+        zod.literal(null),
+      ])
+      .nullish(),
+    suggestedName: zod.string().nullish(),
+  })
+  .describe("Parsed straight from the AI response; fields are best-effort");
+
+/**
+ * @summary Generate an AI maintenance plan for an asset (owner only)
+ */
+export const GenerateAssetMaintenanceTasksParams = zod.object({
+  assetId: zod.coerce.string(),
+});
+
+export const GenerateAssetMaintenanceTasksResponse = zod.object({
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      assetId: zod.string(),
+      title: zod.string(),
+      description: zod.string().optional(),
+      intervalDays: zod.number(),
+      nextDueDate: zod.coerce.date(),
+      completedAt: zod.coerce.date().optional(),
+      isDiy: zod.boolean(),
+      estimatedCost: zod.number().optional(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  taskCount: zod.number(),
+});
+
+/**
+ * @summary Complete a task — schedules the next occurrence and logs a service record
+ */
+export const CompleteMaintenanceTaskParams = zod.object({
+  taskId: zod.coerce.string(),
+});
+
+export const CompleteMaintenanceTaskBody = zod.object({
+  notes: zod.string().optional(),
+  isDiy: zod.boolean().optional(),
+  cost: zod.number().optional(),
+  technicianName: zod.string().optional(),
+  companyName: zod.string().optional(),
+  receiptUrl: zod.string().optional(),
+  completedDate: zod
+    .string()
+    .optional()
+    .describe("YYYY-MM-DD; defaults to today"),
+});
+
+export const CompleteMaintenanceTaskResponse = zod.object({
+  completedTask: zod.object({
+    id: zod.string(),
+    assetId: zod.string(),
+    title: zod.string(),
+    description: zod.string().optional(),
+    intervalDays: zod.number(),
+    nextDueDate: zod.coerce.date(),
+    completedAt: zod.coerce.date().optional(),
+    isDiy: zod.boolean(),
+    estimatedCost: zod.number().optional(),
+    createdAt: zod.coerce.date(),
+  }),
+  nextTask: zod.object({
+    id: zod.string(),
+    assetId: zod.string(),
+    title: zod.string(),
+    description: zod.string().optional(),
+    intervalDays: zod.number(),
+    nextDueDate: zod.coerce.date(),
+    completedAt: zod.coerce.date().optional(),
+    isDiy: zod.boolean(),
+    estimatedCost: zod.number().optional(),
+    createdAt: zod.coerce.date(),
+  }),
+  serviceRecord: zod.object({
+    id: zod.string(),
+    assetId: zod.string(),
+    date: zod.coerce.date(),
+    technicianName: zod.string().optional(),
+    companyName: zod.string().optional(),
+    description: zod.string(),
+    cost: zod.number().optional(),
+    nextServiceDate: zod.coerce.date().optional(),
+    receiptUrl: zod.string().optional(),
+    verified: zod.boolean().optional(),
+    createdAt: zod.coerce.date(),
+  }),
+});
+
+/**
+ * @summary Open tasks due in the next 7 days across the user's own properties
+ */
+export const ListUpcomingMaintenanceResponse = zod.object({
+  tasks: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      nextDueDate: zod.coerce.date(),
+      assetId: zod.string(),
+      assetName: zod.string(),
+    }),
+  ),
+});
+
+/**
+ * @summary Current user's subscription tier and AI usage
+ */
+export const GetSubscriptionResponse = zod.object({
+  tier: zod.enum(["essential", "basic", "managed", "concierge"]),
+  propertyLimit: zod.number(),
+  stripeCustomerId: zod.string().nullable(),
+  stripeSubscriptionId: zod.string().nullable(),
+  aiScansUsed: zod.number(),
+  aiPlansUsed: zod.number(),
+});
+
+/**
+ * @summary Move back to the free tier (only when there is no live Stripe subscription)
+ */
+export const DowngradeSubscriptionResponse = zod.object({
+  tier: zod.enum(["essential", "basic", "managed", "concierge"]),
+  propertyLimit: zod.number(),
+});
+
+/**
+ * @summary Available paid plans and prices (public; empty on Stripe errors)
+ */
+export const ListStripePlansResponse = zod.object({
+  plans: zod.array(
+    zod.object({
+      productId: zod.string(),
+      name: zod.string(),
+      description: zod.string().nullable(),
+      tier: zod.string(),
+      prices: zod.array(
+        zod.object({
+          id: zod.string(),
+          unitAmount: zod
+            .number()
+            .nullable()
+            .describe("Smallest currency unit (cents)"),
+          currency: zod.string(),
+          interval: zod.enum(["day", "week", "month", "year"]).optional(),
+        }),
+      ),
+    }),
+  ),
+});
+
+/**
+ * @summary Create a Stripe Checkout session for a paid tier
+ */
+export const CreateStripeCheckoutBody = zod.object({
+  tier: zod.enum(["basic", "managed", "concierge"]),
+});
+
+export const CreateStripeCheckoutResponse = zod.object({
+  url: zod.string().nullable(),
+});
+
+/**
+ * @summary Confirm a completed checkout session and apply the tier
+ */
+export const SyncStripeCheckoutBody = zod.object({
+  sessionId: zod.string(),
+});
+
+export const SyncStripeCheckoutResponse = zod.object({
+  tier: zod.enum(["essential", "basic", "managed", "concierge"]),
+  propertyLimit: zod.number(),
+});
+
+/**
+ * @summary Open the Stripe billing portal for an existing customer
+ */
+export const CreateStripePortalSessionResponse = zod.object({
+  url: zod.string().nullable(),
+});
+
+/**
+ * @summary Register (or re-assign) an Expo push token for the current user
+ */
+
+export const RegisterPushTokenBody = zod.object({
+  token: zod.string().min(1),
+  platform: zod.string().optional().describe("Ignored on DELETE"),
+});
+
+export const RegisterPushTokenResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Remove one of the current user's push tokens
+ */
+
+export const UnregisterPushTokenBody = zod.object({
+  token: zod.string().min(1),
+  platform: zod.string().optional().describe("Ignored on DELETE"),
+});
+
+export const UnregisterPushTokenResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS (no auth)
+ */
+export const GetPublicStorageObjectParams = zod.object({
+  filePath: zod.coerce.string(),
+});
+
+/**
+ * @summary Printable QR label data for a property's active assets (or one asset)
+ */
+export const ListPropertyQrLabelsParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const ListPropertyQrLabelsQueryParams = zod.object({
+  assetId: zod.coerce
+    .string()
+    .optional()
+    .describe("Return only this asset's label (retired assets allowed)"),
+});
+
+export const ListPropertyQrLabelsResponse = zod.object({
+  propertyId: zod.string(),
+  propertyName: zod.string(),
+  labels: zod.array(
+    zod.object({
+      assetId: zod.string(),
+      name: zod.string(),
+      category: zod.string(),
+      registryId: zod
+        .string()
+        .describe(
+          "Short stable ID, CDA- plus the first 8 hex chars of the asset UUID",
+        ),
+      protocol: zod.string().describe("CDA|<uuid>|<registryId>"),
+    }),
+  ),
+});
+
+/**
+ * @summary Public, non-sensitive info for a scanned asset label (no auth)
+ */
+export const GetPublicQrAssetParams = zod.object({
+  assetId: zod.coerce.string().describe("Full asset UUID"),
+});
+
+export const GetPublicQrAssetResponse = zod.object({
+  registryId: zod.string(),
+  category: zod.string(),
+});
+
+/**
+ * @summary Whether the signed-in user can open the scanned asset
+ */
+export const GetQrAssetAccessParams = zod.object({
+  assetId: zod.coerce.string(),
+});
+
+export const GetQrAssetAccessResponse = zod.object({
+  hasAccess: zod.boolean(),
+  propertyId: zod.string().nullable(),
+  assetId: zod.string().nullable(),
+  isTechnician: zod.boolean(),
+});
+
+/**
+ * @summary Technician scan result for an asset (UUID, registry ID, CDA protocol string or label URL)
+ */
+export const GetTechnicianScannedAssetParams = zod.object({
+  ref: zod.coerce.string(),
+});
+
+export const GetTechnicianScannedAssetResponse = zod.object({
+  assetId: zod.string(),
+  registryId: zod.string(),
+  category: zod.string(),
+  hasActiveJob: zod.boolean(),
+  myJobs: zod.array(
+    zod.object({
+      id: zod.string(),
+      description: zod.string(),
+      urgency: zod.string(),
+      status: zod.string(),
+      scheduledAt: zod.coerce.date().nullish(),
+      acceptedAt: zod.coerce.date().nullish(),
+      createdAt: zod.coerce.date(),
+      propertyAddress: zod
+        .string()
+        .nullish()
+        .describe("Only while the job is active and assigned to the caller"),
+      propertyCity: zod.string().nullish(),
+      propertyState: zod.string().nullish(),
+      contactPhone: zod
+        .string()
+        .nullish()
+        .describe("Only while the job is active and assigned to the caller"),
+    }),
+  ),
+  openJobs: zod.array(
+    zod.object({
+      id: zod.string(),
+      description: zod.string(),
+      urgency: zod.string(),
+      status: zod.string(),
+      assetName: zod.string(),
+      assetCategory: zod.string(),
+      city: zod.string().nullish(),
+      state: zod.string().nullish(),
+      zipCode: zod.string().nullish(),
+      latitude: zod.number().nullish(),
+      longitude: zod.number().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  ),
+  asset: zod
+    .object({
+      id: zod.string(),
+      name: zod.string(),
+      category: zod.string(),
+      brand: zod.string().nullish(),
+      model: zod.string().nullish(),
+      serialNumber: zod.string().nullish(),
+      installDate: zod.string().nullish(),
+      warrantyExpiry: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      retiredAt: zod.coerce.date().nullish(),
+    })
+    .nullable()
+    .describe("Only when the caller has an active job on this asset"),
+  serviceHistory: zod
+    .array(
+      zod.object({
+        id: zod.string(),
+        date: zod.string(),
+        description: zod.string(),
+        companyName: zod.string().nullish(),
+        technicianName: zod.string().nullish(),
+        cost: zod.string().nullish(),
+        nextServiceDate: zod.string().nullish(),
+        verified: zod.boolean(),
+      }),
+    )
+    .nullable(),
 });

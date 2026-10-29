@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useUser } from "@clerk/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   useGetProperty,
   getGetPropertyQueryKey,
@@ -12,19 +12,23 @@ import {
   getListAssetsQueryKey,
   useUpdateProperty,
   type Asset,
+  type ListAssetsParams,
+  type Property,
 } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { CollaboratorsPanel } from "@/components/collaborators-panel";
 import { EditAssetSheet } from "@/components/edit-asset-sheet";
 import { EditPropertySheet } from "@/components/edit-property-sheet";
+import { PropertySummaryCard } from "@/components/property-detail/property-summary-card";
+import { RetiredAssetsSection } from "@/components/property-detail/retired-assets-section";
 import { useToast } from "@/hooks/use-toast";
 import {
+  QrCode,
   Building2,
   MapPin,
   Plus,
@@ -32,17 +36,15 @@ import {
   ShieldAlert,
   AlertTriangle,
   ArrowLeft,
-  CalendarDays,
   Ruler,
   BedDouble,
   Bath,
   DollarSign,
   Pencil,
-  Archive,
-  ChevronDown,
-  ChevronRight,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format } from "@/lib/date";
+
+const RETIRED_PARAMS: ListAssetsParams = { includeRetired: true };
 
 const statusIcon = {
   verified:        <ShieldCheck className="h-4 w-4 text-chart-1" />,
@@ -50,20 +52,23 @@ const statusIcon = {
   unverified:      <ShieldAlert className="h-4 w-4 text-muted-foreground" />,
 };
 
-const statusBadge = {
-  verified:        <Badge className="bg-chart-1/10 text-chart-1 border-chart-1/20 hover:bg-chart-1/20">Verified</Badge>,
-  needs_attention: <Badge variant="destructive">Needs Attention</Badge>,
-  unverified:      <Badge variant="secondary">Unverified</Badge>,
-};
+function StatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
+  if (status === "verified") {
+    return <Badge className="bg-chart-1/10 text-chart-1 border-chart-1/20 hover:bg-chart-1/20">{t("assetDetail.badges.verified")}</Badge>;
+  }
+  if (status === "needs_attention") return <Badge variant="destructive">{t("assetDetail.badges.needsAttention")}</Badge>;
+  return <Badge variant="secondary">{t("assetDetail.badges.unverified")}</Badge>;
+}
 
 export default function PropertyDetail() {
   const { id } = useParams<{ id: string }>();
   const { user } = useUser();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [addAssetOpen, setAddAssetOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
-  const [retiredOpen, setRetiredOpen] = useState(false);
   const [editPropertyOpen, setEditPropertyOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
@@ -80,15 +85,11 @@ export default function PropertyDetail() {
     query: { enabled: !!id, queryKey: getListAssetsQueryKey(id!) },
   });
 
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-  const authFetch = useAuthFetch();
-  const { data: retiredAssets = [], refetch: refetchRetired } = useQuery<any[]>({
-    queryKey: ["retired-assets", id],
-    enabled: !!id,
-    queryFn: async () => {
-      const res = await authFetch(`${BASE}/api/properties/${id}/assets?includeRetired=true`);
-      const all = await res.json();
-      return all.filter((a: any) => !!a.retiredAt);
+  const { data: retiredAssets = [], refetch: refetchRetired } = useListAssets(id!, RETIRED_PARAMS, {
+    query: {
+      enabled: !!id,
+      queryKey: getListAssetsQueryKey(id!, RETIRED_PARAMS),
+      select: (all) => all.filter((a) => !!a.retiredAt),
     },
   });
 
@@ -104,11 +105,10 @@ export default function PropertyDetail() {
     );
   }
 
-  if (!property) return <div className="p-6 text-center text-muted-foreground">Property not found.</div>;
+  if (!property) return <div className="p-6 text-center text-muted-foreground">{t("propertyDetail.notFound")}</div>;
 
-  const isOwner = !!(user?.id && (property as any).userId === user.id);
-  const healthScore = summary?.healthScore ?? 0;
-  const healthColor = healthScore >= 80 ? "text-chart-1" : healthScore >= 50 ? "text-chart-3" : "text-destructive";
+  // userId is on the row the server returns but not in the generated Property type.
+  const isOwner = !!(user?.id && (property as Property & { userId?: string }).userId === user.id);
 
   const grouped = (assets ?? []).reduce<Record<string, typeof assets>>((acc, a) => {
     if (!acc[a!.category]) acc[a!.category] = [];
@@ -119,7 +119,7 @@ export default function PropertyDetail() {
   function handleAssetCreated(assetId: string) {
     refetchAssets();
     refetchSummary();
-    toast({ title: "Asset added", description: "Maintenance plan generated and added to your dossier." });
+    toast({ title: t("propertyDetail.toast.assetAdded"), description: t("propertyDetail.toast.assetAddedDesc") });
   }
 
   function startEditingName() {
@@ -139,9 +139,10 @@ export default function PropertyDetail() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPropertyQueryKey(id) });
-          toast({ title: "Home renamed", description: `Now called "${trimmed}".` });
+          queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+          toast({ title: t("propertyDetail.toast.renamed"), description: t("propertyDetail.toast.renamedDesc", { name: trimmed }) });
         },
-        onError: () => toast({ title: "Could not save name", variant: "destructive" }),
+        onError: () => toast({ title: t("propertyDetail.toast.renameFailed"), variant: "destructive" }),
         onSettled: () => setEditingName(false),
       }
     );
@@ -151,13 +152,14 @@ export default function PropertyDetail() {
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <Link href="/properties" className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground gap-1.5 mb-2">
         <ArrowLeft className="h-4 w-4" />
-        Back to Properties
+        {t("propertyDetail.back")}
       </Link>
 
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           {editingName ? (
             <input
+              aria-label={t("propertyDetail.homeName")}
               ref={nameInputRef}
               value={nameValue}
               onChange={(e) => setNameValue(e.target.value)}
@@ -174,8 +176,9 @@ export default function PropertyDetail() {
               <h1 className="text-3xl font-bold tracking-tight text-primary">{property.name}</h1>
               <button
                 onClick={startEditingName}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
-                title="Rename home"
+                className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                title={t("propertyDetail.rename")}
+                aria-label={t("propertyDetail.rename")}
               >
                 <Pencil className="h-4 w-4" />
               </button>
@@ -185,24 +188,24 @@ export default function PropertyDetail() {
             <MapPin className="h-3.5 w-3.5" />
             {[property.address, property.city, property.state].filter(Boolean).join(", ")}
           </p>
-          {(property.bedrooms || property.bathrooms || property.sqft) && (
+          {!!(property.bedrooms || property.bathrooms || property.sqft) && (
             <div className="flex items-center gap-3 mt-2 text-sm text-muted-foreground">
-              {property.bedrooms && (
+              {!!property.bedrooms && (
                 <span className="flex items-center gap-1">
                   <BedDouble className="h-3.5 w-3.5" />
-                  {property.bedrooms} bd
+                  {t("propertyDetail.bdShort", { count: property.bedrooms })}
                 </span>
               )}
-              {property.bathrooms && (
+              {!!property.bathrooms && (
                 <span className="flex items-center gap-1">
                   <Bath className="h-3.5 w-3.5" />
-                  {property.bathrooms} ba
+                  {t("propertyDetail.baShort", { count: Number(property.bathrooms) })}
                 </span>
               )}
-              {property.sqft && (
+              {!!property.sqft && (
                 <span className="flex items-center gap-1">
                   <Ruler className="h-3.5 w-3.5" />
-                  {property.sqft.toLocaleString()} sqft
+                  {t("propertyDetail.sqft", { value: property.sqft.toLocaleString() })}
                 </span>
               )}
             </div>
@@ -211,12 +214,20 @@ export default function PropertyDetail() {
         <div className="flex items-center gap-2 shrink-0">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setEditPropertyOpen(true)}>
             <Pencil className="h-3.5 w-3.5" />
-            Edit Property
+            {t("propertyDetail.edit")}
           </Button>
+          {id && (
+            <Button asChild variant="outline" size="sm" className="gap-1.5">
+              <Link href={`/properties/${id}/labels`}>
+                <QrCode className="h-3.5 w-3.5" />
+                {t("qr.printLabels")}
+              </Link>
+            </Button>
+          )}
           {id && (
             <Button className="gap-2" onClick={() => setAddAssetOpen(true)} data-testid="button-add-asset">
               <Plus className="h-4 w-4" />
-              Add Asset
+              {t("assets.addAsset")}
             </Button>
           )}
         </div>
@@ -225,81 +236,18 @@ export default function PropertyDetail() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left — Property Summary */}
         <div className="space-y-4">
-          <Card>
-            {property.photoUrl ? (
-              <div className="h-44 w-full overflow-hidden rounded-t-xl">
-                <img src={property.photoUrl} alt={property.name} className="h-full w-full object-cover" />
-              </div>
-            ) : (
-              <div className="h-32 w-full bg-muted/50 rounded-t-xl flex items-center justify-center">
-                <Building2 className="h-10 w-10 text-muted-foreground/20" />
-              </div>
-            )}
-            <CardContent className="pt-5 space-y-5">
-              <div>
-                <div className="flex justify-between items-center mb-1.5">
-                  <span className="text-sm font-medium">Dossier Health</span>
-                  <span className={`text-sm font-bold ${healthColor}`}>{healthScore}/100</span>
-                </div>
-                <Progress value={healthScore} className="h-2" />
-                <p className="text-[11px] text-muted-foreground mt-1.5">
-                  {summary?.verifiedAssets ?? 0} of {summary?.totalAssets ?? 0} assets verified
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
-                <div>
-                  <p className="text-xs text-muted-foreground">Overdue Tasks</p>
-                  <p className={`text-xl font-bold ${(summary?.overdueTaskCount ?? 0) > 0 ? "text-destructive" : "text-chart-1"}`}>
-                    {summary?.overdueTaskCount ?? 0}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Assets</p>
-                  <p className="text-xl font-bold">{summary?.totalAssets ?? 0}</p>
-                </div>
-              </div>
-
-              {/* Property metadata */}
-              <div className="grid grid-cols-2 gap-3 pt-4 border-t text-sm">
-                {property.yearBuilt && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <CalendarDays className="h-3.5 w-3.5 shrink-0" />
-                    <span>Built {property.yearBuilt}</span>
-                  </div>
-                )}
-                {property.sqft && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Ruler className="h-3.5 w-3.5 shrink-0" />
-                    <span>{property.sqft.toLocaleString()} sqft</span>
-                  </div>
-                )}
-                {property.bedrooms && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <BedDouble className="h-3.5 w-3.5 shrink-0" />
-                    <span>{property.bedrooms} bed</span>
-                  </div>
-                )}
-                {property.bathrooms && (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Bath className="h-3.5 w-3.5 shrink-0" />
-                    <span>{property.bathrooms} bath</span>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <PropertySummaryCard property={property} summary={summary} />
 
           {/* Capital Outlook teaser */}
-          {(assets ?? []).some((a) => (a as any).replacementCost) && (
+          {(assets ?? []).some((a) => a.replacementCost) && (
             <Card className="border-amber-200 bg-amber-50/50">
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-start gap-2.5">
                   <DollarSign className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-semibold text-amber-800">Capital Outlook</p>
+                    <p className="text-xs font-semibold text-amber-800">{t("nav.capitalOutlook")}</p>
                     <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
-                      Est. replacement costs tracked for {(assets ?? []).filter((a) => (a as any).replacementCost).length} assets.
+                      {t("propertyDetail.capitalTeaser", { count: (assets ?? []).filter((a) => a.replacementCost).length })}
                     </p>
                   </div>
                 </div>
@@ -311,12 +259,12 @@ export default function PropertyDetail() {
           {(summary?.assetsByCategory?.length ?? 0) > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Assets by Category</CardTitle>
+                <CardTitle className="text-sm font-medium">{t("propertyDetail.assetsByCategory")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {summary!.assetsByCategory!.map((cat) => (
                   <div key={cat.category} className="flex justify-between items-center text-sm">
-                    <span className="text-muted-foreground">{cat.category}</span>
+                    <span className="text-muted-foreground">{t(`assets.category.${cat.category}`, { defaultValue: cat.category })}</span>
                     <Badge variant="secondary" className="text-xs">{cat.count}</Badge>
                   </div>
                 ))}
@@ -337,7 +285,7 @@ export default function PropertyDetail() {
               <Card key={category}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-                    {category}
+                    {t(`assets.category.${category}`, { defaultValue: category })}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
@@ -351,14 +299,14 @@ export default function PropertyDetail() {
                           <div className="min-w-0">
                             <p className="font-medium text-sm truncate">{asset!.name}</p>
                             <p className="text-xs text-muted-foreground truncate">
-                              {[asset!.brand, asset!.model].filter(Boolean).join(" · ") || "No specs on file"}
+                              {[asset!.brand, asset!.model].filter(Boolean).join(" · ") || t("propertyDetail.noSpecs")}
                             </p>
                           </div>
                         </Link>
                         <div className="flex items-center gap-2 shrink-0 ml-2">
-                          {(asset as any).replacementCost && (
+                          {asset!.replacementCost && (
                             <span className="hidden sm:block text-xs text-muted-foreground font-medium">
-                              ${Number((asset as any).replacementCost).toLocaleString()}
+                              ${Number(asset!.replacementCost).toLocaleString()}
                             </span>
                           )}
                           {asset!.installDate && (
@@ -366,11 +314,12 @@ export default function PropertyDetail() {
                               {format(new Date(asset!.installDate), "MMM yyyy")}
                             </span>
                           )}
-                          {statusBadge[asset!.status as keyof typeof statusBadge] ?? statusBadge.unverified}
+                          <StatusBadge status={asset!.status} />
                           <button
                             onClick={(e) => { e.preventDefault(); setEditAsset(asset!); }}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-1 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                            title="Edit asset"
+                            className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity ml-1 p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                            title={t("propertyDetail.editAsset")}
+                            aria-label={t("propertyDetail.editAssetNamed", { name: asset!.name })}
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
@@ -385,13 +334,13 @@ export default function PropertyDetail() {
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <Building2 className="h-10 w-10 text-muted-foreground/30 mb-4" />
-                <h3 className="font-semibold text-base mb-1">No assets tracked yet</h3>
+                <h3 className="font-semibold text-base mb-1">{t("assets.noAssetsTitle")}</h3>
                 <p className="text-sm text-muted-foreground max-w-xs mb-5">
-                  Start your dossier by adding your home's major systems — HVAC, water heater, roof, and more.
+                  {t("propertyDetail.emptyDesc")}
                 </p>
                 <Button className="gap-2" onClick={() => setAddAssetOpen(true)}>
                   <Plus className="h-4 w-4" />
-                  Add Your First Asset
+                  {t("propertyDetail.addFirst")}
                 </Button>
               </CardContent>
             </Card>
@@ -407,60 +356,18 @@ export default function PropertyDetail() {
                 <Plus className="h-4 w-4" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-medium">Add Another Asset</p>
-                <p className="text-xs opacity-60">AI Lens auto-fills from a photo</p>
+                <p className="text-sm font-medium">{t("propertyDetail.addAnother")}</p>
+                <p className="text-xs opacity-60">{t("propertyDetail.addAnotherHint")}</p>
               </div>
             </button>
           )}
 
           {/* Retired Assets */}
-          {retiredAssets.length > 0 && (
-            <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 overflow-hidden">
-              <button
-                onClick={() => setRetiredOpen((o) => !o)}
-                className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-amber-800 hover:bg-amber-100/50 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Archive className="h-4 w-4 text-amber-600" />
-                  Retired Assets
-                  <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 border-amber-200 ml-1">
-                    {retiredAssets.length}
-                  </Badge>
-                </span>
-                {retiredOpen
-                  ? <ChevronDown className="h-4 w-4 text-amber-600" />
-                  : <ChevronRight className="h-4 w-4 text-amber-600" />
-                }
-              </button>
-              {retiredOpen && (
-                <div className="divide-y divide-amber-200/50 border-t border-amber-200">
-                  {retiredAssets.map((asset: any) => (
-                    <div key={asset.id} className="flex items-center justify-between py-3 px-4 hover:bg-amber-100/30 transition-colors group">
-                      <Link href={`/properties/${property!.id}/assets/${asset.id}`} className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer">
-                        <div className="bg-amber-100 p-2 rounded-lg shrink-0">
-                          <Archive className="h-3.5 w-3.5 text-amber-500" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-medium text-sm truncate text-amber-900">{asset.name}</p>
-                          <p className="text-xs text-amber-600 truncate">
-                            {[asset.brand, asset.model].filter(Boolean).join(" · ") || asset.category}
-                            {asset.retiredAt && ` · Retired ${format(new Date(asset.retiredAt), "MMM yyyy")}`}
-                          </p>
-                        </div>
-                      </Link>
-                      <button
-                        onClick={() => setEditAsset(asset)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-amber-200/50 text-amber-600 hover:text-amber-800"
-                        title="Edit / Restore asset"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <RetiredAssetsSection
+            retiredAssets={retiredAssets}
+            propertyId={property.id}
+            onEdit={setEditAsset}
+          />
         </div>
       </div>
 
@@ -474,14 +381,14 @@ export default function PropertyDetail() {
       )}
 
       <EditAssetSheet
-        asset={editAsset as any}
+        asset={editAsset}
         open={!!editAsset}
         onOpenChange={(open) => { if (!open) setEditAsset(null); }}
         onSaved={() => { refetchAssets(); refetchRetired(); refetchSummary(); }}
       />
 
       <EditPropertySheet
-        property={property as any}
+        property={property}
         open={editPropertyOpen}
         onOpenChange={setEditPropertyOpen}
         onSaved={() => {

@@ -1,134 +1,117 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useUser, useClerk } from "@clerk/react";
 import { useTranslation } from "react-i18next";
 import { PendingInvitesModal } from "@/components/pending-invites-modal";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import {
+  getListPropertiesQueryKey,
+  lookupProperty,
+  createProperty,
+  generateStewardshipPlan,
+  type PropertyLookupResult,
+} from "@workspace/api-client-react";
+import { apiErrorMessage } from "@/lib/upload";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldError } from "@/components/field-error";
 import { useToast } from "@/hooks/use-toast";
+import { WelcomeStep } from "@/components/onboarding/welcome-step";
+import { OnboardingVerifyStep } from "@/components/onboarding/verify-step";
+import { OnboardingDoneStep } from "@/components/onboarding/done-step";
+import {
+  EMPTY_PROPERTY_FORM,
+  type PropertyForm,
+  type PropertyFormErrors,
+} from "@/components/add-property/verify-step";
 import {
   Building2,
   Search,
   Loader2,
-  CheckCircle2,
   Sparkles,
   MapPin,
-  Calendar,
-  Maximize,
-  BedDouble,
-  Bath,
-  ArrowRight,
   ChevronLeft,
   Wand2,
   ShieldCheck,
-  ClipboardList,
-  Hammer,
   LogOut,
 } from "lucide-react";
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type LookupResult = {
-  address: string;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
-  yearBuilt: number | null;
-  sqft: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  lotSize: number | null;
-  latitude: number | null;
-  longitude: number | null;
-};
-
 type Step = "welcome" | "address" | "verify" | "scouting" | "done";
 
-function StatBadge({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string | number | null;
-}) {
-  if (value == null) return null;
-  return (
-    <div className="flex items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-sm">
-      <span className="text-muted-foreground">{icon}</span>
-      <div>
-        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">
-          {label}
-        </p>
-        <p className="font-semibold text-sm leading-tight">{value}</p>
-      </div>
-    </div>
-  );
+/** HTTP status carried by generated-client errors; undefined for network failures. */
+function errorStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : undefined;
 }
 
-export function Onboarding() {
+export function Onboarding({
+  onFlowStart,
+  onFinish,
+}: {
+  onFlowStart?: () => void;
+  onFinish?: () => void;
+} = {}) {
   const { user } = useUser();
+  const [, setLocation] = useLocation();
   const { signOut } = useClerk();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const authFetch = useAuthFetch();
-  const firstName = user?.firstName ?? "there";
-
   const [step, setStep] = useState<Step>("welcome");
   const [addressInput, setAddressInput] = useState("");
   const [lookupBusy, setLookupBusy] = useState(false);
-  const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  const [lookupResult, setLookupResult] = useState<PropertyLookupResult | null>(null);
   const [manualMode, setManualMode] = useState(false);
 
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
-  const [state, setState] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [yearBuilt, setYearBuilt] = useState("");
-  const [sqft, setSqft] = useState("");
-  const [bedrooms, setBedrooms] = useState("");
-  const [bathrooms, setBathrooms] = useState("");
+  const [form, setForm] = useState<PropertyForm>(EMPTY_PROPERTY_FORM);
+  const setField = (key: keyof PropertyForm, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   const [saveBusy, setSaveBusy] = useState(false);
   const [scoutResult, setScoutResult] = useState<{ taskCount: number } | null>(null);
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
+  // Set once the POST succeeds, so a retry after a later failure (bad JSON,
+  // scout error) doesn't create a second property.
+  const createdPropertyIdRef = useRef<string | null>(null);
+  const [errors, setErrors] = useState<PropertyFormErrors>({});
+  const clearError = (key: keyof PropertyFormErrors) => setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
 
   async function handleLookup() {
-    if (!addressInput.trim()) return;
+    if (!addressInput.trim()) {
+      setErrors({ addressInput: t("onboarding.errAddressRequired") });
+      return;
+    }
     setLookupBusy(true);
     try {
-      const res = await authFetch(
-        `${BASE}/api/properties/lookup?address=${encodeURIComponent(addressInput.trim())}`
-      );
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
+      let data: PropertyLookupResult;
+      try {
+        data = await lookupProperty({ address: addressInput.trim() });
+      } catch (err) {
         toast({
           title: t("onboarding.addressNotFound"),
-          description: err.error ?? t("onboarding.addressNotFoundDesc"),
+          description: apiErrorMessage(err, t("onboarding.addressNotFoundDesc")),
           variant: "destructive",
         });
         return;
       }
-      const data: LookupResult = await res.json();
       setLookupResult(data);
-      setAddress(data.address);
-      setCity(data.city ?? "");
-      setState(data.state ?? "");
-      setZipCode(data.zipCode ?? "");
-      setYearBuilt(data.yearBuilt != null ? String(data.yearBuilt) : "");
-      setSqft(data.sqft != null ? String(data.sqft) : "");
-      setBedrooms(data.bedrooms != null ? String(data.bedrooms) : "");
-      setBathrooms(data.bathrooms != null ? String(data.bathrooms) : "");
+      setForm({
+        name: data.address,
+        address: data.address,
+        city: data.city ?? "",
+        state: data.state ?? "",
+        zipCode: data.zipCode ?? "",
+        yearBuilt: data.yearBuilt != null ? String(data.yearBuilt) : "",
+        sqft: data.sqft != null ? String(data.sqft) : "",
+        bedrooms: data.bedrooms != null ? String(data.bedrooms) : "",
+        bathrooms: data.bathrooms != null ? String(data.bathrooms) : "",
+      });
       setLatitude(data.latitude ?? null);
       setLongitude(data.longitude ?? null);
-      setName(data.address);
       setStep("verify");
     } finally {
       setLookupBusy(false);
@@ -141,51 +124,68 @@ export function Onboarding() {
   }
 
   async function handleSave() {
-    if (!name.trim() || !address.trim()) return;
+    const next: PropertyFormErrors = {};
+    if (!form.name.trim()) next.name = t("onboarding.errNameRequired");
+    if (!form.address.trim()) next.address = t("onboarding.errStreetRequired");
+    const year = form.yearBuilt ? parseInt(form.yearBuilt) : null;
+    if (year != null && (year < 1600 || year > new Date().getFullYear() + 1)) next.yearBuilt = t("onboarding.errYearInvalid");
+    setErrors(next);
+    if (Object.keys(next).length > 0) return;
     setSaveBusy(true);
     setStep("scouting");
+    onFlowStart?.();
 
     try {
-      const res = await authFetch(`${BASE}/api/properties`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          address: address.trim(),
-          city: city.trim() || null,
-          state: state.trim() || null,
-          zipCode: zipCode.trim() || null,
-          yearBuilt: yearBuilt ? parseInt(yearBuilt) : null,
-          sqft: sqft ? parseInt(sqft) : null,
-          bedrooms: bedrooms ? parseInt(bedrooms) : null,
-          bathrooms: bathrooms ? parseFloat(bathrooms) : null,
-          latitude: latitude ?? undefined,
-          longitude: longitude ?? undefined,
-        }),
-      });
+      let propertyId = createdPropertyIdRef.current;
+      if (propertyId === null) {
+        try {
+          const property = await createProperty({
+            name: form.name.trim(),
+            address: form.address.trim(),
+            city: form.city.trim() || undefined,
+            state: form.state.trim() || undefined,
+            zipCode: form.zipCode.trim() || undefined,
+            yearBuilt: form.yearBuilt ? parseInt(form.yearBuilt) : undefined,
+            sqft: form.sqft ? parseInt(form.sqft) : undefined,
+            bedrooms: form.bedrooms ? parseInt(form.bedrooms) : undefined,
+            bathrooms: form.bathrooms ? parseFloat(form.bathrooms) : undefined,
+            latitude: latitude ?? undefined,
+            longitude: longitude ?? undefined,
+          });
+          propertyId = property.id;
+        } catch (err) {
+          const status = errorStatus(err);
+          if (status === undefined) throw err;
+          if (status < 200 || status >= 300) {
+            toast({ title: t("onboarding.couldNotSave"), variant: "destructive" });
+            setStep("verify");
+            return;
+          }
+          // 2xx but the body couldn't be read: the property exists, id unknown.
+          propertyId = "";
+        }
 
-      if (!res.ok) {
-        toast({ title: t("onboarding.couldNotSave"), variant: "destructive" });
-        setStep("verify");
+        // The property exists from here on. Remember it so a retry can never
+        // POST a duplicate.
+        createdPropertyIdRef.current = propertyId;
+
+        await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+      }
+
+      if (!propertyId) {
+        // Created, but we never learned the id. Send the user on to the
+        // dashboard, which will pick the new property up from the list.
+        await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+        setStep("done");
         return;
       }
 
-      const property = await res.json();
-
-      await queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/properties"] });
-
       try {
-        const scoutRes = await authFetch(
-          `${BASE}/api/properties/${property.id}/scout`,
-          { method: "POST" }
-        );
-        if (scoutRes.ok) {
-          const scoutData = await scoutRes.json();
-          setScoutResult({ taskCount: scoutData.taskCount });
-        }
-      } catch {
-        setScoutResult({ taskCount: 0 });
+        const scoutData = await generateStewardshipPlan(propertyId);
+        setScoutResult({ taskCount: scoutData.taskCount });
+      } catch (err) {
+        // A non-2xx reply leaves the result unset; only a network failure records 0.
+        if (errorStatus(err) === undefined) setScoutResult({ taskCount: 0 });
       }
 
       setStep("done");
@@ -198,7 +198,9 @@ export function Onboarding() {
   }
 
   function handleFinish() {
-    queryClient.refetchQueries({ queryKey: ["/api/properties"] });
+    queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+    setLocation("/dashboard");
+    onFinish?.();
   }
 
   return (
@@ -230,48 +232,7 @@ export function Onboarding() {
 
           {/* ── Step 1: Welcome ── */}
           {step === "welcome" && (
-            <div className="text-center space-y-8">
-              <div className="space-y-3">
-                <div className="inline-flex items-center gap-2 bg-primary/8 text-primary text-sm font-medium px-4 py-1.5 rounded-full">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {t("onboarding.welcomeBadge")}
-                </div>
-                <h1 className="text-4xl font-bold tracking-tight leading-tight">
-                  {t("onboarding.welcomeTitle", { name: firstName })}
-                </h1>
-                <p className="text-muted-foreground text-lg max-w-md mx-auto leading-relaxed">
-                  {t("onboarding.welcomeSubtitle")}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                {([
-                  { icon: ClipboardList, titleKey: "card1Title", descKey: "card1Desc" },
-                  { icon: Hammer,        titleKey: "card2Title", descKey: "card2Desc" },
-                  { icon: ShieldCheck,   titleKey: "card3Title", descKey: "card3Desc" },
-                ] as const).map(({ icon: Icon, titleKey, descKey }) => (
-                  <div
-                    key={titleKey}
-                    className="rounded-xl border bg-card p-4 text-left space-y-2"
-                  >
-                    <div className="bg-primary/10 w-fit rounded-lg p-2">
-                      <Icon className="h-4 w-4 text-primary" />
-                    </div>
-                    <p className="text-sm font-semibold leading-tight">{t(`onboarding.${titleKey}`)}</p>
-                    <p className="text-xs text-muted-foreground leading-snug">{t(`onboarding.${descKey}`)}</p>
-                  </div>
-                ))}
-              </div>
-
-              <Button
-                size="lg"
-                className="gap-2 px-8 text-base"
-                onClick={() => setStep("address")}
-              >
-                {t("onboarding.addMyHome")}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <WelcomeStep firstName={user?.firstName} onStart={() => setStep("address")} />
           )}
 
           {/* ── Step 2: Address Lookup ── */}
@@ -300,7 +261,7 @@ export function Onboarding() {
 
               <div className="space-y-2">
                 <Label htmlFor="ob-address" className="text-sm font-medium">
-                  {t("onboarding.streetAddress")}
+                  {t("onboarding.streetAddress")} <span className="text-destructive" aria-hidden="true">*</span>
                 </Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -309,15 +270,18 @@ export function Onboarding() {
                       id="ob-address"
                       placeholder={t("onboarding.addressPlaceholder")}
                       value={addressInput}
-                      onChange={(e) => setAddressInput(e.target.value)}
+                      onChange={(e) => { setAddressInput(e.target.value); clearError("addressInput"); }}
                       onKeyDown={(e) => e.key === "Enter" && handleLookup()}
                       className="pl-9"
                       autoFocus
+                      required
+                      aria-invalid={!!errors.addressInput}
+                      aria-describedby={errors.addressInput ? "ob-address-error" : undefined}
                     />
                   </div>
                   <Button
                     onClick={handleLookup}
-                    disabled={!addressInput.trim() || lookupBusy}
+                    disabled={lookupBusy}
                     className="gap-2 shrink-0"
                   >
                     {lookupBusy ? (
@@ -328,6 +292,7 @@ export function Onboarding() {
                     {lookupBusy ? t("onboarding.lookingUp") : t("onboarding.lookUp")}
                   </Button>
                 </div>
+                <FieldError id="ob-address-error" message={errors.addressInput} />
               </div>
 
               <div className="rounded-xl border border-dashed bg-muted/30 px-4 py-4 space-y-3">
@@ -364,102 +329,17 @@ export function Onboarding() {
 
           {/* ── Step 3: Verify ── */}
           {step === "verify" && (
-            <div className="space-y-5">
-              <div>
-                <button
-                  onClick={() => { setManualMode(false); setStep("address"); }}
-                  className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                  {t("onboarding.back")}
-                </button>
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="bg-emerald-100 p-2.5 rounded-xl">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">
-                      {manualMode ? t("onboarding.manualTitle") : t("onboarding.verifyTitle")}
-                    </h2>
-                    <p className="text-muted-foreground text-sm mt-0.5">
-                      {manualMode ? t("onboarding.manualSubtitle") : t("onboarding.verifySubtitle")}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {lookupResult && !manualMode && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <StatBadge icon={<Calendar className="h-3.5 w-3.5" />} label={t("onboarding.labelYearBuilt")} value={lookupResult.yearBuilt} />
-                  <StatBadge icon={<Maximize className="h-3.5 w-3.5" />} label={t("onboarding.labelSqFt")} value={lookupResult.sqft?.toLocaleString() ?? null} />
-                  <StatBadge icon={<BedDouble className="h-3.5 w-3.5" />} label={t("onboarding.labelBeds")} value={lookupResult.bedrooms} />
-                  <StatBadge icon={<Bath className="h-3.5 w-3.5" />} label={t("onboarding.labelBaths")} value={lookupResult.bathrooms} />
-                </div>
-              )}
-
-              <div className="space-y-3 rounded-xl border bg-card p-5">
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelPropertyName")}</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t("onboarding.propertyNamePlaceholder")}
-                    autoFocus={manualMode}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelStreetAddress")}</Label>
-                  <Input
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder={t("onboarding.streetAddressPlaceholder")}
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="space-y-1 col-span-2">
-                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelCity")}</Label>
-                    <Input value={city} onChange={(e) => setCity(e.target.value)} placeholder={t("onboarding.cityPlaceholder")} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelState")}</Label>
-                    <Input value={state} onChange={(e) => setState(e.target.value)} maxLength={2} placeholder={t("onboarding.statePlaceholder")} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelYearBuilt")}</Label>
-                    <Input value={yearBuilt} onChange={(e) => setYearBuilt(e.target.value)} type="number" placeholder="1990" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelSqFt")}</Label>
-                    <Input value={sqft} onChange={(e) => setSqft(e.target.value)} type="number" placeholder="2000" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelBeds")}</Label>
-                    <Input value={bedrooms} onChange={(e) => setBedrooms(e.target.value)} type="number" placeholder="3" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-muted-foreground">{t("onboarding.labelBaths")}</Label>
-                    <Input value={bathrooms} onChange={(e) => setBathrooms(e.target.value)} type="number" step="0.5" placeholder="2" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Sparkles className="h-3.5 w-3.5 text-primary" />
-                  {t("onboarding.scoutRunning")}
-                </div>
-                <Button
-                  onClick={handleSave}
-                  disabled={!name.trim() || !address.trim() || saveBusy}
-                  className="gap-1.5"
-                >
-                  {t("onboarding.saveAndGenerate")}
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <OnboardingVerifyStep
+              form={form}
+              setField={setField}
+              errors={errors}
+              clearError={clearError}
+              lookupResult={lookupResult}
+              manualMode={manualMode}
+              saveBusy={saveBusy}
+              onBack={() => { setManualMode(false); setStep("address"); }}
+              onSave={handleSave}
+            />
           )}
 
           {/* ── Step 4: AI Scouting ── */}
@@ -492,60 +372,7 @@ export function Onboarding() {
 
           {/* ── Step 5: Done ── */}
           {step === "done" && (
-            <div className="space-y-6 text-center">
-              <div className="flex flex-col items-center gap-4">
-                <div className="bg-emerald-100 rounded-full p-5">
-                  <CheckCircle2 className="h-10 w-10 text-emerald-600" />
-                </div>
-                <div className="space-y-2">
-                  <h2 className="text-3xl font-bold">{t("onboarding.doneTitle")}</h2>
-                  <p className="text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                    {t("onboarding.doneSubtitle")}
-                  </p>
-                </div>
-              </div>
-
-              {scoutResult && scoutResult.taskCount > 0 && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3 text-left">
-                  <Sparkles className="h-5 w-5 text-emerald-600 shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-emerald-800">
-                      {t("onboarding.tasksGenerated", { count: scoutResult.taskCount })}
-                    </p>
-                    <p className="text-xs text-emerald-700 mt-0.5">
-                      {t("onboarding.tasksGeneratedDesc")}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-3">
-                {([
-                  { icon: Building2,    labelKey: "confirmProperty" },
-                  { icon: Wand2,        labelKey: "confirmAI" },
-                  { icon: ClipboardList, labelKey: "confirmTasks" },
-                ] as const).map(({ icon: Icon, labelKey }) => (
-                  <div
-                    key={labelKey}
-                    className="rounded-xl border bg-card p-4 flex flex-col items-center gap-2"
-                  >
-                    <div className="bg-emerald-100 rounded-lg p-2">
-                      <Icon className="h-4 w-4 text-emerald-600" />
-                    </div>
-                    <p className="text-xs font-medium text-center leading-tight">{t(`onboarding.${labelKey}`)}</p>
-                  </div>
-                ))}
-              </div>
-
-              <Button
-                size="lg"
-                className="gap-2 px-8 w-full"
-                onClick={handleFinish}
-              >
-                {t("onboarding.goToDashboard")}
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
+            <OnboardingDoneStep scoutResult={scoutResult} onFinish={handleFinish} />
           )}
         </div>
       </div>

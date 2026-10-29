@@ -1,41 +1,37 @@
 import React, { createContext, useContext } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/expo";
-import type { Inbox } from "@/components/PendingInvitesSheet";
+import { getGetInboxQueryKey, useGetInbox, type Inbox } from "@workspace/api-client-react";
+
+const EMPTY_INBOX: Inbox = { transfers: [], collaboratorInvites: [] };
 
 interface InboxContextValue {
+  inbox: Inbox;
   pendingCount: number;
 }
 
-const InboxContext = createContext<InboxContextValue>({ pendingCount: 0 });
+const InboxContext = createContext<InboxContextValue>({ inbox: EMPTY_INBOX, pendingCount: 0 });
 
 export function InboxProvider({ children }: { children: React.ReactNode }) {
-  const { getToken } = useAuth();
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
-
-  // Uses the same query key as index.tsx so both share the cached response
-  const { data } = useQuery<Inbox>({
-    queryKey: ["inbox"],
-    queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/inbox`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return { transfers: [], collaboratorInvites: [] };
-      return res.json();
-    },
-    staleTime: 30_000,
+  const { isSignedIn } = useAuth();
+  // Single source of truth for the inbox — Home and the tab badges both read from here.
+  // A failed load just shows an empty inbox.
+  const { data } = useGetInbox({
+    query: { queryKey: getGetInboxQueryKey(), enabled: !!isSignedIn, staleTime: 30_000 },
   });
 
+  const inbox = data ?? EMPTY_INBOX;
   const pendingCount =
-    (data?.transfers?.length ?? 0) + (data?.collaboratorInvites?.length ?? 0);
+    (inbox.transfers?.length ?? 0) + (inbox.collaboratorInvites?.length ?? 0);
 
   return (
-    <InboxContext.Provider value={{ pendingCount }}>
+    <InboxContext.Provider value={{ inbox, pendingCount }}>
       {children}
     </InboxContext.Provider>
   );
+}
+
+export function useInbox(): Inbox {
+  return useContext(InboxContext).inbox;
 }
 
 export function useInboxPendingCount(): number {

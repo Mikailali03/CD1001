@@ -13,10 +13,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useListProperties, useListAssets } from "@workspace/api-client-react";
+import { useListAssets, getListAssetsQueryKey } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useSelectedProperty } from "@/context/PropertyContext";
 import { AssetCard, CATEGORY_CONFIG, calcAssetScore } from "@/components/AssetCard";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 const CATEGORY_ORDER = ["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"];
 
@@ -55,12 +57,13 @@ function isUnderWarranty(warrantyExpiry?: string | null): boolean {
 function CategoryHeader({
   category, count, colors,
 }: { category: string; count: number; colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   const cfg = CATEGORY_CONFIG[category] ?? CATEGORY_CONFIG.Other!;
   return (
     <View style={catStyles.wrap}>
       <Text style={catStyles.emoji}>{cfg.emoji}</Text>
       <Text style={[catStyles.label, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-        {category.toUpperCase()}
+        {t(`categories.${category}`, { defaultValue: category }).toUpperCase()}
       </Text>
       <View style={[catStyles.divider, { backgroundColor: colors.border }]} />
       <Text style={[catStyles.count, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -121,25 +124,26 @@ export default function AssetsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: properties = [] } = useListProperties();
-  const activeProperty = properties[0];
+  const { selectedProperty: activeProperty, isLoading: propsLoading } = useSelectedProperty();
   const propertyId = activeProperty?.id ?? "";
 
-  const { data: rawAssets = [], isLoading } = useListAssets(
+  const { data: rawAssets = [], isLoading: assetsLoading } = useListAssets(
     propertyId,
     {},
-    { query: { enabled: !!propertyId } }
+    { query: { queryKey: getListAssetsQueryKey(propertyId, {}), enabled: !!propertyId } }
   );
 
   const assets = rawAssets as RawAsset[];
+  const isLoading = propsLoading || assetsLoading;
 
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Promise.all([
-      queryClient.invalidateQueries(),
+      queryClient.invalidateQueries({ queryKey: getListAssetsQueryKey(propertyId) }),
       new Promise((r) => setTimeout(r, 600)),
     ]);
     setRefreshing(false);
@@ -173,10 +177,10 @@ export default function AssetsScreen() {
             <Feather name="package" size={40} color={colors.mutedForeground} style={{ opacity: 0.4 }} />
           </View>
           <Text style={{ fontSize: 18, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 }}>
-            No Property Found
+            {t("assets.noPropertyTitle")}
           </Text>
           <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular" }}>
-            Set up your home in the web app to manage assets here.
+            {t("assets.noPropertyDesc")}
           </Text>
         </View>
       );
@@ -196,15 +200,17 @@ export default function AssetsScreen() {
       <View style={[headerStyles.wrap, { paddingTop: topPad2, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <View style={headerStyles.row}>
           <View>
-            <Text style={[headerStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>My Assets</Text>
+            <Text style={[headerStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{t("assets.title")}</Text>
             {activeProperty && (
               <Text style={[headerStyles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {(activeProperty as any).name ?? (activeProperty as any).address ?? "My Home"}
+                {activeProperty.name || activeProperty.address || t("common.myHome")}
               </Text>
             )}
           </View>
           {/* Add asset FAB */}
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={t("assets.addAsset")}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               router.push({ pathname: "/add-asset", params: { propertyId } });
@@ -212,17 +218,17 @@ export default function AssetsScreen() {
             style={[headerStyles.fab, { backgroundColor: colors.primary }]}
             activeOpacity={0.85}
           >
-            <Feather name="plus" size={22} color="#fff" />
+            <Feather name="plus" size={22} color={colors.primaryForeground} />
           </TouchableOpacity>
         </View>
 
         {/* Summary pills */}
         {totalAssets > 0 && (
           <View style={headerStyles.pillsRow}>
-            <SummaryPill label={`${totalAssets} tracked`} icon="package" bg={colors.muted} textColor={colors.foreground} />
+            <SummaryPill label={t("assets.trackedCount", { count: totalAssets })} icon="package" bg={colors.muted} textColor={colors.foreground} />
             {underWarrantyCount > 0 && (
               <SummaryPill
-                label={`${underWarrantyCount} under warranty`}
+                label={t("assets.underWarrantyCount", { count: underWarrantyCount })}
                 icon="shield"
                 bg="#d1fae5"
                 textColor="#059669"
@@ -230,7 +236,7 @@ export default function AssetsScreen() {
             )}
             {needsAttentionCount > 0 && (
               <SummaryPill
-                label={`${needsAttentionCount} need${needsAttentionCount === 1 ? "s" : ""} attention`}
+                label={t("assets.needsAttentionCount", { count: needsAttentionCount })}
                 icon="alert-circle"
                 bg={colors.destructive + "18"}
                 textColor={colors.destructive}
@@ -246,9 +252,9 @@ export default function AssetsScreen() {
           <View style={{ backgroundColor: colors.muted, borderRadius: 20, padding: 20, marginBottom: 14 }}>
             <Feather name="package" size={36} color={colors.mutedForeground} style={{ opacity: 0.3 }} />
           </View>
-          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>No assets tracked yet</Text>
+          <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>{t("assets.noAssetsTitle")}</Text>
           <Text style={{ fontSize: 12, color: colors.mutedForeground, textAlign: "center", marginTop: 4, fontFamily: "Inter_400Regular" }}>
-            Add your first home system or appliance to start tracking health scores and maintenance.
+            {t("assets.noAssetsDesc")}
           </Text>
           <TouchableOpacity
             onPress={() => {
@@ -258,8 +264,8 @@ export default function AssetsScreen() {
             style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12, marginTop: 18 }}
             activeOpacity={0.85}
           >
-            <Feather name="plus" size={16} color="#fff" />
-            <Text style={{ fontSize: 14, color: "#fff", fontFamily: "Inter_600SemiBold" }}>Add First Asset</Text>
+            <Feather name="plus" size={16} color={colors.primaryForeground} />
+            <Text style={{ fontSize: 14, color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }}>{t("assets.addFirst")}</Text>
           </TouchableOpacity>
         </View>
       ) : (

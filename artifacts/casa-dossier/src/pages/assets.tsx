@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useProperty } from "@/contexts/property-context";
-import { useQuery } from "@tanstack/react-query";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { useListAssets, getListAssetsQueryKey, type Asset } from "@workspace/api-client-react";
 import { Link, useSearch } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,67 +14,11 @@ import {
   Building2,
   Package,
 } from "lucide-react";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-// ── Category config ────────────────────────────────────────────────────────────
-const CATEGORY_CONFIG: Record<string, { emoji: string; color: string; bg: string; lifespan: number }> = {
-  HVAC:       { emoji: "❄️",  color: "#3b82f6", bg: "#3b82f615", lifespan: 15 },
-  Plumbing:   { emoji: "🔧",  color: "#06b6d4", bg: "#06b6d415", lifespan: 12 },
-  Electrical: { emoji: "⚡",  color: "#eab308", bg: "#eab30815", lifespan: 40 },
-  Roof:       { emoji: "🏠",  color: "#78716c", bg: "#78716c15", lifespan: 25 },
-  Appliance:  { emoji: "🫙",  color: "#8b5cf6", bg: "#8b5cf615", lifespan: 12 },
-  Structural: { emoji: "🏗️", color: "#22c55e", bg: "#22c55e15", lifespan: 50 },
-  Other:      { emoji: "📦",  color: "#94a3b8", bg: "#94a3b815", lifespan: 20 },
-};
+import { calcScore, categoryConfig, gradeFromScore } from "@/lib/asset-scoring";
 
 const CATEGORY_ORDER = ["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"];
 
-type Asset = {
-  id: string;
-  propertyId: string;
-  name: string;
-  category: string;
-  brand: string | null;
-  model: string | null;
-  serialNumber: string | null;
-  installDate: string | null;
-  warrantyExpiry: string | null;
-  replacementCost: string | null;
-  status: string;
-  notes: string | null;
-};
-
-// ── Per-asset health score ─────────────────────────────────────────────────────
-function calcScore(asset: Asset): number {
-  let score = 100;
-  const cfg = CATEGORY_CONFIG[asset.category] ?? CATEGORY_CONFIG.Other!;
-
-  if (asset.installDate) {
-    const ageYears = (Date.now() - new Date(asset.installDate).getTime()) / (365.25 * 24 * 3600 * 1000);
-    const agePct = Math.min(ageYears / cfg.lifespan, 1);
-    score -= Math.round(agePct * 40);
-  }
-
-  if (asset.status === "needs_attention") score -= 25;
-  else if (asset.status === "unverified") score -= 5;
-  if (asset.status === "verified") score = Math.min(score + 5, 100);
-  if (asset.warrantyExpiry && new Date(asset.warrantyExpiry) > new Date()) {
-    score = Math.min(score + 5, 100);
-  }
-
-  return Math.max(0, Math.round(score));
-}
-
-function gradeFromScore(score: number) {
-  if (score >= 90) return { grade: "A", color: "#3d7a5f" };
-  if (score >= 75) return { grade: "B", color: "#4b7fb5" };
-  if (score >= 55) return { grade: "C", color: "#c8853a" };
-  if (score >= 35) return { grade: "D", color: "#b85a2a" };
-  return { grade: "F", color: "#c0392b" };
-}
-
-function isUnderWarranty(warrantyExpiry: string | null): boolean {
+function isUnderWarranty(warrantyExpiry?: string | null): boolean {
   if (!warrantyExpiry) return false;
   return new Date(warrantyExpiry) > new Date();
 }
@@ -108,8 +51,9 @@ function RadialGauge({ score }: { score: number }) {
 
 // ── Asset Card ────────────────────────────────────────────────────────────────
 function AssetCard({ asset, propertyId }: { asset: Asset; propertyId: string }) {
+  const { t } = useTranslation();
   const score = calcScore(asset);
-  const cfg = CATEGORY_CONFIG[asset.category] ?? CATEGORY_CONFIG.Other!;
+  const cfg = categoryConfig(asset.category);
   const underWarranty = isUnderWarranty(asset.warrantyExpiry);
 
   return (
@@ -133,12 +77,12 @@ function AssetCard({ asset, propertyId }: { asset: Asset; propertyId: string }) 
             {underWarranty && (
               <Badge className="text-[9px] px-1.5 py-0 h-4 bg-emerald-100 text-emerald-700 border-emerald-200 font-bold gap-0.5">
                 <ShieldCheck className="h-2.5 w-2.5" />
-                Warranty
+                {t("assets.warranty")}
               </Badge>
             )}
             {asset.status === "needs_attention" && (
               <Badge className="text-[9px] px-1.5 py-0 h-4 bg-destructive/10 text-destructive border-destructive/20 font-bold">
-                Needs Attention
+                {t("assets.needsAttention")}
               </Badge>
             )}
           </div>
@@ -148,8 +92,8 @@ function AssetCard({ asset, propertyId }: { asset: Asset; propertyId: string }) 
             </p>
           )}
           {asset.serialNumber && (
-            <p className="text-[10px] text-muted-foreground/70 font-mono mt-0.5 truncate">
-              S/N: {asset.serialNumber}
+            <p className="text-xs text-muted-foreground/70 font-mono mt-0.5 truncate">
+              {t("assets.serialNumber")}: {asset.serialNumber}
             </p>
           )}
         </div>
@@ -193,15 +137,8 @@ export default function MyAssets() {
     if (search.includes("add=1")) setAddOpen(true);
   }, [search]);
 
-  const authFetch = useAuthFetch();
-  const { data: assets = [], isLoading: assetsLoading } = useQuery<Asset[]>({
-    queryKey: ["assets", activePropertyId],
-    queryFn: async () => {
-      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/assets`);
-      if (!res.ok) throw new Error("Failed to fetch assets");
-      return res.json();
-    },
-    enabled: !!activePropertyId,
+  const { data: assets = [], isLoading: assetsLoading } = useListAssets(activePropertyId ?? "", undefined, {
+    query: { queryKey: getListAssetsQueryKey(activePropertyId ?? ""), enabled: !!activePropertyId },
   });
 
   if (propLoading || (!!activePropertyId && assetsLoading)) return <AssetsSkeleton />;
@@ -216,9 +153,9 @@ export default function MyAssets() {
         <p className="text-muted-foreground max-w-sm mb-6 text-sm">
           {t("assets.noPropertyDesc")}
         </p>
-        <Link href="/properties">
-          <Button className="gap-2"><Plus className="h-4 w-4" />{t("assets.addYourHome")}</Button>
-        </Link>
+        <Button asChild className="gap-2">
+          <Link href="/properties"><Plus className="h-4 w-4" />{t("assets.addYourHome")}</Link>
+        </Button>
       </div>
     );
   }
@@ -257,17 +194,17 @@ export default function MyAssets() {
       <div className="flex flex-wrap gap-2">
         <div className="flex items-center gap-1.5 bg-secondary rounded-full px-3 py-1.5 text-xs font-medium">
           <Package className="h-3.5 w-3.5 text-muted-foreground" />
-          {totalAssets} {t("assets.tracked")}
+          {t("assets.trackedCount", { count: totalAssets })}
         </div>
         {underWarrantyCount > 0 && (
           <div className="flex items-center gap-1.5 bg-emerald-100 text-emerald-700 rounded-full px-3 py-1.5 text-xs font-medium">
             <ShieldCheck className="h-3.5 w-3.5" />
-            {underWarrantyCount} {t("assets.underWarranty")}
+            {t("assets.underWarrantyCount", { count: underWarrantyCount })}
           </div>
         )}
         {needsAttentionCount > 0 && (
           <div className="flex items-center gap-1.5 bg-destructive/10 text-destructive rounded-full px-3 py-1.5 text-xs font-medium">
-            {needsAttentionCount} {needsAttentionCount === 1 ? t("assets.needsAttentionSingular") : t("assets.needAttention")}
+            {t("assets.needsAttentionCount", { count: needsAttentionCount })}
           </div>
         )}
       </div>
@@ -291,14 +228,14 @@ export default function MyAssets() {
         </div>
       ) : (
         Object.entries(grouped).map(([category, items]) => {
-          const cfg = CATEGORY_CONFIG[category] ?? CATEGORY_CONFIG.Other!;
+          const cfg = categoryConfig(category);
           return (
             <div key={category} className="space-y-3">
               {/* Category heading */}
               <div className="flex items-center gap-2">
                 <span className="text-base select-none">{cfg.emoji}</span>
                 <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wide">
-                  {category}
+                  {t(`assets.category.${category}`, { defaultValue: category })}
                 </h2>
                 <div className="flex-1 h-px bg-border" />
                 <span className="text-xs text-muted-foreground">{items.length}</span>

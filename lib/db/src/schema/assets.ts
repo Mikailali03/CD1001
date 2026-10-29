@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, numeric } from "drizzle-orm/pg-core";
+import { pgTable, index, text, timestamp, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { propertiesTable } from "./properties";
@@ -23,7 +23,9 @@ export const assetsTable = pgTable("assets", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   retiredAt: timestamp("retired_at"),
-});
+}, (t) => [
+  index("assets_property_id_idx").on(t.propertyId),
+]);
 
 export const insertAssetSchema = createInsertSchema(assetsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertAsset = z.infer<typeof insertAssetSchema>;

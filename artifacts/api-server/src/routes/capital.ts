@@ -5,39 +5,10 @@ import { assetsTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty } from "../lib/access.js";
+import { requireTier } from "../lib/subscription.js";
+import { getExpectedLifespan } from "@workspace/maintenance-specs";
 
 const router = Router();
-
-const BASE_LIFESPAN: Record<string, number> = {
-  HVAC: 17,
-  Plumbing: 12,
-  Electrical: 40,
-  Roof: 22,
-  Appliance: 12,
-  Structural: 50,
-  Other: 15,
-};
-
-function getExpectedLifespan(category: string, name: string): number {
-  const lower = name.toLowerCase();
-  if (lower.includes("water heater")) return 12;
-  if (lower.includes("furnace")) return 20;
-  if (lower.includes("ac") || lower.includes("air condition")) return 15;
-  if (lower.includes("heat pump")) return 15;
-  if (lower.includes("panel") && category === "Electrical") return 40;
-  if (lower.includes("wiring")) return 50;
-  if (lower.includes("asphalt") || lower.includes("shingle")) return 22;
-  if (lower.includes("metal roof")) return 50;
-  if (lower.includes("tile roof")) return 40;
-  if (lower.includes("dishwasher")) return 12;
-  if (lower.includes("refrigerator") || lower.includes("fridge")) return 14;
-  if (lower.includes("washer") || lower.includes("dryer")) return 11;
-  if (lower.includes("oven") || lower.includes("range")) return 15;
-  if (lower.includes("microwave")) return 9;
-  if (lower.includes("foundation")) return 100;
-  if (lower.includes("sump pump")) return 10;
-  return BASE_LIFESPAN[category] ?? 15;
-}
 
 type Urgency = "critical" | "warning" | "good" | "unknown";
 
@@ -50,11 +21,14 @@ function getUrgency(yearsRemaining: number | null): Urgency {
 
 const CapitalOutlookParams = z.object({ propertyId: z.string() });
 
-router.get("/properties/:propertyId/capital-outlook", requireAuth(), async (req, res) => {
+router.get("/properties/:propertyId/capital-outlook", requireAuth(), requireTier("basic"), async (req, res) => {
   const { propertyId } = CapitalOutlookParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
   const assets = await db
     .select()

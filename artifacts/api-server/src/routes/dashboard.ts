@@ -6,7 +6,7 @@ import {
   serviceRecordsTable,
   propertiesTable,
 } from "@workspace/db";
-import { desc, inArray } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperties } from "../lib/access.js";
@@ -32,7 +32,8 @@ router.get("/dashboard", requireAuth(), async (req, res) => {
   const properties = await getAccessibleProperties(req.userId!);
 
   if (properties.length === 0) {
-    return res.json(EMPTY_DASHBOARD);
+    res.json(EMPTY_DASHBOARD);
+    return;
   }
 
   const propertyIds = properties.map((p) => p.id);
@@ -116,7 +117,8 @@ router.get("/dashboard/activity", requireAuth(), async (req, res) => {
   const properties = await getAccessibleProperties(req.userId!);
 
   if (properties.length === 0) {
-    return res.json([]);
+    res.json([]);
+    return;
   }
 
   const propertyIds = properties.map((p) => p.id);

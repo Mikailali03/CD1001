@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   View,
@@ -24,30 +24,26 @@ import {
   useListLockerFiles,
   useListLockerFolders,
   useCreateLockerFile,
+  getListLockerFilesQueryKey,
+  getListLockerFoldersQueryKey,
+  type LockerFile,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useSubscription } from "@/hooks/useSubscription";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import { resolveStorageUrl, storageUrlForObjectPath } from "@/lib/config";
+import { isUpgradeRequiredError } from "@/lib/api-errors";
+import { UploadRejectedError, uploadFailureMessage, uploadPickedFile } from "@/hooks/useImageUpload";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const NUM_COLS = 3;
 const PHOTO_SIZE = (SCREEN_WIDTH - 32 - (NUM_COLS - 1) * 4) / NUM_COLS;
 
-type LockerFile = {
-  id: string;
-  userId?: string;
-  folderId?: string | null;
-  name: string;
-  objectPath: string;
-  contentType: string;
-  size?: number | null;
-  createdAt: string;
-};
-
-type LockerFolder = { id: string; name: string; createdAt: string };
-
 type FolderTabId = "all" | "unorganized" | string;
 
 export default function LockerScreen() {
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { getToken } = useAuth();
@@ -59,19 +55,19 @@ export default function LockerScreen() {
   const [viewingPhoto, setViewingPhoto] = useState<LockerFile | null>(null);
   const [activeFolderId, setActiveFolderId] = useState<FolderTabId>("all");
 
-  const { data: rawFolders = [] } = useListLockerFolders({ query: {} });
-  const folders = rawFolders as LockerFolder[];
+  const { data: folders = [] } = useListLockerFolders({
+    query: { queryKey: getListLockerFoldersQueryKey() },
+  });
 
   const filesParams = activeFolderId !== "all" && activeFolderId !== "unorganized"
     ? { folderId: activeFolderId }
     : {};
 
-  const { data: rawFiles = [], isLoading } = useListLockerFiles(
+  const { data: allFiles = [], isLoading } = useListLockerFiles(
     filesParams,
-    { query: {} }
+    { query: { queryKey: getListLockerFilesQueryKey(filesParams) } }
   );
 
-  const allFiles = rawFiles as LockerFile[];
   const photoFiles = allFiles
     .filter((f) => f.contentType.startsWith("image/"))
     .filter((f) =>
@@ -80,21 +76,43 @@ export default function LockerScreen() {
 
   const { mutateAsync: createFile } = useCreateLockerFile();
 
+  // Uploading is a paid feature (server returns 403 upgrade_required); viewing stays open
+  const { isFreeTier } = useSubscription();
+
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Promise.all([
-      queryClient.invalidateQueries(),
+      // Only this screen's data — files (every folder filter) and folders
+      queryClient.invalidateQueries({ queryKey: getListLockerFilesQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListLockerFoldersQueryKey() }),
       new Promise((r) => setTimeout(r, 600)),
     ]);
     setRefreshing(false);
   };
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
+  // Locker documents are private on the server, so image requests must carry
+  // the session token. Clerk tokens are short-lived, so keep a fresh one.
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const refresh = () =>
+      getToken()
+        .then((t) => { if (alive) setAuthToken(t); })
+        .catch(() => {});
+    refresh();
+    const id = setInterval(refresh, 45_000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [getToken]);
 
-  function photoUrl(f: LockerFile) {
-    return `${baseUrl}/api/storage${f.objectPath}`;
+  function photoSource(f: LockerFile) {
+    return {
+      uri: resolveStorageUrl(storageUrlForObjectPath(f.objectPath)),
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+    };
   }
 
   const pickAndUpload = async (useCamera: boolean) => {
@@ -104,14 +122,14 @@ export default function LockerScreen() {
       if (useCamera) {
         const perm = await ImagePicker.requestCameraPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert("Permission Required", "Camera access is needed to take photos.");
+          Alert.alert(t("locker.permissionTitle"), t("locker.cameraPermission"));
           return;
         }
         result = await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.85 });
       } else {
         const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (!perm.granted) {
-          Alert.alert("Permission Required", "Photo library access is needed.");
+          Alert.alert(t("locker.permissionTitle"), t("locker.libraryPermission"));
           return;
         }
         result = await ImagePicker.launchImageLibraryAsync({
@@ -127,26 +145,14 @@ export default function LockerScreen() {
       setUploadProgress(0);
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      const token = await getToken();
-
       for (let i = 0; i < result.assets.length; i++) {
         const asset = result.assets[i];
         setUploadProgress(Math.round((i / result.assets.length) * 80));
 
-        const name = asset.fileName ?? `photo_${Date.now()}.jpg`;
-        const contentType = asset.mimeType ?? "image/jpeg";
-        const size = asset.fileSize ?? 0;
-
-        const urlRes = await fetch(`${baseUrl}/api/storage/uploads/request-url`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ name, size, contentType }),
+        const { name, objectPath, contentType, size } = await uploadPickedFile({
+          ...asset,
+          fileName: asset.fileName ?? `photo_${Date.now()}.jpg`,
         });
-        if (!urlRes.ok) throw new Error("Failed to get upload URL");
-        const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-
-        const blob = await (await fetch(asset.uri)).blob();
-        await fetch(uploadURL, { method: "PUT", headers: { "Content-Type": contentType }, body: blob });
 
         await createFile({
           data: {
@@ -164,10 +170,17 @@ export default function LockerScreen() {
         setUploadProgress(Math.round(((i + 1) / result.assets.length) * 100));
       }
 
-      await queryClient.invalidateQueries();
+      await queryClient.invalidateQueries({ queryKey: getListLockerFilesQueryKey() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      Alert.alert("Upload Failed", "Something went wrong. Please try again.");
+    } catch (err: unknown) {
+      if (isUpgradeRequiredError(err)) {
+        router.push("/upgrade");
+        return;
+      }
+      Alert.alert(
+        t("locker.uploadFailed"),
+        err instanceof UploadRejectedError ? uploadFailureMessage(err) : t("common.somethingWentWrong"),
+      );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setUploading(false);
@@ -176,45 +189,50 @@ export default function LockerScreen() {
   };
 
   const showAddOptions = () => {
-    Alert.alert("Add Photos", "Choose a source", [
-      { text: "Take Photo", onPress: () => pickAndUpload(true) },
-      { text: "Photo Library", onPress: () => pickAndUpload(false) },
-      { text: "Cancel", style: "cancel" },
+    if (isFreeTier) {
+      Haptics.selectionAsync();
+      router.push("/upgrade");
+      return;
+    }
+    Alert.alert(t("locker.addPhotos"), t("locker.chooseSource"), [
+      { text: t("common.takePhoto"), onPress: () => pickAndUpload(true) },
+      { text: t("locker.photoLibrary"), onPress: () => pickAndUpload(false) },
+      { text: t("common.cancel"), style: "cancel" },
     ]);
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const folderTabs: { id: FolderTabId; label: string; icon: keyof typeof Feather.glyphMap }[] = [
-    { id: "all", label: "All Photos", icon: "image" },
-    { id: "unorganized", label: "Unorganized", icon: "folder" },
+    { id: "all", label: t("locker.allPhotos"), icon: "image" },
+    { id: "unorganized", label: t("locker.unorganized"), icon: "folder" },
     ...folders.map((f) => ({ id: f.id, label: f.name, icon: "folder" as const })),
   ];
 
   const activeTabLabel =
     activeFolderId === "all"
-      ? "All Photos"
+      ? t("locker.allPhotos")
       : activeFolderId === "unorganized"
-      ? "Unorganized"
-      : folders.find((f) => f.id === activeFolderId)?.name ?? "Folder";
+      ? t("locker.unorganized")
+      : folders.find((f) => f.id === activeFolderId)?.name ?? t("locker.folder");
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <View style={styles.headerNav}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} hitSlop={8} onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
             <Feather name="chevron-left" size={24} color={colors.foreground} />
           </TouchableOpacity>
         </View>
         <View style={styles.headerTop}>
           <View>
             <Text style={[styles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              Digital Locker
+              {t("locker.title")}
             </Text>
             {!isLoading && (
               <Text style={[styles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {activeTabLabel} · {photoFiles.length} photo{photoFiles.length !== 1 ? "s" : ""}
+                {t("locker.subtitle", { folder: activeTabLabel, count: photoFiles.length })}
               </Text>
             )}
           </View>
@@ -228,9 +246,9 @@ export default function LockerScreen() {
               <ActivityIndicator size="small" color={colors.primaryForeground} />
             ) : (
               <>
-                <Feather name="upload" size={14} color={colors.primaryForeground} />
+                <Feather name={isFreeTier ? "lock" : "upload"} size={14} color={colors.primaryForeground} />
                 <Text style={[styles.uploadText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
-                  Upload
+                  {t("locker.upload")}
                 </Text>
               </>
             )}
@@ -247,6 +265,8 @@ export default function LockerScreen() {
             const isActive = activeFolderId === tab.id;
             return (
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
                 key={String(tab.id)}
                 style={[
                   styles.tab,
@@ -302,12 +322,12 @@ export default function LockerScreen() {
             <Feather name="image" size={36} color={colors.mutedForeground} style={{ opacity: 0.35 }} />
           </View>
           <Text style={[styles.emptyTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            No photos yet
+            {t("locker.emptyTitle")}
           </Text>
           <Text style={[styles.emptyDesc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
             {activeFolderId === "all"
-              ? "Upload photos to keep a visual record of your home"
-              : `No photos in ${activeTabLabel}`}
+              ? t("locker.emptyDesc")
+              : t("locker.emptyInFolder", { folder: activeTabLabel })}
           </Text>
           <TouchableOpacity
             style={[styles.emptyBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
@@ -315,7 +335,7 @@ export default function LockerScreen() {
           >
             <Feather name="plus" size={14} color={colors.foreground} />
             <Text style={[styles.emptyBtnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-              Upload a photo
+              {t("locker.uploadAPhoto")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -340,7 +360,7 @@ export default function LockerScreen() {
               activeOpacity={0.85}
             >
               <Image
-                source={{ uri: photoUrl(item) }}
+                source={photoSource(item)}
                 style={StyleSheet.absoluteFill}
                 contentFit="cover"
                 transition={200}
@@ -358,12 +378,12 @@ export default function LockerScreen() {
         onRequestClose={() => setViewingPhoto(null)}
       >
         <View style={styles.lightbox}>
-          <TouchableOpacity style={styles.lightboxClose} onPress={() => setViewingPhoto(null)}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("locker.closePhoto")} hitSlop={8} style={styles.lightboxClose} onPress={() => setViewingPhoto(null)}>
             <Feather name="x" size={24} color="#fff" />
           </TouchableOpacity>
           {viewingPhoto && (
             <Image
-              source={{ uri: photoUrl(viewingPhoto) }}
+              source={photoSource(viewingPhoto)}
               style={styles.lightboxImage}
               contentFit="contain"
             />

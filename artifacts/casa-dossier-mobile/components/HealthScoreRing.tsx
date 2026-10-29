@@ -2,6 +2,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import Svg, { Circle, Text as SvgText } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
+import { useTranslation } from "react-i18next";
 
 interface HealthScoreRingProps {
   score: number;
@@ -10,6 +11,7 @@ interface HealthScoreRingProps {
 
 export function HealthScoreRing({ score, size = 120 }: HealthScoreRingProps) {
   const colors = useColors();
+  const { t } = useTranslation();
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -23,7 +25,7 @@ export function HealthScoreRing({ score, size = 120 }: HealthScoreRingProps) {
         : "#EF4444";
 
   const label =
-    score >= 80 ? "Excellent" : score >= 60 ? "Fair" : "Needs Attention";
+    score >= 80 ? t("home.ring.excellent") : score >= 60 ? t("home.ring.fair") : t("home.ring.needsAttention");
 
   return (
     <View style={styles.container}>

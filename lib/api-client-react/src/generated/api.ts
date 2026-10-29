@@ -18,56 +18,93 @@ import type {
 
 import type {
   ActivityItem,
+  AddressAutocompleteResult,
   AdminAnalytics,
   AdminProperty,
   AdminStats,
   AdminTechnician,
   AdminUser,
   Asset,
+  AssetScanResult,
   AssignedJobSummary,
+  AutocompletePropertyAddressParams,
   BackfillResult,
+  CapitalOutlook,
+  ClaimPropertyTransferBody,
+  ClaimPropertyTransferResult,
   Collaborator,
   CompleteJobBody,
+  CompleteMaintenanceTaskBody,
+  CompleteMaintenanceTaskResult,
   CompleteMarketplaceJob200,
   CreateAssetBody,
+  CreateGuideBody,
   CreateLockerFileBody,
   CreateLockerFolderBody,
   CreateMaintenanceTaskBody,
   CreateMarketplaceJobBody,
   CreatePropertyBody,
   CreateServiceRecordBody,
+  CreateStripeCheckoutBody,
   Dashboard,
   EmailTemplate,
   EmailTrigger,
   ErrorEnvelope,
+  GeneratedMaintenanceTasks,
+  GetInvestmentLedgerParams,
   Guide,
   HealthStatus,
   Inbox,
+  InitiatePropertyTransferBody,
+  InvestmentLedger,
   InviteCollaboratorBody,
   ListAdminPropertiesParams,
   ListAdminUsersParams,
   ListAssetsParams,
   ListGuidesParams,
   ListLockerFilesParams,
+  ListPropertyQrLabelsParams,
   LockerFile,
   LockerFolder,
+  LookupPropertyParams,
   MaintenanceTask,
   MarkJobArrived200,
   MarkJobEnRoute200,
   MarketplaceJob,
+  OkResult,
   Property,
+  PropertyLookupResult,
+  PropertyMaintenanceInbox,
+  PropertyReport,
   PropertySummary,
+  PropertyTransfer,
+  PushTokenBody,
+  QrAssetAccess,
+  QrLabelSheet,
+  QrPublicAsset,
+  ScanAssetDataPlateBody,
   ScheduleJobBody,
   ScheduleMarketplaceJob200,
   ServiceRecord,
+  StewardshipPlan,
+  StripePlans,
+  StripeRedirect,
+  Subscription,
+  SubscriptionTierResult,
+  SyncStripeCheckoutBody,
   TechJobDetail,
   TechJobSummary,
+  TechnicianScanResult,
+  TransferClaimDetails,
+  TransferGoneError,
+  UpcomingMaintenance,
   UpdateAdminUserBody,
   UpdateAssetBody,
   UpdateLockerFileBody,
   UpdateLockerFolderBody,
   UpdateMaintenanceTaskBody,
   UpdatePropertyBody,
+  UpgradeRequiredError,
   UploadUrlRequest,
   UploadUrlResponse,
   UpsertEmailTemplateBody,
@@ -2013,6 +2050,92 @@ export function useListGuides<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Publish a new DIY guide and notify all users (admin only)
+ */
+export const getCreateGuideUrl = () => {
+  return `/api/guides`;
+};
+
+export const createGuide = async (
+  createGuideBody: CreateGuideBody,
+  options?: RequestInit,
+): Promise<Guide> => {
+  return customFetch<Guide>(getCreateGuideUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createGuideBody),
+  });
+};
+
+export const getCreateGuideMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createGuide>>,
+    TError,
+    { data: BodyType<CreateGuideBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createGuide>>,
+  TError,
+  { data: BodyType<CreateGuideBody> },
+  TContext
+> => {
+  const mutationKey = ["createGuide"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createGuide>>,
+    { data: BodyType<CreateGuideBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createGuide(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateGuideMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createGuide>>
+>;
+export type CreateGuideMutationBody = BodyType<CreateGuideBody>;
+export type CreateGuideMutationError = ErrorType<void>;
+
+/**
+ * @summary Publish a new DIY guide and notify all users (admin only)
+ */
+export const useCreateGuide = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createGuide>>,
+    TError,
+    { data: BodyType<CreateGuideBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createGuide>>,
+  TError,
+  { data: BodyType<CreateGuideBody> },
+  TContext
+> => {
+  return useMutation(getCreateGuideMutationOptions(options));
+};
 
 /**
  * @summary Get a single DIY guide
@@ -5827,6 +5950,2702 @@ export function useGetAdminAnalytics<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetAdminAnalyticsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Address suggestions as the user types (empty list when unavailable)
+ */
+export const getAutocompletePropertyAddressUrl = (
+  params: AutocompletePropertyAddressParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/properties/autocomplete?${stringifiedParams}`
+    : `/api/properties/autocomplete`;
+};
+
+export const autocompletePropertyAddress = async (
+  params: AutocompletePropertyAddressParams,
+  options?: RequestInit,
+): Promise<AddressAutocompleteResult> => {
+  return customFetch<AddressAutocompleteResult>(
+    getAutocompletePropertyAddressUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAutocompletePropertyAddressQueryKey = (
+  params?: AutocompletePropertyAddressParams,
+) => {
+  return [`/api/properties/autocomplete`, ...(params ? [params] : [])] as const;
+};
+
+export const getAutocompletePropertyAddressQueryOptions = <
+  TData = Awaited<ReturnType<typeof autocompletePropertyAddress>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AutocompletePropertyAddressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof autocompletePropertyAddress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAutocompletePropertyAddressQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof autocompletePropertyAddress>>
+  > = ({ signal }) =>
+    autocompletePropertyAddress(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof autocompletePropertyAddress>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AutocompletePropertyAddressQueryResult = NonNullable<
+  Awaited<ReturnType<typeof autocompletePropertyAddress>>
+>;
+export type AutocompletePropertyAddressQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Address suggestions as the user types (empty list when unavailable)
+ */
+
+export function useAutocompletePropertyAddress<
+  TData = Awaited<ReturnType<typeof autocompletePropertyAddress>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AutocompletePropertyAddressParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof autocompletePropertyAddress>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAutocompletePropertyAddressQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Look up public property details for an address
+ */
+export const getLookupPropertyUrl = (params: LookupPropertyParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/properties/lookup?${stringifiedParams}`
+    : `/api/properties/lookup`;
+};
+
+export const lookupProperty = async (
+  params: LookupPropertyParams,
+  options?: RequestInit,
+): Promise<PropertyLookupResult> => {
+  return customFetch<PropertyLookupResult>(getLookupPropertyUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getLookupPropertyQueryKey = (params?: LookupPropertyParams) => {
+  return [`/api/properties/lookup`, ...(params ? [params] : [])] as const;
+};
+
+export const getLookupPropertyQueryOptions = <
+  TData = Awaited<ReturnType<typeof lookupProperty>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params: LookupPropertyParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupProperty>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getLookupPropertyQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupProperty>>> = ({
+    signal,
+  }) => lookupProperty(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof lookupProperty>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type LookupPropertyQueryResult = NonNullable<
+  Awaited<ReturnType<typeof lookupProperty>>
+>;
+export type LookupPropertyQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Look up public property details for an address
+ */
+
+export function useLookupProperty<
+  TData = Awaited<ReturnType<typeof lookupProperty>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  params: LookupPropertyParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof lookupProperty>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getLookupPropertyQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Generate (or return the existing) AI whole-home stewardship plan
+ */
+export const getGenerateStewardshipPlanUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/scout`;
+};
+
+export const generateStewardshipPlan = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<StewardshipPlan> => {
+  return customFetch<StewardshipPlan>(
+    getGenerateStewardshipPlanUrl(propertyId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getGenerateStewardshipPlanMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateStewardshipPlan>>,
+    TError,
+    { propertyId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateStewardshipPlan>>,
+  TError,
+  { propertyId: string },
+  TContext
+> => {
+  const mutationKey = ["generateStewardshipPlan"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateStewardshipPlan>>,
+    { propertyId: string }
+  > = (props) => {
+    const { propertyId } = props ?? {};
+
+    return generateStewardshipPlan(propertyId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateStewardshipPlanMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateStewardshipPlan>>
+>;
+
+export type GenerateStewardshipPlanMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Generate (or return the existing) AI whole-home stewardship plan
+ */
+export const useGenerateStewardshipPlan = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateStewardshipPlan>>,
+    TError,
+    { propertyId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateStewardshipPlan>>,
+  TError,
+  { propertyId: string },
+  TContext
+> => {
+  return useMutation(getGenerateStewardshipPlanMutationOptions(options));
+};
+
+/**
+ * @summary Projected replacement timeline and costs (basic+ tier)
+ */
+export const getGetCapitalOutlookUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/capital-outlook`;
+};
+
+export const getCapitalOutlook = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<CapitalOutlook> => {
+  return customFetch<CapitalOutlook>(getGetCapitalOutlookUrl(propertyId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCapitalOutlookQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/capital-outlook`] as const;
+};
+
+export const getGetCapitalOutlookQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCapitalOutlook>>,
+  TError = ErrorType<UpgradeRequiredError | ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCapitalOutlook>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCapitalOutlookQueryKey(propertyId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCapitalOutlook>>
+  > = ({ signal }) =>
+    getCapitalOutlook(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCapitalOutlook>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCapitalOutlookQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCapitalOutlook>>
+>;
+export type GetCapitalOutlookQueryError = ErrorType<
+  UpgradeRequiredError | ErrorEnvelope
+>;
+
+/**
+ * @summary Projected replacement timeline and costs (basic+ tier)
+ */
+
+export function useGetCapitalOutlook<
+  TData = Awaited<ReturnType<typeof getCapitalOutlook>>,
+  TError = ErrorType<UpgradeRequiredError | ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCapitalOutlook>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCapitalOutlookQueryOptions(propertyId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Actual vs expected maintenance spend for a date range (basic+ tier)
+ */
+export const getGetInvestmentLedgerUrl = (
+  propertyId: string,
+  params?: GetInvestmentLedgerParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/properties/${propertyId}/ledger?${stringifiedParams}`
+    : `/api/properties/${propertyId}/ledger`;
+};
+
+export const getInvestmentLedger = async (
+  propertyId: string,
+  params?: GetInvestmentLedgerParams,
+  options?: RequestInit,
+): Promise<InvestmentLedger> => {
+  return customFetch<InvestmentLedger>(
+    getGetInvestmentLedgerUrl(propertyId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetInvestmentLedgerQueryKey = (
+  propertyId: string,
+  params?: GetInvestmentLedgerParams,
+) => {
+  return [
+    `/api/properties/${propertyId}/ledger`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetInvestmentLedgerQueryOptions = <
+  TData = Awaited<ReturnType<typeof getInvestmentLedger>>,
+  TError = ErrorType<UpgradeRequiredError | ErrorEnvelope>,
+>(
+  propertyId: string,
+  params?: GetInvestmentLedgerParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getInvestmentLedger>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetInvestmentLedgerQueryKey(propertyId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getInvestmentLedger>>
+  > = ({ signal }) =>
+    getInvestmentLedger(propertyId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getInvestmentLedger>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetInvestmentLedgerQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getInvestmentLedger>>
+>;
+export type GetInvestmentLedgerQueryError = ErrorType<
+  UpgradeRequiredError | ErrorEnvelope
+>;
+
+/**
+ * @summary Actual vs expected maintenance spend for a date range (basic+ tier)
+ */
+
+export function useGetInvestmentLedger<
+  TData = Awaited<ReturnType<typeof getInvestmentLedger>>,
+  TError = ErrorType<UpgradeRequiredError | ErrorEnvelope>,
+>(
+  propertyId: string,
+  params?: GetInvestmentLedgerParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getInvestmentLedger>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetInvestmentLedgerQueryOptions(
+    propertyId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Full property history report (assets with their service records)
+ */
+export const getGetPropertyReportUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/report`;
+};
+
+export const getPropertyReport = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<PropertyReport> => {
+  return customFetch<PropertyReport>(getGetPropertyReportUrl(propertyId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPropertyReportQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/report`] as const;
+};
+
+export const getGetPropertyReportQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPropertyReport>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropertyReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPropertyReportQueryKey(propertyId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPropertyReport>>
+  > = ({ signal }) =>
+    getPropertyReport(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPropertyReport>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPropertyReportQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPropertyReport>>
+>;
+export type GetPropertyReportQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Full property history report (assets with their service records)
+ */
+
+export function useGetPropertyReport<
+  TData = Awaited<ReturnType<typeof getPropertyReport>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropertyReport>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPropertyReportQueryOptions(propertyId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Open maintenance tasks for a property that are overdue or due within 30 days
+ */
+export const getGetPropertyMaintenanceInboxUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/inbox`;
+};
+
+export const getPropertyMaintenanceInbox = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<PropertyMaintenanceInbox> => {
+  return customFetch<PropertyMaintenanceInbox>(
+    getGetPropertyMaintenanceInboxUrl(propertyId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPropertyMaintenanceInboxQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/inbox`] as const;
+};
+
+export const getGetPropertyMaintenanceInboxQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getGetPropertyMaintenanceInboxQueryKey(propertyId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>
+  > = ({ signal }) =>
+    getPropertyMaintenanceInbox(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPropertyMaintenanceInboxQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>
+>;
+export type GetPropertyMaintenanceInboxQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Open maintenance tasks for a property that are overdue or due within 30 days
+ */
+
+export function useGetPropertyMaintenanceInbox<
+  TData = Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPropertyMaintenanceInbox>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPropertyMaintenanceInboxQueryOptions(
+    propertyId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary The property's pending deed transfer, or null (owner only)
+ */
+export const getGetPendingPropertyTransferUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/transfer`;
+};
+
+export const getPendingPropertyTransfer = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<PropertyTransfer | null> => {
+  return customFetch<PropertyTransfer | null>(
+    getGetPendingPropertyTransferUrl(propertyId),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetPendingPropertyTransferQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/transfer`] as const;
+};
+
+export const getGetPendingPropertyTransferQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPendingPropertyTransfer>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPendingPropertyTransfer>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPendingPropertyTransferQueryKey(propertyId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPendingPropertyTransfer>>
+  > = ({ signal }) =>
+    getPendingPropertyTransfer(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPendingPropertyTransfer>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPendingPropertyTransferQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPendingPropertyTransfer>>
+>;
+export type GetPendingPropertyTransferQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary The property's pending deed transfer, or null (owner only)
+ */
+
+export function useGetPendingPropertyTransfer<
+  TData = Awaited<ReturnType<typeof getPendingPropertyTransfer>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPendingPropertyTransfer>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPendingPropertyTransferQueryOptions(
+    propertyId,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Start a deed transfer to another email (cancels any pending one)
+ */
+export const getInitiatePropertyTransferUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/transfer`;
+};
+
+export const initiatePropertyTransfer = async (
+  propertyId: string,
+  initiatePropertyTransferBody: InitiatePropertyTransferBody,
+  options?: RequestInit,
+): Promise<PropertyTransfer> => {
+  return customFetch<PropertyTransfer>(
+    getInitiatePropertyTransferUrl(propertyId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(initiatePropertyTransferBody),
+    },
+  );
+};
+
+export const getInitiatePropertyTransferMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof initiatePropertyTransfer>>,
+    TError,
+    { propertyId: string; data: BodyType<InitiatePropertyTransferBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof initiatePropertyTransfer>>,
+  TError,
+  { propertyId: string; data: BodyType<InitiatePropertyTransferBody> },
+  TContext
+> => {
+  const mutationKey = ["initiatePropertyTransfer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof initiatePropertyTransfer>>,
+    { propertyId: string; data: BodyType<InitiatePropertyTransferBody> }
+  > = (props) => {
+    const { propertyId, data } = props ?? {};
+
+    return initiatePropertyTransfer(propertyId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type InitiatePropertyTransferMutationResult = NonNullable<
+  Awaited<ReturnType<typeof initiatePropertyTransfer>>
+>;
+export type InitiatePropertyTransferMutationBody =
+  BodyType<InitiatePropertyTransferBody>;
+export type InitiatePropertyTransferMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Start a deed transfer to another email (cancels any pending one)
+ */
+export const useInitiatePropertyTransfer = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof initiatePropertyTransfer>>,
+    TError,
+    { propertyId: string; data: BodyType<InitiatePropertyTransferBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof initiatePropertyTransfer>>,
+  TError,
+  { propertyId: string; data: BodyType<InitiatePropertyTransferBody> },
+  TContext
+> => {
+  return useMutation(getInitiatePropertyTransferMutationOptions(options));
+};
+
+/**
+ * @summary Cancel a pending deed transfer (owner only)
+ */
+export const getCancelPropertyTransferUrl = (transferId: string) => {
+  return `/api/transfers/${transferId}`;
+};
+
+export const cancelPropertyTransfer = async (
+  transferId: string,
+  options?: RequestInit,
+): Promise<PropertyTransfer> => {
+  return customFetch<PropertyTransfer>(
+    getCancelPropertyTransferUrl(transferId),
+    {
+      ...options,
+      method: "DELETE",
+    },
+  );
+};
+
+export const getCancelPropertyTransferMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelPropertyTransfer>>,
+    TError,
+    { transferId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelPropertyTransfer>>,
+  TError,
+  { transferId: string },
+  TContext
+> => {
+  const mutationKey = ["cancelPropertyTransfer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelPropertyTransfer>>,
+    { transferId: string }
+  > = (props) => {
+    const { transferId } = props ?? {};
+
+    return cancelPropertyTransfer(transferId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelPropertyTransferMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelPropertyTransfer>>
+>;
+
+export type CancelPropertyTransferMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Cancel a pending deed transfer (owner only)
+ */
+export const useCancelPropertyTransfer = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelPropertyTransfer>>,
+    TError,
+    { transferId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelPropertyTransfer>>,
+  TError,
+  { transferId: string },
+  TContext
+> => {
+  return useMutation(getCancelPropertyTransferMutationOptions(options));
+};
+
+/**
+ * @summary Public details of a pending transfer for the claim page
+ */
+export const getGetTransferClaimUrl = (token: string) => {
+  return `/api/transfers/claim/${token}`;
+};
+
+export const getTransferClaim = async (
+  token: string,
+  options?: RequestInit,
+): Promise<TransferClaimDetails> => {
+  return customFetch<TransferClaimDetails>(getGetTransferClaimUrl(token), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTransferClaimQueryKey = (token: string) => {
+  return [`/api/transfers/claim/${token}`] as const;
+};
+
+export const getGetTransferClaimQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTransferClaim>>,
+  TError = ErrorType<ErrorEnvelope | TransferGoneError>,
+>(
+  token: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTransferClaim>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTransferClaimQueryKey(token);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTransferClaim>>
+  > = ({ signal }) => getTransferClaim(token, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!token,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTransferClaim>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTransferClaimQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTransferClaim>>
+>;
+export type GetTransferClaimQueryError = ErrorType<
+  ErrorEnvelope | TransferGoneError
+>;
+
+/**
+ * @summary Public details of a pending transfer for the claim page
+ */
+
+export function useGetTransferClaim<
+  TData = Awaited<ReturnType<typeof getTransferClaim>>,
+  TError = ErrorType<ErrorEnvelope | TransferGoneError>,
+>(
+  token: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTransferClaim>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTransferClaimQueryOptions(token, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Accept a transfer; the signed-in user (matching verified email) becomes the owner
+ */
+export const getClaimPropertyTransferUrl = (token: string) => {
+  return `/api/transfers/claim/${token}`;
+};
+
+export const claimPropertyTransfer = async (
+  token: string,
+  claimPropertyTransferBody: ClaimPropertyTransferBody,
+  options?: RequestInit,
+): Promise<ClaimPropertyTransferResult> => {
+  return customFetch<ClaimPropertyTransferResult>(
+    getClaimPropertyTransferUrl(token),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(claimPropertyTransferBody),
+    },
+  );
+};
+
+export const getClaimPropertyTransferMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof claimPropertyTransfer>>,
+    TError,
+    { token: string; data: BodyType<ClaimPropertyTransferBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof claimPropertyTransfer>>,
+  TError,
+  { token: string; data: BodyType<ClaimPropertyTransferBody> },
+  TContext
+> => {
+  const mutationKey = ["claimPropertyTransfer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof claimPropertyTransfer>>,
+    { token: string; data: BodyType<ClaimPropertyTransferBody> }
+  > = (props) => {
+    const { token, data } = props ?? {};
+
+    return claimPropertyTransfer(token, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClaimPropertyTransferMutationResult = NonNullable<
+  Awaited<ReturnType<typeof claimPropertyTransfer>>
+>;
+export type ClaimPropertyTransferMutationBody =
+  BodyType<ClaimPropertyTransferBody>;
+export type ClaimPropertyTransferMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Accept a transfer; the signed-in user (matching verified email) becomes the owner
+ */
+export const useClaimPropertyTransfer = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof claimPropertyTransfer>>,
+    TError,
+    { token: string; data: BodyType<ClaimPropertyTransferBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof claimPropertyTransfer>>,
+  TError,
+  { token: string; data: BodyType<ClaimPropertyTransferBody> },
+  TContext
+> => {
+  return useMutation(getClaimPropertyTransferMutationOptions(options));
+};
+
+/**
+ * @summary Read an appliance data plate photo with AI
+ */
+export const getScanAssetDataPlateUrl = () => {
+  return `/api/assets/scan`;
+};
+
+export const scanAssetDataPlate = async (
+  scanAssetDataPlateBody: ScanAssetDataPlateBody,
+  options?: RequestInit,
+): Promise<AssetScanResult> => {
+  return customFetch<AssetScanResult>(getScanAssetDataPlateUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(scanAssetDataPlateBody),
+  });
+};
+
+export const getScanAssetDataPlateMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanAssetDataPlate>>,
+    TError,
+    { data: BodyType<ScanAssetDataPlateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof scanAssetDataPlate>>,
+  TError,
+  { data: BodyType<ScanAssetDataPlateBody> },
+  TContext
+> => {
+  const mutationKey = ["scanAssetDataPlate"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof scanAssetDataPlate>>,
+    { data: BodyType<ScanAssetDataPlateBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return scanAssetDataPlate(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ScanAssetDataPlateMutationResult = NonNullable<
+  Awaited<ReturnType<typeof scanAssetDataPlate>>
+>;
+export type ScanAssetDataPlateMutationBody = BodyType<ScanAssetDataPlateBody>;
+export type ScanAssetDataPlateMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Read an appliance data plate photo with AI
+ */
+export const useScanAssetDataPlate = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof scanAssetDataPlate>>,
+    TError,
+    { data: BodyType<ScanAssetDataPlateBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof scanAssetDataPlate>>,
+  TError,
+  { data: BodyType<ScanAssetDataPlateBody> },
+  TContext
+> => {
+  return useMutation(getScanAssetDataPlateMutationOptions(options));
+};
+
+/**
+ * @summary Generate an AI maintenance plan for an asset (owner only)
+ */
+export const getGenerateAssetMaintenanceTasksUrl = (assetId: string) => {
+  return `/api/assets/${assetId}/generate-tasks`;
+};
+
+export const generateAssetMaintenanceTasks = async (
+  assetId: string,
+  options?: RequestInit,
+): Promise<GeneratedMaintenanceTasks> => {
+  return customFetch<GeneratedMaintenanceTasks>(
+    getGenerateAssetMaintenanceTasksUrl(assetId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getGenerateAssetMaintenanceTasksMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateAssetMaintenanceTasks>>,
+    TError,
+    { assetId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateAssetMaintenanceTasks>>,
+  TError,
+  { assetId: string },
+  TContext
+> => {
+  const mutationKey = ["generateAssetMaintenanceTasks"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateAssetMaintenanceTasks>>,
+    { assetId: string }
+  > = (props) => {
+    const { assetId } = props ?? {};
+
+    return generateAssetMaintenanceTasks(assetId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateAssetMaintenanceTasksMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateAssetMaintenanceTasks>>
+>;
+
+export type GenerateAssetMaintenanceTasksMutationError =
+  ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Generate an AI maintenance plan for an asset (owner only)
+ */
+export const useGenerateAssetMaintenanceTasks = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateAssetMaintenanceTasks>>,
+    TError,
+    { assetId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateAssetMaintenanceTasks>>,
+  TError,
+  { assetId: string },
+  TContext
+> => {
+  return useMutation(getGenerateAssetMaintenanceTasksMutationOptions(options));
+};
+
+/**
+ * @summary Complete a task — schedules the next occurrence and logs a service record
+ */
+export const getCompleteMaintenanceTaskUrl = (taskId: string) => {
+  return `/api/maintenance/${taskId}/complete`;
+};
+
+export const completeMaintenanceTask = async (
+  taskId: string,
+  completeMaintenanceTaskBody: CompleteMaintenanceTaskBody,
+  options?: RequestInit,
+): Promise<CompleteMaintenanceTaskResult> => {
+  return customFetch<CompleteMaintenanceTaskResult>(
+    getCompleteMaintenanceTaskUrl(taskId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(completeMaintenanceTaskBody),
+    },
+  );
+};
+
+export const getCompleteMaintenanceTaskMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeMaintenanceTask>>,
+    TError,
+    { taskId: string; data: BodyType<CompleteMaintenanceTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeMaintenanceTask>>,
+  TError,
+  { taskId: string; data: BodyType<CompleteMaintenanceTaskBody> },
+  TContext
+> => {
+  const mutationKey = ["completeMaintenanceTask"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeMaintenanceTask>>,
+    { taskId: string; data: BodyType<CompleteMaintenanceTaskBody> }
+  > = (props) => {
+    const { taskId, data } = props ?? {};
+
+    return completeMaintenanceTask(taskId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteMaintenanceTaskMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeMaintenanceTask>>
+>;
+export type CompleteMaintenanceTaskMutationBody =
+  BodyType<CompleteMaintenanceTaskBody>;
+export type CompleteMaintenanceTaskMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Complete a task — schedules the next occurrence and logs a service record
+ */
+export const useCompleteMaintenanceTask = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeMaintenanceTask>>,
+    TError,
+    { taskId: string; data: BodyType<CompleteMaintenanceTaskBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeMaintenanceTask>>,
+  TError,
+  { taskId: string; data: BodyType<CompleteMaintenanceTaskBody> },
+  TContext
+> => {
+  return useMutation(getCompleteMaintenanceTaskMutationOptions(options));
+};
+
+/**
+ * @summary Open tasks due in the next 7 days across the user's own properties
+ */
+export const getListUpcomingMaintenanceUrl = () => {
+  return `/api/maintenance/upcoming`;
+};
+
+export const listUpcomingMaintenance = async (
+  options?: RequestInit,
+): Promise<UpcomingMaintenance> => {
+  return customFetch<UpcomingMaintenance>(getListUpcomingMaintenanceUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListUpcomingMaintenanceQueryKey = () => {
+  return [`/api/maintenance/upcoming`] as const;
+};
+
+export const getListUpcomingMaintenanceQueryOptions = <
+  TData = Awaited<ReturnType<typeof listUpcomingMaintenance>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listUpcomingMaintenance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListUpcomingMaintenanceQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listUpcomingMaintenance>>
+  > = ({ signal }) => listUpcomingMaintenance({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listUpcomingMaintenance>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListUpcomingMaintenanceQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listUpcomingMaintenance>>
+>;
+export type ListUpcomingMaintenanceQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Open tasks due in the next 7 days across the user's own properties
+ */
+
+export function useListUpcomingMaintenance<
+  TData = Awaited<ReturnType<typeof listUpcomingMaintenance>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listUpcomingMaintenance>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListUpcomingMaintenanceQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Current user's subscription tier and AI usage
+ */
+export const getGetSubscriptionUrl = () => {
+  return `/api/subscription`;
+};
+
+export const getSubscription = async (
+  options?: RequestInit,
+): Promise<Subscription> => {
+  return customFetch<Subscription>(getGetSubscriptionUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSubscriptionQueryKey = () => {
+  return [`/api/subscription`] as const;
+};
+
+export const getGetSubscriptionQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSubscription>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSubscription>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSubscriptionQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getSubscription>>> = ({
+    signal,
+  }) => getSubscription({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSubscription>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSubscriptionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSubscription>>
+>;
+export type GetSubscriptionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Current user's subscription tier and AI usage
+ */
+
+export function useGetSubscription<
+  TData = Awaited<ReturnType<typeof getSubscription>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSubscription>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSubscriptionQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Move back to the free tier (only when there is no live Stripe subscription)
+ */
+export const getDowngradeSubscriptionUrl = () => {
+  return `/api/subscription/downgrade`;
+};
+
+export const downgradeSubscription = async (
+  options?: RequestInit,
+): Promise<SubscriptionTierResult> => {
+  return customFetch<SubscriptionTierResult>(getDowngradeSubscriptionUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getDowngradeSubscriptionMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof downgradeSubscription>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof downgradeSubscription>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["downgradeSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof downgradeSubscription>>,
+    void
+  > = () => {
+    return downgradeSubscription(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DowngradeSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof downgradeSubscription>>
+>;
+
+export type DowngradeSubscriptionMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Move back to the free tier (only when there is no live Stripe subscription)
+ */
+export const useDowngradeSubscription = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof downgradeSubscription>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof downgradeSubscription>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDowngradeSubscriptionMutationOptions(options));
+};
+
+/**
+ * @summary Available paid plans and prices (public; empty on Stripe errors)
+ */
+export const getListStripePlansUrl = () => {
+  return `/api/stripe/plans`;
+};
+
+export const listStripePlans = async (
+  options?: RequestInit,
+): Promise<StripePlans> => {
+  return customFetch<StripePlans>(getListStripePlansUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListStripePlansQueryKey = () => {
+  return [`/api/stripe/plans`] as const;
+};
+
+export const getListStripePlansQueryOptions = <
+  TData = Awaited<ReturnType<typeof listStripePlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listStripePlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListStripePlansQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listStripePlans>>> = ({
+    signal,
+  }) => listStripePlans({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listStripePlans>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListStripePlansQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listStripePlans>>
+>;
+export type ListStripePlansQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Available paid plans and prices (public; empty on Stripe errors)
+ */
+
+export function useListStripePlans<
+  TData = Awaited<ReturnType<typeof listStripePlans>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listStripePlans>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListStripePlansQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a Stripe Checkout session for a paid tier
+ */
+export const getCreateStripeCheckoutUrl = () => {
+  return `/api/stripe/checkout`;
+};
+
+export const createStripeCheckout = async (
+  createStripeCheckoutBody: CreateStripeCheckoutBody,
+  options?: RequestInit,
+): Promise<StripeRedirect> => {
+  return customFetch<StripeRedirect>(getCreateStripeCheckoutUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createStripeCheckoutBody),
+  });
+};
+
+export const getCreateStripeCheckoutMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStripeCheckout>>,
+    TError,
+    { data: BodyType<CreateStripeCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createStripeCheckout>>,
+  TError,
+  { data: BodyType<CreateStripeCheckoutBody> },
+  TContext
+> => {
+  const mutationKey = ["createStripeCheckout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createStripeCheckout>>,
+    { data: BodyType<CreateStripeCheckoutBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createStripeCheckout(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateStripeCheckoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createStripeCheckout>>
+>;
+export type CreateStripeCheckoutMutationBody =
+  BodyType<CreateStripeCheckoutBody>;
+export type CreateStripeCheckoutMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Create a Stripe Checkout session for a paid tier
+ */
+export const useCreateStripeCheckout = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStripeCheckout>>,
+    TError,
+    { data: BodyType<CreateStripeCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createStripeCheckout>>,
+  TError,
+  { data: BodyType<CreateStripeCheckoutBody> },
+  TContext
+> => {
+  return useMutation(getCreateStripeCheckoutMutationOptions(options));
+};
+
+/**
+ * @summary Confirm a completed checkout session and apply the tier
+ */
+export const getSyncStripeCheckoutUrl = () => {
+  return `/api/stripe/sync`;
+};
+
+export const syncStripeCheckout = async (
+  syncStripeCheckoutBody: SyncStripeCheckoutBody,
+  options?: RequestInit,
+): Promise<SubscriptionTierResult> => {
+  return customFetch<SubscriptionTierResult>(getSyncStripeCheckoutUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(syncStripeCheckoutBody),
+  });
+};
+
+export const getSyncStripeCheckoutMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncStripeCheckout>>,
+    TError,
+    { data: BodyType<SyncStripeCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof syncStripeCheckout>>,
+  TError,
+  { data: BodyType<SyncStripeCheckoutBody> },
+  TContext
+> => {
+  const mutationKey = ["syncStripeCheckout"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof syncStripeCheckout>>,
+    { data: BodyType<SyncStripeCheckoutBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return syncStripeCheckout(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SyncStripeCheckoutMutationResult = NonNullable<
+  Awaited<ReturnType<typeof syncStripeCheckout>>
+>;
+export type SyncStripeCheckoutMutationBody = BodyType<SyncStripeCheckoutBody>;
+export type SyncStripeCheckoutMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Confirm a completed checkout session and apply the tier
+ */
+export const useSyncStripeCheckout = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncStripeCheckout>>,
+    TError,
+    { data: BodyType<SyncStripeCheckoutBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof syncStripeCheckout>>,
+  TError,
+  { data: BodyType<SyncStripeCheckoutBody> },
+  TContext
+> => {
+  return useMutation(getSyncStripeCheckoutMutationOptions(options));
+};
+
+/**
+ * @summary Open the Stripe billing portal for an existing customer
+ */
+export const getCreateStripePortalSessionUrl = () => {
+  return `/api/stripe/portal`;
+};
+
+export const createStripePortalSession = async (
+  options?: RequestInit,
+): Promise<StripeRedirect> => {
+  return customFetch<StripeRedirect>(getCreateStripePortalSessionUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getCreateStripePortalSessionMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStripePortalSession>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createStripePortalSession>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["createStripePortalSession"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createStripePortalSession>>,
+    void
+  > = () => {
+    return createStripePortalSession(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateStripePortalSessionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createStripePortalSession>>
+>;
+
+export type CreateStripePortalSessionMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Open the Stripe billing portal for an existing customer
+ */
+export const useCreateStripePortalSession = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createStripePortalSession>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createStripePortalSession>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getCreateStripePortalSessionMutationOptions(options));
+};
+
+/**
+ * @summary Permanently delete the current user's account and data
+ */
+export const getDeleteUserAccountUrl = () => {
+  return `/api/user`;
+};
+
+export const deleteUserAccount = async (
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteUserAccountUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteUserAccountMutationOptions = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteUserAccount>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteUserAccount>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["deleteUserAccount"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteUserAccount>>,
+    void
+  > = () => {
+    return deleteUserAccount(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteUserAccountMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteUserAccount>>
+>;
+
+export type DeleteUserAccountMutationError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Permanently delete the current user's account and data
+ */
+export const useDeleteUserAccount = <
+  TError = ErrorType<ErrorEnvelope>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteUserAccount>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteUserAccount>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getDeleteUserAccountMutationOptions(options));
+};
+
+/**
+ * @summary Register (or re-assign) an Expo push token for the current user
+ */
+export const getRegisterPushTokenUrl = () => {
+  return `/api/push-tokens`;
+};
+
+export const registerPushToken = async (
+  pushTokenBody: PushTokenBody,
+  options?: RequestInit,
+): Promise<OkResult> => {
+  return customFetch<OkResult>(getRegisterPushTokenUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pushTokenBody),
+  });
+};
+
+export const getRegisterPushTokenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPushToken>>,
+    TError,
+    { data: BodyType<PushTokenBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof registerPushToken>>,
+  TError,
+  { data: BodyType<PushTokenBody> },
+  TContext
+> => {
+  const mutationKey = ["registerPushToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof registerPushToken>>,
+    { data: BodyType<PushTokenBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return registerPushToken(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RegisterPushTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof registerPushToken>>
+>;
+export type RegisterPushTokenMutationBody = BodyType<PushTokenBody>;
+export type RegisterPushTokenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Register (or re-assign) an Expo push token for the current user
+ */
+export const useRegisterPushToken = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof registerPushToken>>,
+    TError,
+    { data: BodyType<PushTokenBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof registerPushToken>>,
+  TError,
+  { data: BodyType<PushTokenBody> },
+  TContext
+> => {
+  return useMutation(getRegisterPushTokenMutationOptions(options));
+};
+
+/**
+ * @summary Remove one of the current user's push tokens
+ */
+export const getUnregisterPushTokenUrl = () => {
+  return `/api/push-tokens`;
+};
+
+export const unregisterPushToken = async (
+  pushTokenBody: PushTokenBody,
+  options?: RequestInit,
+): Promise<OkResult> => {
+  return customFetch<OkResult>(getUnregisterPushTokenUrl(), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(pushTokenBody),
+  });
+};
+
+export const getUnregisterPushTokenMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unregisterPushToken>>,
+    TError,
+    { data: BodyType<PushTokenBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof unregisterPushToken>>,
+  TError,
+  { data: BodyType<PushTokenBody> },
+  TContext
+> => {
+  const mutationKey = ["unregisterPushToken"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof unregisterPushToken>>,
+    { data: BodyType<PushTokenBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return unregisterPushToken(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UnregisterPushTokenMutationResult = NonNullable<
+  Awaited<ReturnType<typeof unregisterPushToken>>
+>;
+export type UnregisterPushTokenMutationBody = BodyType<PushTokenBody>;
+export type UnregisterPushTokenMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove one of the current user's push tokens
+ */
+export const useUnregisterPushToken = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof unregisterPushToken>>,
+    TError,
+    { data: BodyType<PushTokenBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof unregisterPushToken>>,
+  TError,
+  { data: BodyType<PushTokenBody> },
+  TContext
+> => {
+  return useMutation(getUnregisterPushTokenMutationOptions(options));
+};
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS (no auth)
+ */
+export const getGetPublicStorageObjectUrl = (filePath: string) => {
+  return `/api/storage/public-objects/${filePath}`;
+};
+
+export const getPublicStorageObject = async (
+  filePath: string,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetPublicStorageObjectUrl(filePath), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPublicStorageObjectQueryKey = (filePath: string) => {
+  return [`/api/storage/public-objects/${filePath}`] as const;
+};
+
+export const getGetPublicStorageObjectQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicStorageObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  filePath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicStorageObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPublicStorageObjectQueryKey(filePath);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPublicStorageObject>>
+  > = ({ signal }) =>
+    getPublicStorageObject(filePath, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!filePath,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicStorageObject>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicStorageObjectQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicStorageObject>>
+>;
+export type GetPublicStorageObjectQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Serve a public asset from PUBLIC_OBJECT_SEARCH_PATHS (no auth)
+ */
+
+export function useGetPublicStorageObject<
+  TData = Awaited<ReturnType<typeof getPublicStorageObject>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  filePath: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicStorageObject>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicStorageObjectQueryOptions(filePath, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Printable QR label data for a property's active assets (or one asset)
+ */
+export const getListPropertyQrLabelsUrl = (
+  propertyId: string,
+  params?: ListPropertyQrLabelsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/properties/${propertyId}/qr-labels?${stringifiedParams}`
+    : `/api/properties/${propertyId}/qr-labels`;
+};
+
+export const listPropertyQrLabels = async (
+  propertyId: string,
+  params?: ListPropertyQrLabelsParams,
+  options?: RequestInit,
+): Promise<QrLabelSheet> => {
+  return customFetch<QrLabelSheet>(
+    getListPropertyQrLabelsUrl(propertyId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListPropertyQrLabelsQueryKey = (
+  propertyId: string,
+  params?: ListPropertyQrLabelsParams,
+) => {
+  return [
+    `/api/properties/${propertyId}/qr-labels`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getListPropertyQrLabelsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listPropertyQrLabels>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  params?: ListPropertyQrLabelsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPropertyQrLabels>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getListPropertyQrLabelsQueryKey(propertyId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listPropertyQrLabels>>
+  > = ({ signal }) =>
+    listPropertyQrLabels(propertyId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listPropertyQrLabels>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListPropertyQrLabelsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listPropertyQrLabels>>
+>;
+export type ListPropertyQrLabelsQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Printable QR label data for a property's active assets (or one asset)
+ */
+
+export function useListPropertyQrLabels<
+  TData = Awaited<ReturnType<typeof listPropertyQrLabels>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  propertyId: string,
+  params?: ListPropertyQrLabelsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listPropertyQrLabels>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListPropertyQrLabelsQueryOptions(
+    propertyId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Public, non-sensitive info for a scanned asset label (no auth)
+ */
+export const getGetPublicQrAssetUrl = (assetId: string) => {
+  return `/api/qr/assets/${assetId}`;
+};
+
+export const getPublicQrAsset = async (
+  assetId: string,
+  options?: RequestInit,
+): Promise<QrPublicAsset> => {
+  return customFetch<QrPublicAsset>(getGetPublicQrAssetUrl(assetId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetPublicQrAssetQueryKey = (assetId: string) => {
+  return [`/api/qr/assets/${assetId}`] as const;
+};
+
+export const getGetPublicQrAssetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getPublicQrAsset>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  assetId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicQrAsset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetPublicQrAssetQueryKey(assetId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getPublicQrAsset>>
+  > = ({ signal }) => getPublicQrAsset(assetId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!assetId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getPublicQrAsset>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetPublicQrAssetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getPublicQrAsset>>
+>;
+export type GetPublicQrAssetQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Public, non-sensitive info for a scanned asset label (no auth)
+ */
+
+export function useGetPublicQrAsset<
+  TData = Awaited<ReturnType<typeof getPublicQrAsset>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  assetId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getPublicQrAsset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetPublicQrAssetQueryOptions(assetId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Whether the signed-in user can open the scanned asset
+ */
+export const getGetQrAssetAccessUrl = (assetId: string) => {
+  return `/api/qr/assets/${assetId}/access`;
+};
+
+export const getQrAssetAccess = async (
+  assetId: string,
+  options?: RequestInit,
+): Promise<QrAssetAccess> => {
+  return customFetch<QrAssetAccess>(getGetQrAssetAccessUrl(assetId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetQrAssetAccessQueryKey = (assetId: string) => {
+  return [`/api/qr/assets/${assetId}/access`] as const;
+};
+
+export const getGetQrAssetAccessQueryOptions = <
+  TData = Awaited<ReturnType<typeof getQrAssetAccess>>,
+  TError = ErrorType<unknown>,
+>(
+  assetId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQrAssetAccess>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetQrAssetAccessQueryKey(assetId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getQrAssetAccess>>
+  > = ({ signal }) => getQrAssetAccess(assetId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!assetId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getQrAssetAccess>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetQrAssetAccessQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getQrAssetAccess>>
+>;
+export type GetQrAssetAccessQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Whether the signed-in user can open the scanned asset
+ */
+
+export function useGetQrAssetAccess<
+  TData = Awaited<ReturnType<typeof getQrAssetAccess>>,
+  TError = ErrorType<unknown>,
+>(
+  assetId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getQrAssetAccess>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetQrAssetAccessQueryOptions(assetId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Technician scan result for an asset (UUID, registry ID, CDA protocol string or label URL)
+ */
+export const getGetTechnicianScannedAssetUrl = (ref: string) => {
+  return `/api/tech/assets/${ref}`;
+};
+
+export const getTechnicianScannedAsset = async (
+  ref: string,
+  options?: RequestInit,
+): Promise<TechnicianScanResult> => {
+  return customFetch<TechnicianScanResult>(
+    getGetTechnicianScannedAssetUrl(ref),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetTechnicianScannedAssetQueryKey = (ref: string) => {
+  return [`/api/tech/assets/${ref}`] as const;
+};
+
+export const getGetTechnicianScannedAssetQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTechnicianScannedAsset>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  ref: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTechnicianScannedAsset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetTechnicianScannedAssetQueryKey(ref);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTechnicianScannedAsset>>
+  > = ({ signal }) =>
+    getTechnicianScannedAsset(ref, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!ref,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTechnicianScannedAsset>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTechnicianScannedAssetQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTechnicianScannedAsset>>
+>;
+export type GetTechnicianScannedAssetQueryError = ErrorType<ErrorEnvelope>;
+
+/**
+ * @summary Technician scan result for an asset (UUID, registry ID, CDA protocol string or label URL)
+ */
+
+export function useGetTechnicianScannedAsset<
+  TData = Awaited<ReturnType<typeof getTechnicianScannedAsset>>,
+  TError = ErrorType<ErrorEnvelope>,
+>(
+  ref: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTechnicianScannedAsset>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTechnicianScannedAssetQueryOptions(ref, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

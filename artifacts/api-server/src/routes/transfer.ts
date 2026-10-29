@@ -4,13 +4,17 @@ import { propertyTransfersTable, propertiesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
-import { getOwnedProperty } from "../lib/access.js";
+import { getOwnedProperty, getVerifiedEmail } from "../lib/access.js";
+import { claimTransfer } from "../lib/transfers.js";
+import { sendTransferInitiatedEmail } from "../lib/email.js";
 
 const router = Router();
 
 const InitiateParams = z.object({ propertyId: z.string() });
 const InitiateBody = z.object({
   toEmail: z.string().email(),
+  // Ignored — the sender's email comes from their verified Clerk account.
+  // Still accepted so older clients that send it don't get a 400.
   fromEmail: z.string().email().optional(),
 });
 
@@ -23,7 +27,10 @@ router.get("/properties/:propertyId/transfer", requireAuth(), async (req, res) =
   const { propertyId } = InitiateParams.parse(req.params);
 
   const property = await getOwnedProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
   const [transfer] = await db
     .select()
@@ -42,15 +49,24 @@ router.get("/properties/:propertyId/transfer", requireAuth(), async (req, res) =
 // POST /api/properties/:propertyId/transfer — initiate
 router.post("/properties/:propertyId/transfer", requireAuth(), async (req, res) => {
   const { propertyId } = InitiateParams.parse(req.params);
-  const { toEmail, fromEmail } = InitiateBody.parse(req.body);
+  const body = InitiateBody.parse(req.body);
+  const toEmail = body.toEmail.toLowerCase();
 
   const property = await getOwnedProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
-  const senderEmail = fromEmail ?? req.userId;
+  const senderEmail = await getVerifiedEmail(req.userId);
+  if (!senderEmail) {
+    res.status(403).json({ error: "Verify your email address before transferring a home." });
+    return;
+  }
 
-  if (toEmail.toLowerCase() === senderEmail.toLowerCase()) {
-    return res.status(400).json({ error: "You cannot transfer to yourself." });
+  if (toEmail === senderEmail) {
+    res.status(400).json({ error: "You cannot transfer to yourself." });
+    return;
   }
 
   // Cancel any existing pending transfer
@@ -79,6 +95,14 @@ router.post("/properties/:propertyId/transfer", requireAuth(), async (req, res) 
     })
     .returning();
 
+  sendTransferInitiatedEmail({
+    toEmail,
+    senderEmail,
+    property,
+    token: transfer!.token,
+    expiresAt: transfer!.expiresAt,
+  }).catch((err) => req.log.error({ err, transferId: transfer!.id }, "Failed to send transfer email"));
+
   res.status(201).json(transfer);
 });
 
@@ -91,11 +115,17 @@ router.delete("/transfers/:transferId", requireAuth(), async (req, res) => {
     .from(propertyTransfersTable)
     .where(eq(propertyTransfersTable.id, transferId));
 
-  if (!existing) return res.status(404).json({ error: "Transfer not found or already resolved" });
+  if (!existing) {
+    res.status(404).json({ error: "Transfer not found or already resolved" });
+    return;
+  }
 
   // Verify the requesting user owns the source property
   const property = await getOwnedProperty(existing.propertyId, req.userId);
-  if (!property) return res.status(403).json({ error: "Forbidden" });
+  if (!property) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const [transfer] = await db
     .update(propertyTransfersTable)
@@ -107,7 +137,10 @@ router.delete("/transfers/:transferId", requireAuth(), async (req, res) => {
       )
     )
     .returning();
-  if (!transfer) return res.status(404).json({ error: "Transfer not found or already resolved" });
+  if (!transfer) {
+    res.status(404).json({ error: "Transfer not found or already resolved" });
+    return;
+  }
   res.json(transfer);
 });
 
@@ -118,17 +151,45 @@ router.get("/transfers/claim/:token", async (req, res) => {
     .select()
     .from(propertyTransfersTable)
     .where(eq(propertyTransfersTable.token, token));
-  if (!transfer) return res.status(404).json({ error: "Invalid or expired transfer link." });
+  if (!transfer) {
+    res.status(404).json({ error: "Invalid or expired transfer link." });
+    return;
+  }
   if (transfer.status !== "pending") {
-    return res.status(410).json({ error: "This transfer has already been completed or cancelled.", status: transfer.status });
+    res.status(410).json({ error: "This transfer has already been completed or cancelled.", status: transfer.status });
+    return;
   }
 
+  if (transfer.expiresAt && transfer.expiresAt <= new Date()) {
+    res.status(410).json({ error: "This transfer link has expired.", status: "expired" });
+    return;
+  }
+
+  // Unauthenticated endpoint: return only what the claim page displays.
   const [property] = await db
-    .select()
+    .select({
+      id: propertiesTable.id,
+      name: propertiesTable.name,
+      address: propertiesTable.address,
+      city: propertiesTable.city,
+      state: propertiesTable.state,
+      yearBuilt: propertiesTable.yearBuilt,
+      sqft: propertiesTable.sqft,
+    })
     .from(propertiesTable)
     .where(eq(propertiesTable.id, transfer.propertyId));
 
-  res.json({ transfer, property: property ?? null });
+  res.json({
+    transfer: {
+      id: transfer.id,
+      status: transfer.status,
+      fromEmail: transfer.fromEmail,
+      toEmail: transfer.toEmail,
+      expiresAt: transfer.expiresAt,
+      createdAt: transfer.createdAt,
+    },
+    property: property ?? null,
+  });
 });
 
 // POST /api/transfers/claim/:token — accept (requires auth — the signed-in user becomes the new owner)
@@ -141,29 +202,18 @@ router.post("/transfers/claim/:token", requireAuth(), async (req, res) => {
     .from(propertyTransfersTable)
     .where(eq(propertyTransfersTable.token, token));
 
-  if (!transfer) return res.status(404).json({ error: "Invalid or expired transfer link." });
-  if (transfer.status !== "pending") {
-    return res.status(410).json({ error: "This transfer has already been completed or cancelled.", status: transfer.status });
+  if (!transfer) {
+    res.status(404).json({ error: "Invalid or expired transfer link." });
+    return;
   }
 
-  const newUserId = req.userId;
+  const result = await claimTransfer(transfer, req.userId);
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
 
-  await db
-    .update(propertiesTable)
-    .set({ userId: newUserId, updatedAt: new Date() })
-    .where(eq(propertiesTable.id, transfer.propertyId));
-
-  const [completed] = await db
-    .update(propertyTransfersTable)
-    .set({
-      status: "completed",
-      toUserId: newUserId,
-      completedAt: new Date(),
-    })
-    .where(eq(propertyTransfersTable.id, transfer.id))
-    .returning();
-
-  res.json({ transfer: completed, newUserId });
+  res.json({ transfer: result.transfer, newUserId: req.userId });
 });
 
 export default router;

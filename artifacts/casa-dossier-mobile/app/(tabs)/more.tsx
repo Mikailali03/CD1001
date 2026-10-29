@@ -11,9 +11,13 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useUser, useClerk } from "@clerk/expo";
+import { useUser } from "@clerk/expo";
 import { useColors } from "@/hooks/useColors";
+import { useSignOut } from "@/hooks/useSignOut";
+import { TECHNICIAN_ACCESS } from "@/components/tech/routes";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
+import { LanguageToggle } from "@/components/LanguageToggle";
 
 type RowItem = {
   icon: keyof typeof Feather.glyphMap;
@@ -62,15 +66,16 @@ export default function MoreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useUser();
-  const { signOut } = useClerk();
+  const signOut = useSignOut();
+  const { t } = useTranslation();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const handleSignOut = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("more.signOut"), t("more.signOutConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "Sign Out",
+        text: t("more.signOut"),
         style: "destructive",
         onPress: async () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -83,8 +88,8 @@ export default function MoreScreen() {
   const navItems: RowItem[] = [
     {
       icon: "book-open",
-      label: "DIY Guides",
-      sublabel: "Step-by-step home maintenance",
+      label: t("more.diyGuides"),
+      sublabel: t("more.diyGuidesSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/diy-guides");
@@ -92,8 +97,8 @@ export default function MoreScreen() {
     },
     {
       icon: "image",
-      label: "Digital Locker",
-      sublabel: "Photos & documents for your home",
+      label: t("more.locker"),
+      sublabel: t("more.lockerSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/locker");
@@ -101,8 +106,8 @@ export default function MoreScreen() {
     },
     {
       icon: "trending-up",
-      label: "Capital Outlook",
-      sublabel: "10-year replacement cost projections",
+      label: t("more.capitalOutlook"),
+      sublabel: t("more.capitalOutlookSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/capital-outlook");
@@ -110,8 +115,8 @@ export default function MoreScreen() {
     },
     {
       icon: "file-text",
-      label: "Generate Report",
-      sublabel: "Official property dossier & history",
+      label: t("more.report"),
+      sublabel: t("more.reportSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/report");
@@ -119,8 +124,8 @@ export default function MoreScreen() {
     },
     {
       icon: "arrow-right-circle",
-      label: "Digital Deed Transfer",
-      sublabel: "Securely transfer your home's history",
+      label: t("more.transfer"),
+      sublabel: t("more.transferSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/transfer");
@@ -128,8 +133,8 @@ export default function MoreScreen() {
     },
     {
       icon: "settings",
-      label: "Settings",
-      sublabel: "Notifications, preferences",
+      label: t("more.settings"),
+      sublabel: t("more.settingsSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/settings");
@@ -137,16 +142,25 @@ export default function MoreScreen() {
     },
     {
       icon: "star",
-      label: "Upgrade Plan",
-      sublabel: "View plans & unlock features",
+      label: t("more.upgrade"),
+      sublabel: t("more.upgradeSub"),
       onPress: () => {
         Haptics.selectionAsync();
         router.push("/upgrade");
       },
     },
+    {
+      icon: "tool",
+      label: t("more.technician"),
+      sublabel: t("more.technicianSub"),
+      onPress: () => {
+        Haptics.selectionAsync();
+        router.push(TECHNICIAN_ACCESS);
+      },
+    },
   ];
 
-  const displayName = user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? "Homeowner";
+  const displayName = user?.fullName ?? user?.firstName ?? user?.primaryEmailAddress?.emailAddress ?? t("more.homeowner");
   const initials = (user?.firstName?.[0] ?? "") + (user?.lastName?.[0] ?? "");
 
   return (
@@ -157,7 +171,7 @@ export default function MoreScreen() {
     >
       <View style={{ paddingTop: topPad + 8, paddingHorizontal: 20, paddingBottom: 8 }}>
         <Text style={[styles.pageTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          More
+          {t("more.title")}
         </Text>
       </View>
 
@@ -184,7 +198,7 @@ export default function MoreScreen() {
       {/* Nav sections */}
       <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          TOOLS
+          {t("more.tools")}
         </Text>
       </View>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -195,17 +209,29 @@ export default function MoreScreen() {
 
       <View style={{ paddingHorizontal: 20, marginTop: 24, marginBottom: 8 }}>
         <Text style={[styles.sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-          ACCOUNT
+          {t("more.account")}
         </Text>
       </View>
       <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {navItems.slice(3).map((item) => (
           <NavRow key={item.label} item={item} colors={colors} />
         ))}
+        {/* Language */}
+        <View style={[styles.row, { borderBottomColor: colors.border }]}>
+          <View style={[styles.rowIcon, { backgroundColor: colors.muted }]}>
+            <Feather name="globe" size={18} color={colors.foreground} />
+          </View>
+          <View style={styles.rowContent}>
+            <Text style={[styles.rowLabel, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
+              {t("language.label")}
+            </Text>
+          </View>
+          <LanguageToggle />
+        </View>
         <NavRow
           item={{
             icon: "log-out",
-            label: "Sign Out",
+            label: t("more.signOut"),
             danger: true,
             onPress: handleSignOut,
           }}

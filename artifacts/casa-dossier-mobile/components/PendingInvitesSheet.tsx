@@ -11,36 +11,26 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  acceptInboxCollaborator,
+  claimInboxTransfer,
+  declineInboxCollaborator,
+  getListPropertiesQueryKey,
+  type Inbox as GeneratedInbox,
+  type InboxCollaboratorItem,
+  type InboxTransferItem,
+  type Property,
+} from "@workspace/api-client-react";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
+import { Trans, useTranslation } from "react-i18next";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-export type InboxProperty = {
-  id: string;
-  name: string;
-  address: string;
-  city?: string;
-  state?: string;
-};
-
-export type InboxTransfer = {
-  id: string;
-  fromEmail: string;
-  property: InboxProperty;
-};
-
-export type InboxCollaborator = {
-  id: string;
-  invitedEmail: string;
-  property: InboxProperty;
-};
-
-export type Inbox = {
-  transfers: InboxTransfer[];
-  collaboratorInvites: InboxCollaborator[];
-};
+export type Inbox = GeneratedInbox;
+export type InboxTransfer = InboxTransferItem;
+export type InboxCollaborator = InboxCollaboratorItem;
+type InboxProperty = Pick<Property, "name" | "address" | "city" | "state">;
 
 // ── Property row ───────────────────────────────────────────────────────────────
 function PropertyRow({ name, address, city, state, colors }: InboxProperty & { colors: ReturnType<typeof useColors> }) {
@@ -85,33 +75,25 @@ type Props = {
 export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const [pending, setPending] = useState<Record<string, boolean>>({});
-
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
 
   const totalItems = inbox.transfers.length + inbox.collaboratorInvites.length;
 
   async function claimTransfer(transfer: InboxTransfer) {
     setPending((p) => ({ ...p, [transfer.id]: true }));
     try {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/inbox/transfers/${transfer.id}/claim`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
+      await claimInboxTransfer(transfer.id);
       const updated: Inbox = {
         ...inbox,
-        transfers: inbox.transfers.filter((t) => t.id !== transfer.id),
+        transfers: inbox.transfers.filter((item) => item.id !== transfer.id),
       };
       onInboxChange(updated);
-      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
+      queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      Alert.alert("Error", "Could not claim property. Please try again.");
+      Alert.alert(t("common.error"), t("invites.claimFailed"));
     } finally {
       setPending((p) => ({ ...p, [transfer.id]: false }));
     }
@@ -120,22 +102,17 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
   async function acceptCollab(collab: InboxCollaborator) {
     setPending((p) => ({ ...p, [collab.id]: true }));
     try {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/inbox/collaborators/${collab.id}/accept`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error();
+      await acceptInboxCollaborator(collab.id);
       const updated: Inbox = {
         ...inbox,
         collaboratorInvites: inbox.collaboratorInvites.filter((c) => c.id !== collab.id),
       };
       onInboxChange(updated);
-      await queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/properties"] });
+      await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+      await queryClient.refetchQueries({ queryKey: getListPropertiesQueryKey() });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
-      Alert.alert("Error", "Could not accept invite. Please try again.");
+      Alert.alert(t("common.error"), t("invites.acceptFailed"));
       setPending((p) => ({ ...p, [collab.id]: false }));
     }
   }
@@ -143,11 +120,7 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
   async function declineCollab(collab: InboxCollaborator) {
     setPending((p) => ({ ...p, [collab.id]: true }));
     try {
-      const token = await getToken();
-      await fetch(`${baseUrl}/api/inbox/collaborators/${collab.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await declineInboxCollaborator(collab.id);
       const updated: Inbox = {
         ...inbox,
         collaboratorInvites: inbox.collaboratorInvites.filter((c) => c.id !== collab.id),
@@ -155,7 +128,7 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
       onInboxChange(updated);
       Haptics.selectionAsync();
     } catch {
-      Alert.alert("Error", "Could not decline invite. Please try again.");
+      Alert.alert(t("common.error"), t("invites.declineFailed"));
     } finally {
       setPending((p) => ({ ...p, [collab.id]: false }));
     }
@@ -188,10 +161,10 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
             </View>
             <View>
               <Text style={[sheetStyles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                Property Invitations
+                {t("invites.title")}
               </Text>
               <Text style={[sheetStyles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {totalItems} pending
+                {t("invites.pendingCount", { count: totalItems })}
               </Text>
             </View>
           </View>
@@ -207,9 +180,9 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
           showsVerticalScrollIndicator={false}
         >
           {/* Deed transfers */}
-          {inbox.transfers.map((t) => (
+          {inbox.transfers.map((tr) => (
             <View
-              key={t.id}
+              key={tr.id}
               style={[cardStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
             >
               {/* Type badge */}
@@ -218,30 +191,33 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
                   <Feather name="file-text" size={12} color="#d97706" />
                 </View>
                 <Text style={[cardStyles.typeLabel, { color: "#b45309", fontFamily: "Inter_600SemiBold" }]}>
-                  DEED TRANSFER
+                  {t("invites.deedTransfer").toUpperCase()}
                 </Text>
               </View>
 
-              <PropertyRow {...t.property} colors={colors} />
+              <PropertyRow {...tr.property} colors={colors} />
 
               <Text style={[cardStyles.desc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                <Text style={{ color: colors.foreground, fontFamily: "Inter_500Medium" }}>{t.fromEmail}</Text>
-                {" "}has transferred ownership of this home to you.
+                <Trans
+                  i18nKey="invites.transferredToYou"
+                  values={{ email: tr.fromEmail }}
+                  components={{ bold: <Text style={{ color: colors.foreground, fontFamily: "Inter_500Medium" }} /> }}
+                />
               </Text>
 
               <TouchableOpacity
-                style={[cardStyles.acceptBtn, { backgroundColor: colors.primary, opacity: pending[t.id] ? 0.7 : 1 }]}
-                onPress={() => claimTransfer(t)}
-                disabled={!!pending[t.id]}
+                style={[cardStyles.acceptBtn, { backgroundColor: colors.primary, opacity: pending[tr.id] ? 0.7 : 1 }]}
+                onPress={() => claimTransfer(tr)}
+                disabled={!!pending[tr.id]}
                 activeOpacity={0.8}
               >
-                {pending[t.id] ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                {pending[tr.id] ? (
+                  <ActivityIndicator size="small" color={colors.primaryForeground} />
                 ) : (
                   <>
-                    <Feather name="check" size={14} color="#fff" />
-                    <Text style={[cardStyles.acceptText, { fontFamily: "Inter_600SemiBold" }]}>
-                      Accept &amp; Claim Property
+                    <Feather name="check" size={14} color={colors.primaryForeground} />
+                    <Text style={[cardStyles.acceptText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+                      {t("invites.acceptAndClaim")}
                     </Text>
                   </>
                 )}
@@ -261,14 +237,14 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
                   <Feather name="users" size={12} color="#3b82f6" />
                 </View>
                 <Text style={[cardStyles.typeLabel, { color: "#1d4ed8", fontFamily: "Inter_600SemiBold" }]}>
-                  COLLABORATION INVITE
+                  {t("invites.collabInvite").toUpperCase()}
                 </Text>
               </View>
 
               <PropertyRow {...c.property} colors={colors} />
 
               <Text style={[cardStyles.desc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                You've been invited to co-manage this home's dossier.
+                {t("invites.collabInvitedDesc")}
               </Text>
 
               <View style={cardStyles.actionRow}>
@@ -279,11 +255,11 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
                   activeOpacity={0.8}
                 >
                   {pending[c.id] ? (
-                    <ActivityIndicator size="small" color="#fff" />
+                    <ActivityIndicator size="small" color={colors.primaryForeground} />
                   ) : (
                     <>
-                      <Feather name="check" size={14} color="#fff" />
-                      <Text style={[cardStyles.acceptText, { fontFamily: "Inter_600SemiBold" }]}>Accept</Text>
+                      <Feather name="check" size={14} color={colors.primaryForeground} />
+                      <Text style={[cardStyles.acceptText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>{t("invites.accept")}</Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -294,7 +270,7 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
                   activeOpacity={0.8}
                 >
                   <Text style={[cardStyles.declineText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                    Decline
+                    {t("invites.decline")}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -306,10 +282,10 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
             <View style={[emptyStyles.wrap, { borderColor: colors.border }]}>
               <Feather name="check-circle" size={32} color={colors.primary} style={{ opacity: 0.6 }} />
               <Text style={[emptyStyles.title, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                All caught up!
+                {t("invites.allCaughtUp")}
               </Text>
               <Text style={[emptyStyles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                No more pending invitations.
+                {t("invites.noMore")}
               </Text>
             </View>
           )}
@@ -323,7 +299,7 @@ export function PendingInvitesSheet({ visible, inbox, onClose, onInboxChange }: 
             activeOpacity={0.7}
           >
             <Text style={[footerStyles.laterText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              Remind me later
+              {t("invites.remindLater")}
             </Text>
             <Feather name="chevron-down" size={14} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -403,7 +379,7 @@ const cardStyles = StyleSheet.create({
     paddingHorizontal: 14,
     minHeight: 40,
   },
-  acceptText: { fontSize: 13, color: "#fff" },
+  acceptText: { fontSize: 13 },
   declineBtn: {
     alignItems: "center",
     justifyContent: "center",

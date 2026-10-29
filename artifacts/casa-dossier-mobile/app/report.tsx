@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -12,68 +12,42 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
-import { useListProperties } from "@workspace/api-client-react";
+import {
+  getGetPropertyReportQueryKey,
+  useGetPropertyReport,
+  type PropertyReport,
+  type ReportAsset,
+  type ServiceRecord,
+} from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
-import { format, parseISO } from "date-fns";
+import { useSelectedProperty } from "@/context/PropertyContext";
+import { EmptyState } from "@/components/EmptyState";
+import { parseISO } from "date-fns";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import { formatDate } from "@/lib/dates";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type ServiceRecord = {
-  id: string;
-  date: string;
-  description: string;
-  technicianName: string | null;
-  companyName: string | null;
-  cost: number | null;
-};
-
-type ReportAsset = {
-  id: string;
-  name: string;
-  category: string;
-  brand: string | null;
-  model: string | null;
-  serialNumber: string | null;
-  installDate: string | null;
-  status: string;
-  retiredAt: string | null;
-  notes: string | null;
-  records: ServiceRecord[];
-};
-
-type ReportData = {
-  property: {
-    name: string;
-    address: string;
-    city: string | null;
-    state: string | null;
-    zipCode: string | null;
-    yearBuilt: number | null;
-    sqft: number | null;
-    bedrooms: number | null;
-    bathrooms: number | null;
-  };
-  activeAssets: ReportAsset[];
-  retiredAssets: ReportAsset[];
-  totalEvents: number;
-  generatedAt: string;
-};
+type ReportData = PropertyReport;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
-  try { return format(parseISO(d), "MMM d, yyyy"); } catch { return d; }
+  try { return formatDate(parseISO(d), "MMM d, yyyy"); } catch { return d; }
 }
 
-function performer(r: ServiceRecord) {
-  if (r.companyName === "CasaService") return `✦ CasaService${r.technicianName ? ` — ${r.technicianName}` : ""}`;
-  return r.companyName ?? r.technicianName ?? "Homeowner (DIY)";
+function performer(r: ServiceRecord, t: TFunction) {
+  if (r.companyName === "CasaService") {
+    return r.technicianName ? t("report.casaServiceWithTech", { name: r.technicianName }) : t("report.casaService");
+  }
+  return r.companyName ?? r.technicianName ?? t("report.homeownerDiy");
 }
 
 // ── Asset Card ─────────────────────────────────────────────────────────────────
 function AssetCard({ asset, retired, colors }: {
   asset: ReportAsset; retired?: boolean; colors: ReturnType<typeof useColors>;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   return (
     <View style={[assetStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -83,13 +57,13 @@ function AssetCard({ asset, retired, colors }: {
             {asset.name}
           </Text>
           <Text style={[assetStyles.cat, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {asset.category}
+            {t(`categories.${asset.category}`, { defaultValue: asset.category })}
             {asset.brand ? ` · ${asset.brand}` : ""}
             {asset.model ? ` ${asset.model}` : ""}
           </Text>
           {retired && asset.retiredAt && (
             <Text style={[assetStyles.retired, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Decommissioned {fmtDate(asset.retiredAt)}
+              {t("report.decommissioned", { date: fmtDate(asset.retiredAt) })}
             </Text>
           )}
         </View>
@@ -97,7 +71,7 @@ function AssetCard({ asset, retired, colors }: {
           {asset.records.length > 0 && (
             <View style={[assetStyles.badge, { backgroundColor: colors.muted }]}>
               <Text style={[assetStyles.badgeText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                {asset.records.length} event{asset.records.length !== 1 ? "s" : ""}
+                {t("report.eventCount", { count: asset.records.length })}
               </Text>
             </View>
           )}
@@ -109,8 +83,8 @@ function AssetCard({ asset, retired, colors }: {
         <View style={[assetStyles.body, { borderTopColor: colors.border }]}>
           {/* Specs row */}
           <View style={assetStyles.specs}>
-            {asset.serialNumber && <Spec label="Serial" value={asset.serialNumber} colors={colors} />}
-            {asset.installDate && <Spec label="Installed" value={fmtDate(asset.installDate)} colors={colors} />}
+            {asset.serialNumber && <Spec label={t("report.serial")} value={asset.serialNumber} colors={colors} />}
+            {asset.installDate && <Spec label={t("report.installed")} value={fmtDate(asset.installDate)} colors={colors} />}
           </View>
           {asset.notes && (
             <Text style={[assetStyles.notes, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
@@ -133,8 +107,8 @@ function AssetCard({ asset, retired, colors }: {
                     color: r.companyName === "CasaService" ? "#92400e" : colors.mutedForeground,
                     fontFamily: r.companyName === "CasaService" ? "Inter_600SemiBold" : "Inter_400Regular",
                   }]}>
-                    {performer(r)}
-                    {r.cost != null && r.cost > 0 ? ` · $${Number(r.cost).toLocaleString()}` : ""}
+                    {performer(r, t)}
+                    {r.cost != null && Number(r.cost) > 0 ? ` · $${Number(r.cost).toLocaleString()}` : ""}
                   </Text>
                 </View>
               ))}
@@ -142,7 +116,7 @@ function AssetCard({ asset, retired, colors }: {
           )}
           {asset.records.length === 0 && (
             <Text style={[assetStyles.noRecords, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              No service records
+              {t("report.noRecords")}
             </Text>
           )}
         </View>
@@ -187,57 +161,36 @@ const assetStyles = StyleSheet.create({
 // ── Main screen ────────────────────────────────────────────────────────────────
 export default function ReportScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { data: properties = [] } = useListProperties();
-  const propertyId = (properties[0] as any)?.id as string | undefined;
+  const { selectedProperty, isLoading: propsLoading } = useSelectedProperty();
+  const propertyId = selectedProperty?.id;
+  // No properties at all: show the empty state instead of waiting forever for a propertyId
+  const noProperty = !propsLoading && !propertyId;
 
-  const [data, setData] = useState<ReportData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
-
-  useEffect(() => {
-    if (!propertyId) return;
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${baseUrl}/api/properties/${propertyId}/report`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error("Failed");
-        const json = await res.json();
-        if (!cancelled) setData(json);
-      } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [propertyId, baseUrl]);
+  const report = useGetPropertyReport(propertyId ?? "", {
+    query: { queryKey: getGetPropertyReportQueryKey(propertyId ?? ""), enabled: !!propertyId },
+  });
+  const data: ReportData | undefined = report.data;
+  const loading = report.isPending;
+  const error = report.isError;
 
   async function handleShare() {
     if (!data) return;
     const p = data.property;
     const lines = [
-      `📋 Property Dossier — ${p.name}`,
-      `${p.address}${p.city ? `, ${p.city}` : ""}${p.state ? `, ${p.state}` : ""}`,
-      p.yearBuilt ? `Built: ${p.yearBuilt}` : null,
-      p.sqft ? `${p.sqft.toLocaleString()} sqft` : null,
+      t("report.share.title", { name: p.name }),
+      [p.address, p.city, p.state].filter(Boolean).join(", "),
+      p.yearBuilt ? t("report.share.built", { year: p.yearBuilt }) : null,
+      p.sqft ? t("report.share.sqft", { sqft: p.sqft.toLocaleString() }) : null,
       "",
-      `Assets: ${data.activeAssets.length} active, ${data.retiredAssets.length} retired`,
-      `Audited events: ${data.totalEvents}`,
+      t("report.share.assets", { active: data.activeAssets.length, retired: data.retiredAssets.length }),
+      t("report.share.events", { count: data.totalEvents }),
       "",
-      `Generated ${format(parseISO(data.generatedAt), "MMM d, yyyy")} via Casa Dossier`,
+      t("report.share.generated", { date: formatDate(parseISO(data.generatedAt), "MMM d, yyyy") }),
     ].filter(Boolean).join("\n");
     await Share.share({ message: lines });
   }
@@ -246,22 +199,32 @@ export default function ReportScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[hdrStyles.bar, { paddingTop: topPad + 8, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={hdrStyles.back} hitSlop={10}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} onPress={() => router.back()} style={hdrStyles.back} hitSlop={10}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[hdrStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          Property Report
+          {t("report.title")}
         </Text>
-        <TouchableOpacity onPress={handleShare} style={hdrStyles.share} hitSlop={10} disabled={!data}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("report.shareLabel")} onPress={handleShare} style={hdrStyles.share} hitSlop={10} disabled={!data}>
           <Feather name="share" size={20} color={data ? colors.foreground : colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
-      {loading && (
+      {noProperty && (
+        <EmptyState
+          icon="home"
+          title={t("common.noPropertyYet")}
+          description={t("report.noPropertyDesc")}
+          actionLabel={t("common.addAProperty")}
+          onAction={() => router.push("/properties")}
+        />
+      )}
+
+      {loading && !noProperty && (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={colors.primary} />
           <Text style={[{ color: colors.mutedForeground, marginTop: 12, fontFamily: "Inter_400Regular", fontSize: 13 }]}>
-            Generating report…
+            {t("report.generating")}
           </Text>
         </View>
       )}
@@ -270,7 +233,7 @@ export default function ReportScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
           <Feather name="alert-circle" size={36} color={colors.mutedForeground} />
           <Text style={[{ color: colors.foreground, marginTop: 12, fontFamily: "Inter_600SemiBold", fontSize: 15 }]}>
-            Could not load report
+            {t("report.loadFailed")}
           </Text>
         </View>
       )}
@@ -292,10 +255,10 @@ export default function ReportScreen() {
               {data.property.zipCode ? ` ${data.property.zipCode}` : ""}
             </Text>
             <View style={propStyles.stats}>
-              {data.property.yearBuilt && <StatChip label="Built" value={String(data.property.yearBuilt)} colors={colors} />}
-              {data.property.sqft && <StatChip label="Sqft" value={data.property.sqft.toLocaleString()} colors={colors} />}
-              {data.property.bedrooms && <StatChip label="Beds" value={String(data.property.bedrooms)} colors={colors} />}
-              {data.property.bathrooms && <StatChip label="Baths" value={String(data.property.bathrooms)} colors={colors} />}
+              {data.property.yearBuilt && <StatChip label={t("report.built")} value={String(data.property.yearBuilt)} colors={colors} />}
+              {data.property.sqft && <StatChip label={t("report.sqftLabel")} value={data.property.sqft.toLocaleString()} colors={colors} />}
+              {data.property.bedrooms && <StatChip label={t("report.beds")} value={String(data.property.bedrooms)} colors={colors} />}
+              {data.property.bathrooms && <StatChip label={t("report.baths")} value={String(Number(data.property.bathrooms))} colors={colors} />}
             </View>
             <View style={[propStyles.divider, { borderTopColor: colors.border }]} />
             <View style={propStyles.eventsRow}>
@@ -304,7 +267,7 @@ export default function ReportScreen() {
                   {data.activeAssets.length + data.retiredAssets.length}
                 </Text>
                 <Text style={[propStyles.eventsLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Total Assets
+                  {t("report.totalAssets")}
                 </Text>
               </View>
               <View style={propStyles.eventsItem}>
@@ -312,15 +275,15 @@ export default function ReportScreen() {
                   {data.totalEvents}
                 </Text>
                 <Text style={[propStyles.eventsLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Audited Events
+                  {t("report.auditedEvents")}
                 </Text>
               </View>
               <View style={propStyles.eventsItem}>
                 <Text style={[propStyles.eventsNum, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                  {format(parseISO(data.generatedAt), "MMM d")}
+                  {formatDate(parseISO(data.generatedAt), "MMM d")}
                 </Text>
                 <Text style={[propStyles.eventsLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Generated
+                  {t("report.generated")}
                 </Text>
               </View>
             </View>
@@ -330,7 +293,7 @@ export default function ReportScreen() {
           {data.activeAssets.length > 0 && (
             <>
               <Text style={[sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                ACTIVE ASSETS ({data.activeAssets.length})
+                {t("report.activeAssets", { count: data.activeAssets.length })}
               </Text>
               {data.activeAssets.map((a) => (
                 <AssetCard key={a.id} asset={a} colors={colors} />
@@ -342,7 +305,7 @@ export default function ReportScreen() {
           {data.retiredAssets.length > 0 && (
             <>
               <Text style={[sectionLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium", marginTop: 20 }]}>
-                RETIRED ASSETS ({data.retiredAssets.length})
+                {t("report.retiredAssets", { count: data.retiredAssets.length })}
               </Text>
               {data.retiredAssets.map((a) => (
                 <AssetCard key={a.id} asset={a} retired colors={colors} />
@@ -354,7 +317,7 @@ export default function ReportScreen() {
             <View style={{ alignItems: "center", paddingVertical: 48 }}>
               <Feather name="package" size={36} color={colors.mutedForeground} />
               <Text style={{ color: colors.mutedForeground, marginTop: 12, fontFamily: "Inter_400Regular", fontSize: 13 }}>
-                No assets tracked yet
+                {t("report.noAssets")}
               </Text>
             </View>
           )}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,93 +9,71 @@ import {
   TextInput,
   Share,
   Alert,
-  Clipboard,
 } from "react-native";
+import * as Clipboard from "expo-clipboard";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
-import { useListProperties } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  cancelPropertyTransfer,
+  getGetPendingPropertyTransferQueryKey,
+  initiatePropertyTransfer,
+  useGetPendingPropertyTransfer,
+  type PropertyTransfer,
+} from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
-import { format, parseISO } from "date-fns";
+import { useSelectedProperty } from "@/context/PropertyContext";
+import { EmptyState } from "@/components/EmptyState";
+import { parseISO } from "date-fns";
+import { Trans, useTranslation } from "react-i18next";
+import { formatDate } from "@/lib/dates";
 import * as Haptics from "expo-haptics";
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-type PendingTransfer = {
-  id: string;
-  propertyId: string;
-  toEmail: string;
-  fromEmail: string;
-  token: string;
-  status: string;
-  createdAt: string;
-  expiresAt: string | null;
-};
+import { API_BASE_URL } from "@/lib/config";
+import { apiErrorMessage } from "@/hooks/useRole";
 
 // ── Main screen ────────────────────────────────────────────────────────────────
 export default function TransferScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
+  const queryClient = useQueryClient();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { data: properties = [] } = useListProperties();
-  const property = (properties[0] as any) as { id: string; name: string; address: string } | undefined;
+  const { selectedProperty: property, isLoading: propsLoading } = useSelectedProperty();
   const propertyId = property?.id;
+  // No properties at all: show the empty state instead of waiting forever for a propertyId
+  const noProperty = !propsLoading && !propertyId;
 
-  const [transfer, setTransfer] = useState<PendingTransfer | null>(null);
-  const [loadingTransfer, setLoadingTransfer] = useState(true);
+  const transferKey = getGetPendingPropertyTransferQueryKey(propertyId ?? "");
+  const transferQuery = useGetPendingPropertyTransfer(propertyId ?? "", {
+    query: { queryKey: transferKey, enabled: !!propertyId },
+  });
+  const transfer = transferQuery.data ?? null;
+  const loadingTransfer = transferQuery.isPending;
+  const setTransfer = (t: PropertyTransfer | null) => queryClient.setQueryData(transferKey, t);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [confirmStep, setConfirmStep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
-
-  const claimUrl = transfer ? `${baseUrl}/claim/${transfer.token}` : null;
-
-  const loadTransfer = useCallback(async () => {
-    if (!propertyId) return;
-    try {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/properties/${propertyId}/transfer`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const json = await res.json();
-        setTransfer(json);
-      }
-    } catch {}
-    finally { setLoadingTransfer(false); }
-  }, [propertyId, baseUrl]);
-
-  useEffect(() => { loadTransfer(); }, [loadTransfer]);
+  const claimUrl = transfer ? `${API_BASE_URL}/claim/${transfer.token}` : null;
 
   async function handleInitiate() {
     if (!recipientEmail.trim() || !propertyId) return;
     setBusy(true);
     try {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/properties/${propertyId}/transfer`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ toEmail: recipientEmail.trim() }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        Alert.alert("Transfer failed", body.error ?? "Something went wrong.");
-        return;
-      }
-      const newTransfer = await res.json();
+      const newTransfer = await initiatePropertyTransfer(propertyId, { toEmail: recipientEmail.trim() });
       setTransfer(newTransfer);
       setRecipientEmail("");
       setConfirmStep(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      Alert.alert("Error", "Could not initiate transfer. Please try again.");
+    } catch (err) {
+      const msg = apiErrorMessage(err);
+      if (msg) Alert.alert(t("transfer.failedTitle"), msg);
+      else Alert.alert(t("common.error"), t("transfer.initiateError"));
     } finally {
       setBusy(false);
     }
@@ -104,25 +82,21 @@ export default function TransferScreen() {
   async function handleCancel() {
     if (!transfer) return;
     Alert.alert(
-      "Cancel Transfer",
-      "This will revoke the claim link. The new owner will no longer be able to accept.",
+      t("transfer.cancelTitle"),
+      t("transfer.cancelBody"),
       [
-        { text: "Keep It", style: "cancel" },
+        { text: t("transfer.keepIt"), style: "cancel" },
         {
-          text: "Cancel Transfer",
+          text: t("transfer.cancelTitle"),
           style: "destructive",
           onPress: async () => {
             setBusy(true);
             try {
-              const token = await getToken();
-              await fetch(`${baseUrl}/api/transfers/${transfer.id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-              });
+              await cancelPropertyTransfer(transfer.id);
               setTransfer(null);
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             } catch {
-              Alert.alert("Error", "Could not cancel the transfer.");
+              Alert.alert(t("common.error"), t("transfer.cancelError"));
             } finally {
               setBusy(false);
             }
@@ -134,7 +108,7 @@ export default function TransferScreen() {
 
   function handleCopy() {
     if (!claimUrl) return;
-    Clipboard.setString(claimUrl);
+    Clipboard.setStringAsync(claimUrl).catch(() => {});
     setCopied(true);
     Haptics.selectionAsync();
     setTimeout(() => setCopied(false), 2000);
@@ -143,7 +117,9 @@ export default function TransferScreen() {
   async function handleShare() {
     if (!claimUrl) return;
     await Share.share({
-      message: `You've been invited to claim the property dossier for ${property?.name ?? "a property"}. Open this link to accept:\n\n${claimUrl}`,
+      message: property?.name
+        ? t("transfer.shareMessage", { name: property.name, url: claimUrl })
+        : t("transfer.shareMessageNoName", { url: claimUrl }),
       url: claimUrl,
     });
   }
@@ -152,11 +128,11 @@ export default function TransferScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[hdrStyles.bar, { paddingTop: topPad + 8, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={hdrStyles.back} hitSlop={10}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} onPress={() => router.back()} style={hdrStyles.back} hitSlop={10}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[hdrStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-          Digital Deed Transfer
+          {t("transfer.title")}
         </Text>
         <View style={{ width: 30 }} />
       </View>
@@ -170,10 +146,10 @@ export default function TransferScreen() {
           <Feather name="shield" size={18} color={colors.primary} style={{ marginTop: 1 }} />
           <View style={{ flex: 1 }}>
             <Text style={[infoStyles.bannerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              Transfer your home's entire history
+              {t("transfer.bannerTitle")}
             </Text>
             <Text style={[infoStyles.bannerBody, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Generate a secure claim link for the new owner. When they accept, all assets, service records, and maintenance history transfer to their account.
+              {t("transfer.bannerBody")}
             </Text>
           </View>
         </View>
@@ -193,7 +169,15 @@ export default function TransferScreen() {
           </View>
         )}
 
-        {loadingTransfer ? (
+        {noProperty ? (
+          <EmptyState
+            icon="home"
+            title={t("common.noPropertyYet")}
+            description={t("transfer.noPropertyDesc")}
+            actionLabel={t("common.addAProperty")}
+            onAction={() => router.push("/properties")}
+          />
+        ) : loadingTransfer ? (
           <View style={{ alignItems: "center", paddingVertical: 48 }}>
             <ActivityIndicator color={colors.primary} />
           </View>
@@ -205,22 +189,22 @@ export default function TransferScreen() {
               <View style={escrowStyles.statusRow}>
                 <View style={escrowStyles.statusDot} />
                 <Text style={[escrowStyles.statusLabel, { color: "#92400e", fontFamily: "Inter_700Bold" }]}>
-                  Transfer In Escrow
+                  {t("transfer.inEscrow")}
                 </Text>
               </View>
               <Text style={[escrowStyles.toEmail, { color: "#92400e", fontFamily: "Inter_400Regular" }]}>
-                Waiting for {transfer.toEmail} to accept
+                {t("transfer.waitingFor", { email: transfer.toEmail })}
               </Text>
               {transfer.expiresAt && (
                 <Text style={[escrowStyles.expires, { color: "#b45309", fontFamily: "Inter_400Regular" }]}>
-                  Expires {format(parseISO(transfer.expiresAt), "MMM d, yyyy")}
+                  {t("transfer.expires", { date: formatDate(parseISO(transfer.expiresAt), "MMM d, yyyy") })}
                 </Text>
               )}
             </View>
 
             {/* Claim link */}
             <Text style={[labelStyle, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              CLAIM LINK
+              {t("transfer.claimLink")}
             </Text>
             <View style={[linkStyles.box, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text
@@ -239,8 +223,8 @@ export default function TransferScreen() {
                 onPress={handleShare}
                 activeOpacity={0.8}
               >
-                <Feather name="share-2" size={15} color="#fff" />
-                <Text style={[linkStyles.btnText, { fontFamily: "Inter_600SemiBold" }]}>Share Link</Text>
+                <Feather name="share-2" size={15} color={colors.primaryForeground} />
+                <Text style={[linkStyles.btnText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>{t("transfer.shareLink")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[linkStyles.btn, { backgroundColor: copied ? "#059669" : colors.muted, flex: 0 }]}
@@ -249,7 +233,7 @@ export default function TransferScreen() {
               >
                 <Feather name={copied ? "check" : "copy"} size={15} color={copied ? "#fff" : colors.foreground} />
                 <Text style={[linkStyles.btnText, { color: copied ? "#fff" : colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  {copied ? "Copied!" : "Copy"}
+                  {copied ? t("transfer.copied") : t("transfer.copy")}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -267,7 +251,7 @@ export default function TransferScreen() {
                 <>
                   <Feather name="x-circle" size={15} color={colors.destructive} />
                   <Text style={[cancelStyles.text, { color: colors.destructive, fontFamily: "Inter_500Medium" }]}>
-                    Cancel Transfer
+                    {t("transfer.cancelTitle")}
                   </Text>
                 </>
               )}
@@ -277,7 +261,7 @@ export default function TransferScreen() {
           /* ── Initiate form ── */
           <View>
             <Text style={[labelStyle, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-              NEW OWNER'S EMAIL
+              {t("transfer.newOwnerEmail")}
             </Text>
             <TextInput
               style={[inputStyles.field, {
@@ -286,10 +270,10 @@ export default function TransferScreen() {
                 color: colors.foreground,
                 fontFamily: "Inter_400Regular",
               }]}
-              placeholder="newowner@email.com"
+              placeholder={t("transfer.emailPlaceholder")}
               placeholderTextColor={colors.mutedForeground}
               value={recipientEmail}
-              onChangeText={(t) => { setRecipientEmail(t); setConfirmStep(false); }}
+              onChangeText={(v) => { setRecipientEmail(v); setConfirmStep(false); }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -300,10 +284,11 @@ export default function TransferScreen() {
                 <View style={[confirmStyles.warn, { backgroundColor: "#fef3c7", borderColor: "#fde68a" }]}>
                   <Feather name="alert-triangle" size={16} color="#d97706" />
                   <Text style={[confirmStyles.warnText, { color: "#92400e", fontFamily: "Inter_400Regular" }]}>
-                    You are about to transfer{" "}
-                    <Text style={{ fontFamily: "Inter_600SemiBold" }}>{property?.name ?? "this property"}</Text>
-                    {" "}to <Text style={{ fontFamily: "Inter_600SemiBold" }}>{recipientEmail}</Text>.
-                    {"\n\n"}This cannot be undone once accepted.
+                    <Trans
+                      i18nKey="transfer.confirmBody"
+                      values={{ name: property?.name ?? t("transfer.thisProperty"), email: recipientEmail }}
+                      components={{ b: <Text style={{ fontFamily: "Inter_600SemiBold" }} /> }}
+                    />
                   </Text>
                 </View>
                 <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
@@ -313,7 +298,7 @@ export default function TransferScreen() {
                     activeOpacity={0.8}
                   >
                     <Text style={[confirmStyles.btnText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                      Back
+                      {t("common.back")}
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -326,7 +311,7 @@ export default function TransferScreen() {
                       <ActivityIndicator color="#fff" size="small" />
                     ) : (
                       <Text style={[confirmStyles.btnText, { color: "#fff", fontFamily: "Inter_600SemiBold" }]}>
-                        Confirm Transfer
+                        {t("transfer.confirm")}
                       </Text>
                     )}
                   </TouchableOpacity>
@@ -345,12 +330,12 @@ export default function TransferScreen() {
                 activeOpacity={0.8}
                 disabled={!recipientEmail.trim()}
               >
-                <Feather name="arrow-right-circle" size={16} color={recipientEmail.trim() ? "#fff" : colors.mutedForeground} />
+                <Feather name="arrow-right-circle" size={16} color={recipientEmail.trim() ? colors.primaryForeground : colors.mutedForeground} />
                 <Text style={[inputStyles.submitText, {
-                  color: recipientEmail.trim() ? "#fff" : colors.mutedForeground,
+                  color: recipientEmail.trim() ? colors.primaryForeground : colors.mutedForeground,
                   fontFamily: "Inter_600SemiBold",
                 }]}>
-                  Generate Claim Link
+                  {t("transfer.generateLink")}
                 </Text>
               </TouchableOpacity>
             )}
@@ -359,7 +344,7 @@ export default function TransferScreen() {
 
         {/* Footer note */}
         <Text style={[footerStyles.note, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-          The new owner must have a Casa Dossier account to accept the transfer. The link expires in 30 days.
+          {t("transfer.footer")}
         </Text>
       </KeyboardAwareScrollViewCompat>
     </View>
@@ -433,7 +418,7 @@ const linkStyles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
   },
-  btnText: { fontSize: 14, color: "#fff" },
+  btnText: { fontSize: 14 },
 });
 
 const cancelStyles = StyleSheet.create({

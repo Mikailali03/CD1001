@@ -1,12 +1,4 @@
-export const LIFESPAN_YEARS: Record<string, number> = {
-  HVAC:       15,
-  Plumbing:   30,
-  Electrical: 25,
-  Roof:       20,
-  Appliance:  10,
-  Structural: 50,
-  Other:      15,
-};
+import { getExpectedLifespan } from "@workspace/maintenance-specs";
 
 export type AssetHealthScore = {
   assetId: string;
@@ -24,7 +16,7 @@ export function calcAssetScore(asset: {
   category: string;
   installDate?: string | null;
 }): AssetHealthScore {
-  const lifespanYears = LIFESPAN_YEARS[asset.category] ?? 15;
+  const lifespanYears = getExpectedLifespan(asset.category, asset.name);
 
   if (!asset.installDate) {
     return {

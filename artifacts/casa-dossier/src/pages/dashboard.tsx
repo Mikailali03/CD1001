@@ -7,6 +7,7 @@ import {
   useUpdateProperty,
   useListMarketplaceJobs,
   getGetPropertyQueryKey,
+  getListPropertiesQueryKey,
 } from "@workspace/api-client-react";
 import { useProperty } from "@/contexts/property-context";
 import { HealthScoreModal } from "@/components/health-score-modal";
@@ -38,7 +39,7 @@ import {
   Clock,
   Calendar,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format } from "@/lib/date";
 import { Link } from "wouter";
 import homeHeroBadge from "@assets/home_hero_badge_1779979811101.png";
 
@@ -76,7 +77,7 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
           {score >= 100 ? (
-            <img src={homeHeroBadge} alt="Home Hero" className="w-10 h-10 object-contain" />
+            <img src={homeHeroBadge} alt={t("dashboard.homeHero")} className="w-10 h-10 object-contain" />
           ) : (
             <>
               <span className="text-lg font-black tabular-nums" style={{ color: cfg.color }}>{score}</span>
@@ -87,7 +88,7 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-sm" style={{ color: cfg.color }}>Grade {grade}</span>
+          <span className="font-bold text-sm" style={{ color: cfg.color }}>{t("dashboard.grade", { grade })}</span>
           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: cfg.bg, color: cfg.color }}>
             {t(`dashboard.${cfg.labelKey}`)}
           </span>
@@ -106,39 +107,41 @@ function HealthScoreWidget({ score, grade, overdueCount, onClick }: {
 }
 
 // ── Investment Ledger dashboard card ──────────────────────────────────────────
+// One card, one action: what's inside is listed as plain text (not tiles that
+// look like separate buttons) and the CTA on the right opens the ledger.
 function LedgerCard({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation();
+  const features = [
+    { icon: DollarSign, label: `${t("dashboard.trackSpend")} ${t("dashboard.bySystem")}` },
+    { icon: TrendingUp, label: t("dashboard.estVsActual") },
+    { icon: FileText,   label: t("dashboard.allRecords") },
+  ];
   return (
     <button
       onClick={onClick}
-      className="group w-full text-left rounded-xl border bg-card hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all overflow-hidden"
+      className="group w-full text-left rounded-xl border bg-card hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all"
     >
-      <div className="flex items-center justify-between px-5 py-4">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 px-5 py-4">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="bg-primary/10 rounded-xl p-2.5 shrink-0">
             <Receipt className="h-5 w-5 text-primary" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="font-semibold text-sm leading-tight">{t("dashboard.investmentLedger")}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t("dashboard.trackSpend")} · {t("dashboard.estVsActual")}
-            </p>
+            <ul className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs text-muted-foreground">
+              {features.map(({ icon: Icon, label }) => (
+                <li key={label} className="flex items-center gap-1">
+                  <Icon className="h-3 w-3 text-primary/70" aria-hidden="true" />
+                  {label}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform shrink-0" />
-      </div>
-      <div className="grid grid-cols-3 divide-x border-t bg-muted/20">
-        {([
-          { icon: DollarSign, labelKey: "trackSpend",  subKey: "bySystem"    },
-          { icon: TrendingUp, labelKey: "compare",     subKey: "estVsActual" },
-          { icon: FileText,   labelKey: "fullLedger",  subKey: "allRecords"  },
-        ] as const).map(({ icon: Icon, labelKey, subKey }) => (
-          <div key={labelKey} className="flex flex-col items-center gap-0.5 py-3 px-2">
-            <Icon className="h-3.5 w-3.5 text-primary mb-0.5" />
-            <span className="text-[11px] font-semibold text-foreground">{t(`dashboard.${labelKey}`)}</span>
-            <span className="text-[10px] text-muted-foreground">{t(`dashboard.${subKey}`)}</span>
-          </div>
-        ))}
+        <span className="inline-flex items-center gap-1 self-start sm:self-center shrink-0 rounded-lg bg-primary/10 text-primary text-xs font-semibold px-3 py-1.5 group-hover:bg-primary/15 transition-colors">
+          {t("dashboard.openLedger")}
+          <ChevronRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+        </span>
       </div>
     </button>
   );
@@ -168,11 +171,11 @@ function PendingJobsWidget() {
           <h2 className="text-sm font-semibold text-foreground">{t("dashboard.activeServiceRequests")}</h2>
           <span className="text-xs bg-primary/10 text-primary font-semibold rounded-full px-2 py-0.5">{activeJobs.length}</span>
         </div>
-        <Link href="/marketplace">
-          <Button variant="ghost" size="sm" className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground">
+        <Button asChild variant="ghost" size="sm" className="text-xs h-7 gap-1 text-muted-foreground hover:text-foreground">
+          <Link href="/marketplace">
             {t("dashboard.viewAll")} <ArrowRight className="h-3 w-3" />
-          </Button>
-        </Link>
+          </Link>
+        </Button>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-3">
         {activeJobs.map((job) => {
@@ -211,10 +214,10 @@ function PendingJobsWidget() {
                 </div>
                 <p className="text-xs text-muted-foreground line-clamp-2">{job.description}</p>
                 {showScheduled && (
-                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3 shrink-0" />
-                    {(job as any).scheduledAt
-                      ? <span className="font-medium text-foreground">{format(new Date((job as any).scheduledAt), "MMM d 'at' h:mm a")}</span>
+                    {job.scheduledAt
+                      ? <span className="font-medium text-foreground">{format(new Date(job.scheduledAt), t("dashboard.scheduledAtFormat"))}</span>
                       : <span className="italic">{t("dashboard.serviceDatePending")}</span>}
                   </div>
                 )}
@@ -238,9 +241,9 @@ function NoPropertyState() {
       <p className="text-muted-foreground max-w-sm mb-6 text-sm">
         {t("dashboard.addHomeDesc")}
       </p>
-      <Link href="/properties">
-        <Button className="gap-2"><Plus className="h-4 w-4" />{t("dashboard.addYourHome")}</Button>
-      </Link>
+      <Button asChild className="gap-2">
+        <Link href="/properties"><Plus className="h-4 w-4" />{t("dashboard.addYourHome")}</Link>
+      </Button>
     </div>
   );
 }
@@ -295,9 +298,10 @@ export default function Dashboard() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getGetPropertyQueryKey(activePropertyId) });
-          toast({ title: "Home renamed", description: `Now called "${trimmed}".` });
+          queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+          toast({ title: t("dashboard.toast.renamed"), description: t("dashboard.toast.renamedDesc", { name: trimmed }) });
         },
-        onError: () => toast({ title: "Could not save name", variant: "destructive" }),
+        onError: () => toast({ title: t("dashboard.toast.renameFailed"), variant: "destructive" }),
         onSettled: () => setEditingName(false),
       }
     );
@@ -315,16 +319,13 @@ export default function Dashboard() {
   if (!summary) return <DashboardSkeleton />;
 
   const grade = (summary.healthGrade ?? "C") as keyof typeof GRADE_CONFIG;
-  const recentRecords = (summary as any).recentRecords ?? [];
-  const assetScores: any[] = (summary as any).assetScores ?? [];
-  const overdueTasksList: any[] = (summary as any).overdueTasks ?? [];
+  const recentRecords = summary.recentRecords ?? [];
+  const assetScores = summary.assetScores ?? [];
+  const overdueTasksList = summary.overdueTasks ?? [];
   const location = [activeProperty.city, activeProperty.state].filter(Boolean).join(", ");
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-
-      {/* ── Active service requests widget ── */}
-      <PendingJobsWidget />
 
       {/* ── Property header + score widget ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -332,6 +333,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             {editingName ? (
               <input
+                aria-label={t("dashboard.homeName")}
                 ref={nameInputRef}
                 value={nameValue}
                 onChange={(e) => setNameValue(e.target.value)}
@@ -348,19 +350,20 @@ export default function Dashboard() {
                 <h1 className="text-2xl font-bold tracking-tight">{activeProperty.name}</h1>
                 <button
                   onClick={startEditingName}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
-                  title="Rename home"
+                  className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+                  title={t("dashboard.renameHome")}
+                  aria-label={t("dashboard.renameHome")}
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
               </div>
             )}
-            <Link href={`/properties/${activePropertyId}`}>
-              <Button variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground h-7 px-2 shrink-0">
+            <Button asChild variant="ghost" size="sm" className="gap-1 text-muted-foreground hover:text-foreground h-7 px-2 shrink-0">
+              <Link href={`/properties/${activePropertyId}`}>
                 <span className="text-xs">{t("dashboard.view")}</span>
                 <ArrowRight className="h-3 w-3" />
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
           {location && (
             <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -368,24 +371,24 @@ export default function Dashboard() {
               {location}
             </p>
           )}
-          {(activeProperty.bedrooms || activeProperty.bathrooms || activeProperty.sqft) && (
+          {!!(activeProperty.bedrooms || activeProperty.bathrooms || activeProperty.sqft) && (
             <div className="flex items-center gap-3 mt-1.5 text-sm text-muted-foreground">
-              {activeProperty.bedrooms && (
+              {!!activeProperty.bedrooms && (
                 <span className="flex items-center gap-1">
                   <BedDouble className="h-3.5 w-3.5" />
-                  {activeProperty.bedrooms} bd
+                  {activeProperty.bedrooms} {t("dashboard.bd")}
                 </span>
               )}
-              {activeProperty.bathrooms && (
+              {!!activeProperty.bathrooms && (
                 <span className="flex items-center gap-1">
                   <Bath className="h-3.5 w-3.5" />
-                  {activeProperty.bathrooms} ba
+                  {Number(activeProperty.bathrooms)} {t("dashboard.ba")}
                 </span>
               )}
-              {activeProperty.sqft && (
+              {!!activeProperty.sqft && (
                 <span className="flex items-center gap-1">
                   <Ruler className="h-3.5 w-3.5" />
-                  {activeProperty.sqft.toLocaleString()} sqft
+                  {activeProperty.sqft.toLocaleString()} {t("dashboard.sqft")}
                 </span>
               )}
             </div>
@@ -399,6 +402,9 @@ export default function Dashboard() {
         />
       </div>
 
+      {/* ── Active service requests widget ── */}
+      <PendingJobsWidget />
+
       {/* ── Stat cards ── */}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="hover:shadow-sm transition-shadow">
@@ -409,7 +415,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{summary.totalAssets}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-emerald-600 font-semibold">{summary.verifiedAssets}</span> {t("dashboard.of")} {summary.totalAssets} {t("dashboard.verified")}
+              <span className="text-emerald-600 font-semibold">{summary.verifiedAssets}</span> {t("dashboard.ofVerified", { total: summary.totalAssets })}
             </p>
           </CardContent>
         </Card>
@@ -440,7 +446,7 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-1.5">
               {summary.assetsByCategory?.map((cat) => (
                 <div key={cat.category} className="flex items-center gap-1 bg-secondary rounded-full px-2.5 py-0.5 text-xs font-medium">
-                  {cat.category} <span className="text-muted-foreground">· {cat.count}</span>
+                  {t(`assets.category.${cat.category}`, { defaultValue: cat.category })} <span className="text-muted-foreground">· {cat.count}</span>
                 </div>
               ))}
             </div>
@@ -466,7 +472,7 @@ export default function Dashboard() {
           <CardContent className="px-4 sm:px-6 pt-0">
             {recentRecords.length > 0 ? (
               <div className="space-y-4">
-                {recentRecords.slice(0, 6).map((record: any) => (
+                {recentRecords.slice(0, 6).map((record) => (
                   <div key={record.id} className="flex items-start gap-3">
                     <div className="mt-0.5 bg-secondary p-1.5 rounded-full shrink-0">
                       <FileText className="h-3.5 w-3.5 text-primary" />
@@ -482,7 +488,7 @@ export default function Dashboard() {
                             </span>
                             {record.technicianName && ` — ${record.technicianName}`}
                           </>
-                        ) : (record.technicianName || record.companyName || "Service")}
+                        ) : (record.technicianName || record.companyName || t("dashboard.serviceFallback"))}
                         {" · "}{format(new Date(record.date), "MMM d, yyyy")}
                       </p>
                     </div>

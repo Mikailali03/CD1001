@@ -1,6 +1,13 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation, Trans } from "react-i18next";
+import {
+  getListPropertiesQueryKey,
+  useGetTransferClaim,
+  getGetTransferClaimQueryKey,
+  claimPropertyTransfer,
+} from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,71 +22,43 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type ClaimData = {
-  transfer: {
-    id: string;
-    propertyId: string;
-    fromEmail: string;
-    toEmail: string;
-    status: string;
-    expiresAt: string | null;
-  };
-  property: {
-    id: string;
-    name: string;
-    address: string;
-    city: string | null;
-    state: string | null;
-    yearBuilt: number | null;
-    sqft: number | null;
-  } | null;
-};
+/** Pull `{ error, status }` out of an ApiError's parsed body, if present. */
+function errorBody(err: unknown): { error?: string; status?: string } {
+  const data = (err as { data?: unknown } | null)?.data;
+  return data && typeof data === "object" ? (data as { error?: string; status?: string }) : {};
+}
 
 export default function ClaimTransfer() {
   const [, params] = useRoute("/claim/:token");
   const [, navigate] = useLocation();
-  const authFetch = useAuthFetch();
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
   const token = params?.token ?? "";
 
-  const [data, setData] = useState<ClaimData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [errorStatus, setErrorStatus] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [claimed, setClaimed] = useState(false);
 
-  useEffect(() => {
-    if (!token) return;
-    authFetch(`${BASE}/api/transfers/claim/${token}`)
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) {
-          setErrorStatus(body.status ?? null);
-          setError(body.error ?? "Something went wrong.");
-        } else {
-          setData(body);
-        }
-      })
-      .catch(() => setError("Could not load transfer details."))
-      .finally(() => setLoading(false));
-  }, [token]);
+  const { data, isLoading: loading, error: loadError } = useGetTransferClaim(token, {
+    query: { queryKey: getGetTransferClaimQueryKey(token), enabled: !!token, retry: false },
+  });
+
+  const loadBody = loadError ? errorBody(loadError) : null;
+  const errorStatus = loadBody?.status ?? null;
+  const error =
+    claimError ??
+    (loadError
+      ? loadBody?.error ?? (loadError.status ? t("claim.genericError") : t("claim.loadFailed"))
+      : null);
 
   async function handleClaim() {
     setClaiming(true);
     try {
-      const res = await authFetch(`${BASE}/api/transfers/claim/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        setError(body.error ?? "Transfer failed.");
-        return;
-      }
+      await claimPropertyTransfer(token, {});
       setClaimed(true);
+      queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+    } catch (err) {
+      setClaimError(errorBody(err).error ?? t("claim.transferFailed"));
     } finally {
       setClaiming(false);
     }
@@ -111,11 +90,13 @@ export default function ClaimTransfer() {
             <CheckCircle2 className="h-10 w-10 text-emerald-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Transfer Complete!</h1>
+            <h1 className="text-2xl font-bold">{t("claim.completeTitle")}</h1>
             <p className="text-muted-foreground mt-2 text-sm">
-              You now own the home dossier for{" "}
-              <span className="font-semibold text-foreground">{data.property.name}</span>.
-              The full maintenance history, assets, and records are yours.
+              <Trans
+                i18nKey="claim.completeBody"
+                values={{ name: data.property.name }}
+                components={{ strong: <span className="font-semibold text-foreground" /> }}
+              />
             </p>
           </div>
           <Card className="text-left">
@@ -132,12 +113,12 @@ export default function ClaimTransfer() {
               )}
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <FileText className="h-4 w-4 shrink-0" />
-                Full maintenance history transferred
+                {t("claim.historyTransferred")}
               </div>
             </CardContent>
           </Card>
-          <Button className="w-full gap-2" onClick={() => navigate("/")}>
-            Open Your Home Dossier
+          <Button className="w-full gap-2" onClick={() => navigate("/dashboard")}>
+            {t("claim.openDossier")}
             <ArrowRight className="h-4 w-4" />
           </Button>
         </div>
@@ -154,13 +135,13 @@ export default function ClaimTransfer() {
           </div>
           <div>
             <h1 className="text-xl font-bold">
-              {errorStatus === "completed" ? "Already Claimed" : errorStatus === "cancelled" ? "Transfer Cancelled" : "Link Unavailable"}
+              {errorStatus === "completed" ? t("claim.alreadyClaimed") : errorStatus === "cancelled" ? t("claim.cancelled") : t("claim.unavailable")}
             </h1>
             <p className="text-muted-foreground mt-2 text-sm">{error}</p>
           </div>
           <Button variant="outline" className="gap-2" onClick={() => navigate("/")}>
             <Home className="h-4 w-4" />
-            Go to Casa Dossier
+            {t("claim.goHome")}
           </Button>
         </div>
       </div>
@@ -180,9 +161,13 @@ export default function ClaimTransfer() {
             <ShieldCheck className="h-10 w-10 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold">Home Dossier Transfer</h1>
+            <h1 className="text-2xl font-bold">{t("claim.title")}</h1>
             <p className="text-muted-foreground text-sm mt-1">
-              <span className="font-medium text-foreground">{transfer.fromEmail}</span> has transferred a home dossier to you.
+              <Trans
+                i18nKey="claim.fromSender"
+                values={{ email: transfer.fromEmail }}
+                components={{ strong: <span className="font-medium text-foreground" /> }}
+              />
             </p>
           </div>
         </div>
@@ -206,16 +191,22 @@ export default function ClaimTransfer() {
                 </div>
               </div>
               <div className="border-t pt-3 grid grid-cols-2 gap-2">
-                {property.yearBuilt && (
+                {!!property.yearBuilt && (
                   <div className="text-xs">
-                    <span className="text-muted-foreground">Built </span>
-                    <span className="font-semibold">{property.yearBuilt}</span>
+                    <Trans
+                      i18nKey="claim.built"
+                      values={{ year: property.yearBuilt }}
+                      components={{ muted: <span className="text-muted-foreground" />, strong: <span className="font-semibold" /> }}
+                    />
                   </div>
                 )}
-                {property.sqft && (
+                {!!property.sqft && (
                   <div className="text-xs">
-                    <span className="font-semibold">{property.sqft.toLocaleString()}</span>
-                    <span className="text-muted-foreground"> sq ft</span>
+                    <Trans
+                      i18nKey="claim.sqft"
+                      values={{ sqft: property.sqft.toLocaleString() }}
+                      components={{ muted: <span className="text-muted-foreground" />, strong: <span className="font-semibold" /> }}
+                    />
                   </div>
                 )}
               </div>
@@ -225,12 +216,12 @@ export default function ClaimTransfer() {
 
         {/* What's included */}
         <div className="bg-muted/50 rounded-xl px-4 py-3 space-y-2">
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">What you'll receive</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{t("claim.whatYouGet")}</p>
           {[
-            "Full maintenance task history",
-            "All tracked assets & appliances",
-            "Service records & technician logs",
-            "AI-generated health reports",
+            t("claim.includes.tasks"),
+            t("claim.includes.assets"),
+            t("claim.includes.records"),
+            t("claim.includes.reports"),
           ].map((item) => (
             <div key={item} className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
@@ -243,13 +234,13 @@ export default function ClaimTransfer() {
         <div className="space-y-2">
           <Button className="w-full gap-2 h-11" onClick={handleClaim} disabled={claiming}>
             {claiming ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Accepting Transfer…</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> {t("claim.accepting")}</>
             ) : (
-              <><ShieldCheck className="h-4 w-4" /> Accept & Claim This Home Dossier</>
+              <><ShieldCheck className="h-4 w-4" /> {t("claim.acceptCta")}</>
             )}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
-            By accepting, you take ownership of this property's complete history.
+            {t("claim.acceptHint")}
           </p>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useGetGuide, getGetGuideQueryKey } from "@workspace/api-client-react";
 import { useParams, Link } from "wouter";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +9,7 @@ import { ArrowLeft, Clock, Wrench, AlertCircle, CheckCircle2 } from "lucide-reac
 
 export default function GuideDetail() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
 
   const { data: guide, isLoading } = useGetGuide(id!, {
     query: { enabled: !!id, queryKey: getGetGuideQueryKey(id!) }
@@ -31,7 +33,7 @@ export default function GuideDetail() {
     );
   }
 
-  if (!guide) return <div className="p-6 text-center">Guide not found</div>;
+  if (!guide) return <div className="p-6 text-center">{t("guides.notFound")}</div>;
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
@@ -46,14 +48,14 @@ export default function GuideDetail() {
     <div className="p-6 space-y-8 max-w-4xl mx-auto animate-in fade-in duration-500">
       <Link href="/guides" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground mb-2">
         <ArrowLeft className="mr-2 h-4 w-4" />
-        Back to Library
+        {t("guides.backToLibrary")}
       </Link>
 
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Badge variant="outline" className="bg-background">{guide.category}</Badge>
-          <Badge className={getDifficultyColor(guide.difficulty)} variant="outline" style={{ textTransform: 'capitalize' }}>
-            {guide.difficulty} Difficulty
+          <Badge className={getDifficultyColor(guide.difficulty)} variant="outline">
+            {t("guides.difficultyLabel", { level: t(`guides.difficulty.${guide.difficulty}`, { defaultValue: guide.difficulty }) })}
           </Badge>
         </div>
         <h1 className="text-4xl font-bold tracking-tight text-primary leading-tight">{guide.title}</h1>
@@ -69,8 +71,8 @@ export default function GuideDetail() {
               <Clock className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Estimated Time</p>
-              <p className="text-lg font-bold text-foreground">{guide.estimatedMinutes} Minutes</p>
+              <p className="text-sm font-medium text-muted-foreground">{t("guides.estimatedTime")}</p>
+              <p className="text-lg font-bold text-foreground">{t("guides.minutes", { count: guide.estimatedMinutes })}</p>
             </div>
           </CardContent>
         </Card>
@@ -82,7 +84,7 @@ export default function GuideDetail() {
                 <div className="bg-background p-2 rounded-full shadow-sm shrink-0">
                   <Wrench className="h-4 w-4 text-primary" />
                 </div>
-                <p className="font-medium">Tools Required</p>
+                <p className="font-medium">{t("guides.toolsRequired")}</p>
               </div>
               <ul className="text-sm text-muted-foreground grid grid-cols-2 gap-x-2 gap-y-1 ml-12">
                 {guide.toolsNeeded.map((tool, i) => (
@@ -98,14 +100,14 @@ export default function GuideDetail() {
         <div className="bg-destructive/10 text-destructive-foreground border border-destructive/20 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
           <div className="text-sm text-destructive">
-            <p className="font-semibold mb-1">Advanced Task Warning</p>
-            <p>This guide involves complex systems. If you are uncomfortable with any step or do not have the proper tools, stop and hire a professional. Safety first.</p>
+            <p className="font-semibold mb-1">{t("guides.advancedWarningTitle")}</p>
+            <p>{t("guides.advancedWarningBody")}</p>
           </div>
         </div>
       )}
 
       <div className="space-y-6 pt-4">
-        <h2 className="text-2xl font-bold">Instructions</h2>
+        <h2 className="text-2xl font-bold">{t("guides.instructions")}</h2>
         {guide.steps && guide.steps.length > 0 ? (
           <div className="space-y-6">
             {guide.steps.map((stepItem, i) => (
@@ -122,14 +124,14 @@ export default function GuideDetail() {
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground">No steps defined for this guide.</p>
+          <p className="text-muted-foreground">{t("guides.noSteps")}</p>
         )}
       </div>
 
       <div className="flex justify-center pt-8 pb-12 border-t mt-12">
         <Button size="lg" className="h-14 px-8 text-base font-semibold shadow-md hover-elevate gap-2">
           <CheckCircle2 className="h-5 w-5" />
-          Mark as Completed
+          {t("guides.markCompleted")}
         </Button>
       </div>
     </div>

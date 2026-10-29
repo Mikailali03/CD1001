@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useListProperties } from "@workspace/api-client-react";
 import { AddPropertyDialog } from "@/components/add-property-dialog";
 import { useSubscription } from "@/contexts/subscription-context";
@@ -29,6 +30,7 @@ function useAddPropertyGate() {
 }
 
 export default function Properties() {
+  const { t } = useTranslation();
   const { data: properties, isLoading } = useListProperties();
   const [addOpen, setAddOpen] = useState(false);
   const { atLimit, tryOpen } = useAddPropertyGate();
@@ -56,15 +58,15 @@ export default function Properties() {
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-primary">My Properties</h1>
-          <p className="text-muted-foreground">Manage your homes and track their health.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-primary">{t("properties.title")}</h1>
+          <p className="text-muted-foreground">{t("properties.subtitle")}</p>
         </div>
         <Button
           className="shrink-0 gap-2"
           onClick={() => tryOpen(() => setAddOpen(true))}
         >
           {atLimit ? <Lock className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          Add Property
+          {t("properties.addProperty")}
         </Button>
       </div>
 
@@ -98,30 +100,30 @@ export default function Properties() {
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {property.yearBuilt && (
+                      {!!property.yearBuilt && (
                         <Badge variant="secondary" className="gap-1 font-normal text-xs">
                           <Calendar className="h-3 w-3" />
-                          Built {property.yearBuilt}
+                          {t("properties.built", { year: property.yearBuilt })}
                         </Badge>
                       )}
-                      {property.sqft && (
+                      {!!property.sqft && (
                         <Badge variant="secondary" className="gap-1 font-normal text-xs">
                           <Maximize className="h-3 w-3" />
-                          {property.sqft.toLocaleString()} sqft
+                          {t("properties.sqft", { value: property.sqft.toLocaleString() })}
                         </Badge>
                       )}
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {property.bedrooms && (
+                      {!!property.bedrooms && (
                         <Badge variant="secondary" className="gap-1 font-normal text-xs">
                           <BedDouble className="h-3 w-3" />
-                          {property.bedrooms} bd
+                          {t("properties.beds", { count: Number(property.bedrooms) })}
                         </Badge>
                       )}
-                      {property.bathrooms && (
+                      {!!property.bathrooms && (
                         <Badge variant="secondary" className="gap-1 font-normal text-xs">
                           <Bath className="h-3 w-3" />
-                          {property.bathrooms} ba
+                          {t("properties.baths", { count: Number(property.bathrooms) })}
                         </Badge>
                       )}
                     </div>
@@ -137,7 +139,7 @@ export default function Properties() {
                 </div>
 
                 <div className="px-4 py-3 border-t text-sm text-muted-foreground flex justify-between">
-                  <span>View Details</span>
+                  <span>{t("properties.viewDetails")}</span>
                   <span className="text-primary font-medium">&rarr;</span>
                 </div>
               </Card>
@@ -158,10 +160,10 @@ export default function Properties() {
             </div>
             <div className="text-center">
               <p className="text-sm font-medium">
-                {atLimit ? "Upgrade to Add More" : "Add Another Property"}
+                {atLimit ? t("properties.upgradeToAddMore") : t("properties.addAnother")}
               </p>
               <p className="text-xs opacity-60 mt-0.5">
-                {atLimit ? "Your plan limit has been reached" : "AI-powered setup in minutes"}
+                {atLimit ? t("properties.limitReached") : t("properties.aiSetup")}
               </p>
             </div>
           </button>
@@ -169,13 +171,13 @@ export default function Properties() {
       ) : (
         <div className="text-center py-20 bg-muted/30 rounded-xl border border-dashed">
           <Building2 className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No properties yet</h3>
+          <h3 className="text-lg font-medium text-foreground">{t("properties.emptyTitle")}</h3>
           <p className="text-muted-foreground max-w-sm mx-auto mt-2 mb-6 text-sm">
-            Add your home to get a personalized maintenance plan generated by AI in seconds.
+            {t("properties.emptyDesc")}
           </p>
           <Button className="gap-2" onClick={() => tryOpen(() => setAddOpen(true))}>
             <Plus className="h-4 w-4" />
-            Add Your First Home
+            {t("properties.addFirstHome")}
           </Button>
         </div>
       )}

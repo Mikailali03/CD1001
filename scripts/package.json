@@ -11,9 +11,13 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/pg": "^8.18.0",
     "tsx": "catalog:"
   },
   "dependencies": {
+    "@clerk/backend": "^3.4.4",
+    "drizzle-orm": "catalog:",
+    "pg": "^8.20.0",
     "stripe": "^22.1.1"
   }
 }

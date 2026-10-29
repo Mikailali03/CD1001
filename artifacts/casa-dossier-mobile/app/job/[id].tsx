@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -12,50 +12,40 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
+import {
+  getGetMarketplaceJobDetailsQueryKey,
+  useGetMarketplaceJobDetails,
+  type TechJobDetail,
+} from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_CONFIG } from "@/components/AssetCard";
-import { format } from "date-fns";
+import { useTranslation } from "react-i18next";
+import { formatDate } from "@/lib/dates";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type JobDetail = {
-  id: string;
-  description: string;
-  urgency: "emergency" | "high" | "medium" | "low";
-  status: "open" | "claimed" | "completed";
-  assetId: string;
-  assetName: string;
-  assetCategory: string;
-  assetBrand?: string | null;
-  assetModel?: string | null;
-  assetSerialNumber?: string | null;
-  assetInstallDate?: string | null;
-  assetWarrantyExpiry?: string | null;
-  assetNotes?: string | null;
-  propertyCity?: string | null;
-  propertyState?: string | null;
-  propertyZipCode?: string | null;
-  propertyYearBuilt?: number | null;
-  technicianId?: string | null;
-  contactPhone?: string | null;
-  scheduledAt?: string | null;
-  acceptedAt?: string | null;
-  createdAt: string;
-  serviceHistory: { id: string; date: string; description: string; cost?: string | null }[];
-};
+type JobDetail = TechJobDetail;
+
+/** A pro has the job: accepted, on the way, or on site. */
+function isAssigned(status: JobDetail["status"]) {
+  return status === "claimed" || status === "en_route" || status === "arrived";
+}
 
 // ── Config ─────────────────────────────────────────────────────────────────────
-const URGENCY_CONFIG: Record<string, { label: string; color: string; bg: string; icon: keyof typeof Feather.glyphMap }> = {
-  emergency: { label: "Emergency",  color: "#dc2626", bg: "#fef2f2", icon: "alert-circle" },
-  high:      { label: "High",       color: "#ea580c", bg: "#fff7ed", icon: "alert-circle" },
-  medium:    { label: "Medium",     color: "#d97706", bg: "#fffbeb", icon: "clock" },
-  low:       { label: "Low",        color: "#6b7280", bg: "#f3f4f6", icon: "clock" },
+// Labels: jobDetail.urgency.<key>
+const URGENCY_CONFIG: Record<string, { color: string; bg: string; icon: keyof typeof Feather.glyphMap }> = {
+  emergency: { color: "#dc2626", bg: "#fef2f2", icon: "alert-circle" },
+  high:      { color: "#ea580c", bg: "#fff7ed", icon: "alert-circle" },
+  medium:    { color: "#d97706", bg: "#fffbeb", icon: "clock" },
+  low:       { color: "#6b7280", bg: "#f3f4f6", icon: "clock" },
 };
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; borderColor: string; icon: keyof typeof Feather.glyphMap }> = {
-  open:      { label: "Awaiting Pro",  color: "#0369a1", bg: "#eff6ff", borderColor: "#bae6fd", icon: "search" },
-  claimed:   { label: "Pro Assigned",  color: "#059669", bg: "#ecfdf5", borderColor: "#6ee7b7", icon: "check-circle" },
-  completed: { label: "Completed",     color: "#7c3aed", bg: "#f5f3ff", borderColor: "#c4b5fd", icon: "check-circle" },
+// Labels: jobDetail.status.<key>
+const STATUS_CONFIG: Record<string, { color: string; bg: string; borderColor: string; icon: keyof typeof Feather.glyphMap }> = {
+  open:      { color: "#0369a1", bg: "#eff6ff", borderColor: "#bae6fd", icon: "search" },
+  claimed:   { color: "#059669", bg: "#ecfdf5", borderColor: "#6ee7b7", icon: "check-circle" },
+  en_route:  { color: "#059669", bg: "#ecfdf5", borderColor: "#6ee7b7", icon: "truck" },
+  arrived:   { color: "#059669", bg: "#ecfdf5", borderColor: "#6ee7b7", icon: "map-pin" },
+  completed: { color: "#7c3aed", bg: "#f5f3ff", borderColor: "#c4b5fd", icon: "check-circle" },
 };
 
 const CATEGORY_EMOJI: Record<string, string> = {
@@ -74,43 +64,23 @@ function normCat(cat: string): string {
 export default function JobDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const [job, setJob] = useState<JobDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const detail = useGetMarketplaceJobDetails(id ?? "", {
+    query: { queryKey: getGetMarketplaceJobDetailsQueryKey(id ?? ""), enabled: !!id },
+  });
+  const job: JobDetail | undefined = detail.data;
+  const loading = detail.isPending;
+  const error = detail.isError;
+  const serviceHistory = job?.serviceHistory ?? [];
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
-
-  useEffect(() => {
-    if (!id) return;
-    setLoading(true);
-    setError(false);
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${baseUrl}/api/marketplace/jobs/${id}/details`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error();
-        const d = await res.json();
-        if (!cancelled) setJob(d);
-      } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [id]);
-
-  const uc = URGENCY_CONFIG[job?.urgency ?? "medium"] ?? URGENCY_CONFIG.medium;
-  const sc = STATUS_CONFIG[job?.status ?? "open"] ?? STATUS_CONFIG.open;
+  const urgencyKey = job?.urgency && URGENCY_CONFIG[job.urgency] ? job.urgency : "medium";
+  const statusKey = job?.status && STATUS_CONFIG[job.status] ? job.status : "open";
+  const uc = URGENCY_CONFIG[urgencyKey]!;
+  const sc = STATUS_CONFIG[statusKey]!;
   const cat = normCat(job?.assetCategory ?? "");
   const catCfg = CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.Other!;
   const catEmoji = CATEGORY_EMOJI[cat] ?? "📦";
@@ -119,16 +89,16 @@ export default function JobDetailScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} hitSlop={8} onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            Service Request
+            {t("jobDetail.title")}
           </Text>
           {job && (
             <Text style={[styles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Posted {format(new Date(job.createdAt), "MMM d, yyyy")}
+              {t("jobDetail.posted", { date: formatDate(job.createdAt, "MMM d, yyyy") })}
             </Text>
           )}
         </View>
@@ -136,7 +106,7 @@ export default function JobDetailScreen() {
           <View style={[styles.urgencyChip, { backgroundColor: uc.bg }]}>
             <Feather name={uc.icon} size={11} color={uc.color} />
             <Text style={[styles.urgencyChipText, { color: uc.color, fontFamily: "Inter_700Bold" }]}>
-              {uc.label}
+              {t(`jobDetail.urgency.${urgencyKey}`)}
             </Text>
           </View>
         )}
@@ -150,10 +120,10 @@ export default function JobDetailScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingHorizontal: 32 }}>
           <Feather name="alert-triangle" size={36} color={colors.mutedForeground + "60"} />
           <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_500Medium", textAlign: "center" }]}>
-            Could not load job details.
+            {t("jobDetail.loadError")}
           </Text>
           <TouchableOpacity onPress={() => router.back()} style={[styles.retryBtn, { borderColor: colors.border }]}>
-            <Text style={[{ fontSize: 13, color: colors.primary, fontFamily: "Inter_500Medium" }]}>Go back</Text>
+            <Text style={[{ fontSize: 13, color: colors.primary, fontFamily: "Inter_500Medium" }]}>{t("common.goBack")}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -168,23 +138,23 @@ export default function JobDetailScreen() {
             </View>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={[styles.statusLabel, { color: sc.color, fontFamily: "Inter_700Bold" }]}>
-                {sc.label}
+                {t(`jobDetail.status.${statusKey}`)}
               </Text>
-              {job.status === "claimed" && (
+              {isAssigned(job.status) && (
                 <Text style={[styles.statusSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                   {job.scheduledAt
-                    ? `Scheduled for ${format(new Date(job.scheduledAt), "EEEE, MMMM d 'at' h:mm a")}`
-                    : "Your pro will reach out to confirm a date"}
+                    ? t("jobDetail.scheduledFor", { date: formatDate(job.scheduledAt, "EEEE, MMMM d"), time: formatDate(job.scheduledAt, "h:mm a") })
+                    : t("jobDetail.proWillConfirm")}
                 </Text>
               )}
               {job.status === "open" && (
                 <Text style={[styles.statusSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  Waiting for a pro to accept your job
+                  {t("jobDetail.waitingForPro")}
                 </Text>
               )}
               {job.status === "completed" && (
                 <Text style={[styles.statusSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  This job has been completed
+                  {t("jobDetail.completedSub")}
                 </Text>
               )}
             </View>
@@ -195,7 +165,7 @@ export default function JobDetailScreen() {
             <View style={styles.sectionHeader}>
               <Feather name="file-text" size={13} color={colors.mutedForeground} />
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                JOB DESCRIPTION
+                {t("jobDetail.description")}
               </Text>
             </View>
             <Text style={[styles.descText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
@@ -208,12 +178,12 @@ export default function JobDetailScreen() {
             <View style={styles.sectionHeader}>
               <Feather name="tool" size={13} color={colors.mutedForeground} />
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                ASSET ON FILE
+                {t("jobDetail.assetOnFile")}
               </Text>
             </View>
             <TouchableOpacity
               style={[styles.assetRow, { backgroundColor: catCfg.bg, borderColor: colors.border }]}
-              onPress={() => router.push(`/asset/${job.assetId}`)}
+              onPress={() => job.assetId && router.push(`/asset/${job.assetId}`)}
               activeOpacity={0.7}
             >
               <View style={[styles.assetEmoji, { backgroundColor: catCfg.bg }]}>
@@ -225,14 +195,14 @@ export default function JobDetailScreen() {
                 </Text>
                 {(job.assetBrand || job.assetModel || job.assetSerialNumber) && (
                   <Text style={[styles.assetMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {[job.assetBrand, job.assetModel, job.assetSerialNumber && `S/N ${job.assetSerialNumber}`]
+                    {[job.assetBrand, job.assetModel, job.assetSerialNumber && t("jobDetail.serial", { serial: job.assetSerialNumber })]
                       .filter(Boolean)
                       .join(" · ")}
                   </Text>
                 )}
                 {job.assetInstallDate && (
                   <Text style={[styles.assetMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    Installed {format(new Date(job.assetInstallDate), "MMM yyyy")}
+                    {t("jobDetail.installed", { date: formatDate(job.assetInstallDate, "MMM yyyy") })}
                   </Text>
                 )}
               </View>
@@ -251,12 +221,12 @@ export default function JobDetailScreen() {
           </View>
 
           {/* Assigned pro (if claimed) */}
-          {job.status === "claimed" && (
+          {isAssigned(job.status) && (
             <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Feather name="user-check" size={13} color={colors.mutedForeground} />
                 <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  ASSIGNED PRO
+                  {t("jobDetail.assignedPro")}
                 </Text>
               </View>
 
@@ -266,23 +236,25 @@ export default function JobDetailScreen() {
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={[styles.techName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                    ✦ CasaService Pro
+                    {t("jobDetail.casaServicePro")}
                   </Text>
                   {job.acceptedAt && (
                     <Text style={[styles.techSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Accepted {format(new Date(job.acceptedAt), "MMM d, yyyy")}
+                      {t("jobDetail.accepted", { date: formatDate(job.acceptedAt, "MMM d, yyyy") })}
                     </Text>
                   )}
                 </View>
                 {job.contactPhone && (
                   <TouchableOpacity
                     onPress={() => Linking.openURL(`tel:${job.contactPhone}`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("jobDetail.callPro")}
                     style={[styles.callBtn, { backgroundColor: colors.primary }]}
                     activeOpacity={0.8}
                   >
                     <Feather name="phone" size={14} color={colors.primaryForeground} />
                     <Text style={[styles.callBtnText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
-                      Call
+                      {t("jobDetail.call")}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -292,11 +264,11 @@ export default function JobDetailScreen() {
                 <Feather name="calendar" size={13} color={colors.mutedForeground} />
                 {job.scheduledAt ? (
                   <Text style={[styles.scheduleText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                    {format(new Date(job.scheduledAt), "EEEE, MMMM d, yyyy 'at' h:mm a")}
+                    {t("jobDetail.dateAtTime", { date: formatDate(job.scheduledAt, "EEEE, MMMM d, yyyy"), time: formatDate(job.scheduledAt, "h:mm a") })}
                   </Text>
                 ) : (
                   <Text style={[styles.scheduleText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontStyle: "italic" }]}>
-                    Service date pending — your pro will reach out to confirm
+                    {t("jobDetail.datePending")}
                   </Text>
                 )}
               </View>
@@ -309,7 +281,7 @@ export default function JobDetailScreen() {
               <View style={styles.sectionHeader}>
                 <Feather name="info" size={13} color={colors.mutedForeground} />
                 <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  ASSET NOTES
+                  {t("jobDetail.assetNotes")}
                 </Text>
               </View>
               <Text style={[styles.descText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>
@@ -319,18 +291,18 @@ export default function JobDetailScreen() {
           )}
 
           {/* Service history (last 3 records) */}
-          {job.serviceHistory.length > 0 && (
+          {serviceHistory.length > 0 && (
             <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Feather name="clock" size={13} color={colors.mutedForeground} />
                 <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  SERVICE HISTORY
+                  {t("jobDetail.serviceHistory")}
                 </Text>
                 <Text style={[{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginLeft: 2 }]}>
-                  · {job.serviceHistory.length} record{job.serviceHistory.length !== 1 ? "s" : ""}
+                  · {t("jobDetail.recordCount", { count: serviceHistory.length })}
                 </Text>
               </View>
-              {job.serviceHistory.slice(-4).reverse().map((rec, idx, arr) => (
+              {serviceHistory.slice(-4).reverse().map((rec, idx, arr) => (
                 <View
                   key={rec.id}
                   style={[
@@ -346,7 +318,7 @@ export default function JobDetailScreen() {
                     </Text>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <Text style={[styles.historyDate, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {format(new Date(rec.date), "MMM d, yyyy")}
+                        {formatDate(rec.date, "MMM d, yyyy")}
                       </Text>
                       {rec.cost && Number(rec.cost) > 0 && (
                         <Text style={[styles.historyCost, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
@@ -363,12 +335,12 @@ export default function JobDetailScreen() {
           {/* View full asset link */}
           <TouchableOpacity
             style={[styles.assetLinkBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-            onPress={() => router.push(`/asset/${job.assetId}`)}
+            onPress={() => job.assetId && router.push(`/asset/${job.assetId}`)}
             activeOpacity={0.7}
           >
             <Feather name="package" size={15} color={colors.primary} />
             <Text style={[styles.assetLinkText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-              View full asset page
+              {t("jobDetail.viewAsset")}
             </Text>
             <Feather name="chevron-right" size={15} color={colors.primary} />
           </TouchableOpacity>

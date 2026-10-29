@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,26 +11,23 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
-import { useQuery } from "@tanstack/react-query";
-import { useListProperties } from "@workspace/api-client-react";
+import { getGetInvestmentLedgerQueryKey, useGetInvestmentLedger } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
-import { format } from "date-fns";
-
-type SubscriptionTier = "essential" | "basic" | "managed" | "concierge";
-const TIER_RANK: Record<SubscriptionTier, number> = { essential: 0, basic: 1, managed: 2, concierge: 3 };
+import { useSelectedProperty } from "@/context/PropertyContext";
+import { EmptyState } from "@/components/EmptyState";
+import { useSubscription, isUpgradeRequiredError } from "@/hooks/useSubscription";
+import { Trans, useTranslation } from "react-i18next";
+import { formatDate } from "@/lib/dates";
+import { CompareBar } from "@/components/ledger/CompareBar";
+import { DonutChart } from "@/components/ledger/DonutChart";
+import { catColor, fmt$ } from "@/components/ledger/categoryColors";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type RangeKey = "this_month" | "last_month" | "this_quarter" | "last_quarter" | "this_year" | "last_year" | "all_time";
 
-const RANGES: { key: RangeKey; label: string }[] = [
-  { key: "this_month",   label: "This Month" },
-  { key: "last_month",   label: "Last Month" },
-  { key: "this_quarter", label: "This Quarter" },
-  { key: "last_quarter", label: "Last Quarter" },
-  { key: "this_year",    label: "This Year" },
-  { key: "last_year",    label: "Last Year" },
-  { key: "all_time",     label: "All Time" },
+// Labels: ledger.range.<key>
+const RANGES: RangeKey[] = [
+  "this_month", "last_month", "this_quarter", "last_quarter", "this_year", "last_year", "all_time",
 ];
 
 type CategorySpend = { category: string; actual: number; expected: number };
@@ -39,7 +36,8 @@ type LedgerRecord = {
   id: string;
   description: string;
   date: string;
-  cost: number | string;
+  // Decimal columns can arrive as strings ("45.00")
+  cost?: number | string;
   assetName: string;
   assetCategory: string;
   technicianName?: string;
@@ -52,180 +50,35 @@ type LedgerData = {
   totals: { actual: number; expected: number };
 };
 
-// ── Category colours ───────────────────────────────────────────────────────────
-const CAT_COLORS: Record<string, string> = {
-  HVAC: "#3b82f6", Plumbing: "#06b6d4", Electrical: "#eab308",
-  Roof: "#78716c", Appliance: "#8b5cf6", Structural: "#22c55e", Other: "#94a3b8",
-};
-function catColor(cat: string) { return CAT_COLORS[cat] ?? "#94a3b8"; }
-
-function fmt$(n: number) {
-  return n === 0 ? "$0" : n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-}
-
-// ── SVG Donut Chart ────────────────────────────────────────────────────────────
-function DonutChart({ data, total, colors }: { data: { name: string; value: number }[]; total: number; colors: ReturnType<typeof useColors> }) {
-  const { Svg, Path, Text: SvgText } = require("react-native-svg");
-  const size = 150, cx = 75, cy = 75, outerR = 60, innerR = 38;
-
-  function polarToXY(angle: number, r: number) {
-    return {
-      x: cx + r * Math.cos((angle * Math.PI) / 180),
-      y: cy + r * Math.sin((angle * Math.PI) / 180),
-    };
-  }
-
-  function describeArc(startAngle: number, endAngle: number) {
-    const s = polarToXY(startAngle, outerR);
-    const e = polarToXY(endAngle, outerR);
-    const si = polarToXY(startAngle, innerR);
-    const ei = polarToXY(endAngle, innerR);
-    const large = endAngle - startAngle > 180 ? 1 : 0;
-    return [
-      `M ${s.x} ${s.y}`,
-      `A ${outerR} ${outerR} 0 ${large} 1 ${e.x} ${e.y}`,
-      `L ${ei.x} ${ei.y}`,
-      `A ${innerR} ${innerR} 0 ${large} 0 ${si.x} ${si.y}`,
-      "Z",
-    ].join(" ");
-  }
-
-  let currentAngle = -90;
-  const arcs = data.map((d) => {
-    const sweep = (d.value / total) * 360;
-    const start = currentAngle;
-    currentAngle += sweep;
-    return { ...d, path: describeArc(start, currentAngle - 0.5), color: catColor(d.name) };
-  });
-
-  return (
-    <Svg width={size} height={size}>
-      {arcs.map((arc) => (
-        <Path key={arc.name} d={arc.path} fill={arc.color} />
-      ))}
-      <SvgText x={cx} y={cy - 6} textAnchor="middle" fontSize={18} fontWeight="700" fill={colors.foreground}>
-        {fmt$(total)}
-      </SvgText>
-      <SvgText x={cx} y={cy + 10} textAnchor="middle" fontSize={9} fill={colors.mutedForeground}>
-        total spent
-      </SvgText>
-    </Svg>
-  );
-}
-
-// ── Compare Bar ────────────────────────────────────────────────────────────────
-function CompareBar({ actual, expected, colors }: { actual: number; expected: number; colors: ReturnType<typeof useColors> }) {
-  const max = Math.max(actual, expected, 1);
-  const over = actual > expected && expected > 0;
-  const under = actual < expected && expected > 0;
-  const diff = Math.abs(actual - expected);
-  const diffPct = expected > 0 ? Math.round((diff / expected) * 100) : 0;
-
-  return (
-    <View style={[compareStyles.wrap, { backgroundColor: colors.muted + "40", borderColor: colors.border }]}>
-      <Text style={[compareStyles.title, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-        EXPECTED VS ACTUAL
-      </Text>
-      {[
-        { label: "Expected", value: expected, barColor: "#94a3b8", width: (expected / max) * 100 },
-        { label: "Actual",   value: actual,   barColor: over ? "#ef4444" : under ? "#22c55e" : "#3b82f6", width: (actual / max) * 100 },
-      ].map(({ label, value, barColor, width }) => (
-        <View key={label} style={{ gap: 4, marginTop: 8 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text style={[compareStyles.barLabel, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{label}</Text>
-            <Text style={[compareStyles.barValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-              ${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            </Text>
-          </View>
-          <View style={[compareStyles.track, { backgroundColor: colors.border }]}>
-            <View style={[compareStyles.fill, { width: `${width}%`, backgroundColor: barColor }]} />
-          </View>
-        </View>
-      ))}
-      {expected > 0 && (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 }}>
-          <Feather
-            name={over ? "trending-up" : under ? "trending-down" : "minus"}
-            size={12}
-            color={over ? "#dc2626" : under ? "#059669" : colors.mutedForeground}
-          />
-          <Text style={[compareStyles.verdict, {
-            color: over ? "#dc2626" : under ? "#059669" : colors.mutedForeground,
-            fontFamily: "Inter_600SemiBold",
-          }]}>
-            {over
-              ? `${diffPct}% over budget ($${diff.toLocaleString(undefined, { maximumFractionDigits: 0 })} more than estimated)`
-              : under
-              ? `${diffPct}% under budget ($${diff.toLocaleString(undefined, { maximumFractionDigits: 0 })} saved)`
-              : "On budget"}
-          </Text>
-        </View>
-      )}
-    </View>
-  );
-}
-
-const compareStyles = StyleSheet.create({
-  wrap: { borderRadius: 12, borderWidth: 1, padding: 14, gap: 0 },
-  title: { fontSize: 11, letterSpacing: 0.8 },
-  barLabel: { fontSize: 12 },
-  barValue: { fontSize: 12 },
-  track: { height: 8, borderRadius: 4, overflow: "hidden" },
-  fill: { height: 8, borderRadius: 4 },
-  verdict: { fontSize: 12, flex: 1 },
-});
-
 // ── Main screen ────────────────────────────────────────────────────────────────
 export default function InvestmentLedgerScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { data: properties = [] } = useListProperties();
-  const propertyId = (properties[0] as any)?.id as string | undefined;
+  const { selectedProperty, isLoading: propsLoading } = useSelectedProperty();
+  const propertyId = selectedProperty?.id;
+  // No properties at all: show the empty state instead of waiting forever for a propertyId
+  const noProperty = !propsLoading && !propertyId;
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
+  const { isLoading: subLoading, isFreeTier } = useSubscription();
+  const [range, setRange] = useState<RangeKey>("this_year");
 
-  const { data: subscription, isLoading: subLoading } = useQuery({
-    queryKey: ["subscription"],
-    queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/subscription`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed");
-      return res.json() as Promise<{ tier: SubscriptionTier }>;
+  // Free plan can't use the ledger — don't fire a request the server will reject
+  const ledger = useGetInvestmentLedger(propertyId ?? "", { range }, {
+    query: {
+      queryKey: getGetInvestmentLedgerQueryKey(propertyId ?? "", { range }),
+      enabled: !!propertyId && !subLoading && !isFreeTier,
+      retry: (n, err) => !isUpgradeRequiredError(err) && n < 2,
     },
   });
-  const isBasicPlus = TIER_RANK[subscription?.tier ?? "essential"] >= 1;
-
-  const [range, setRange] = useState<RangeKey>("this_year");
-  const [data, setData] = useState<LedgerData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!propertyId) return;
-    setLoading(true);
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${baseUrl}/api/properties/${propertyId}/ledger?range=${range}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const d = await res.json();
-        if (!cancelled) setData(d);
-      } catch {
-        if (!cancelled) setData(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [propertyId, range]);
+  const upgradeRequired = isUpgradeRequiredError(ledger.error);
+  const locked = isFreeTier || upgradeRequired;
+  const isBasicPlus = !subLoading && !locked;
+  const data: LedgerData | undefined = ledger.data;
+  const loading = ledger.isPending;
 
   const records = data?.records.filter((r) => r.cost && Number(r.cost) > 0) ?? [];
   const pieData = (data?.byCategory ?? []).filter((c) => c.actual > 0).map((c) => ({ name: c.category, value: c.actual }));
@@ -235,7 +88,7 @@ export default function InvestmentLedgerScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} hitSlop={8} onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -244,10 +97,10 @@ export default function InvestmentLedgerScreen() {
           </View>
           <View>
             <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              Investment Ledger
+              {t("ledger.title")}
             </Text>
             <Text style={[styles.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Maintenance spend — expected vs actual
+              {t("ledger.headerSub")}
             </Text>
           </View>
         </View>
@@ -263,51 +116,63 @@ export default function InvestmentLedgerScreen() {
         >
           {RANGES.map((r) => (
             <TouchableOpacity
-              key={r.key}
-              onPress={() => setRange(r.key)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: range === r }}
+              key={r}
+              onPress={() => setRange(r)}
               style={[
                 styles.rangeChip,
-                range === r.key
+                range === r
                   ? { backgroundColor: colors.primary, borderColor: colors.primary }
                   : { backgroundColor: "transparent", borderColor: colors.border },
               ]}
             >
               <Text style={[
                 styles.rangeChipText,
-                range === r.key
+                range === r
                   ? { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }
                   : { color: colors.mutedForeground, fontFamily: "Inter_400Regular" },
               ]}>
-                {r.label}
+                {t(`ledger.range.${r}`)}
               </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
       )}
 
-      {subLoading ? (
+      {noProperty ? (
+        <EmptyState
+          icon="home"
+          title={t("common.noPropertyYet")}
+          description={t("ledger.noPropertyDesc")}
+          actionLabel={t("common.addAProperty")}
+          onAction={() => router.push("/properties")}
+        />
+      ) : subLoading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
-      ) : !isBasicPlus ? (
+      ) : locked ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
           <View style={[styles.lockIconWrap, { backgroundColor: "#10b981" + "15" }]}>
             <Feather name="lock" size={28} color="#10b981" />
           </View>
           <Text style={[{ fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground, textAlign: "center" }]}>
-            Basic Plan Required
+            {t("common.basicPlanRequired")}
           </Text>
           <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }]}>
-            Track your maintenance spend vs expectations — available on the{" "}
-            <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Basic</Text> plan and above.
+            <Trans
+              i18nKey="ledger.lockedDesc"
+              components={{ b: <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }} /> }}
+            />
           </Text>
           <TouchableOpacity
             style={[styles.upgradeBtn, { backgroundColor: "#10b981" }]}
-            onPress={() => router.push("/upgrade" as any)}
+            onPress={() => router.push("/upgrade")}
             activeOpacity={0.8}
           >
             <Feather name="star" size={14} color="#fff" />
-            <Text style={[styles.upgradeBtnText, { fontFamily: "Inter_600SemiBold" }]}>Upgrade to Basic — $9.99/mo</Text>
+            <Text style={[styles.upgradeBtnText, { fontFamily: "Inter_600SemiBold" }]}>{t("common.upgradeToBasic")}</Text>
           </TouchableOpacity>
         </View>
       ) : loading ? (
@@ -318,7 +183,7 @@ export default function InvestmentLedgerScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
           <Feather name="tool" size={36} color={colors.mutedForeground + "40"} />
           <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-            Could not load ledger data
+            {t("ledger.loadFailed")}
           </Text>
         </View>
       ) : (
@@ -329,7 +194,7 @@ export default function InvestmentLedgerScreen() {
           {/* Spend by Category */}
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-              SPEND BY CATEGORY
+              {t("ledger.spendByCategory")}
             </Text>
 
             {hasSpend ? (
@@ -345,7 +210,7 @@ export default function InvestmentLedgerScreen() {
                       <View key={c.category} style={styles.legendRow}>
                         <View style={[styles.legendDot, { backgroundColor: catColor(c.category) }]} />
                         <Text style={[styles.legendCat, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={1}>
-                          {c.category}
+                          {t(`categories.${c.category}`, { defaultValue: c.category })}
                         </Text>
                         <Text style={[styles.legendPct, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{pct}%</Text>
                         <Text style={[styles.legendAmt, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
@@ -356,7 +221,7 @@ export default function InvestmentLedgerScreen() {
                   })}
                   <View style={[styles.legendRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 2 }]}>
                     <View style={{ width: 10 }} />
-                    <Text style={[styles.legendCat, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Total</Text>
+                    <Text style={[styles.legendCat, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{t("ledger.total")}</Text>
                     <View style={{ flex: 1 }} />
                     <Text style={[styles.legendAmt, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
                       ${data.totals.actual.toLocaleString(undefined, { maximumFractionDigits: 0 })}
@@ -368,10 +233,10 @@ export default function InvestmentLedgerScreen() {
               <View style={styles.emptySpend}>
                 <Feather name="dollar-sign" size={28} color={colors.mutedForeground + "40"} />
                 <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                  No spend recorded for this period
+                  {t("ledger.noSpend")}
                 </Text>
                 <Text style={[{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center" }]}>
-                  Log service records with costs on your asset pages to track spending here.
+                  {t("ledger.noSpendDesc")}
                 </Text>
               </View>
             )}
@@ -386,11 +251,11 @@ export default function InvestmentLedgerScreen() {
           <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                MAINTENANCE LEDGER
+                {t("ledger.maintenanceLedger")}
               </Text>
               {records.length > 0 && (
                 <Text style={[{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  · {records.length} record{records.length !== 1 ? "s" : ""}
+                  · {t("ledger.recordCount", { count: records.length })}
                 </Text>
               )}
             </View>
@@ -398,7 +263,7 @@ export default function InvestmentLedgerScreen() {
             {records.length === 0 ? (
               <View style={styles.emptyLedger}>
                 <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  No cost records in this period
+                  {t("ledger.noCostRecords")}
                 </Text>
               </View>
             ) : (
@@ -425,7 +290,7 @@ export default function InvestmentLedgerScreen() {
                         </Text>
                         <View style={[styles.catBadge, { backgroundColor: catColor(record.assetCategory) + "20" }]}>
                           <Text style={[styles.catBadgeText, { color: catColor(record.assetCategory), fontFamily: "Inter_600SemiBold" }]}>
-                            {record.assetCategory}
+                            {t(`categories.${record.assetCategory}`, { defaultValue: record.assetCategory })}
                           </Text>
                         </View>
                         {(record.companyName || record.technicianName) && (
@@ -440,7 +305,7 @@ export default function InvestmentLedgerScreen() {
                         ${Number(record.cost).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                       </Text>
                       <Text style={[styles.ledgerDate, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                        {format(new Date(record.date), "MMM d, yyyy")}
+                        {formatDate(record.date, "MMM d, yyyy")}
                       </Text>
                     </View>
                   </View>
@@ -449,7 +314,7 @@ export default function InvestmentLedgerScreen() {
                 {/* Period total */}
                 <View style={[styles.periodTotal, { backgroundColor: colors.muted + "40", borderTopColor: colors.border }]}>
                   <Text style={[styles.periodTotalLabel, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                    PERIOD TOTAL
+                    {t("ledger.periodTotal")}
                   </Text>
                   <Text style={[styles.periodTotalValue, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
                     ${data.totals.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}

@@ -37,7 +37,8 @@ router.post("/properties", requireAuth(), async (req, res) => {
     .where(eq(propertiesTable.userId, req.userId));
 
   if ((total ?? 0) >= limit) {
-    return res.status(403).json({ error: "property_limit_reached", tier, limit });
+    res.status(403).json({ error: "property_limit_reached", tier, limit });
+    return;
   }
 
   // Fetch owner email from Clerk (best-effort — doesn't block creation)
@@ -55,7 +56,7 @@ router.post("/properties", requireAuth(), async (req, res) => {
 
   const [property] = await db
     .insert(propertiesTable)
-    .values({ ...body, userId: req.userId, ownerEmail })
+    .values({ ...body, bathrooms: body.bathrooms?.toString(), userId: req.userId, ownerEmail })
     .returning();
   res.status(201).json(property);
 });
@@ -63,7 +64,10 @@ router.post("/properties", requireAuth(), async (req, res) => {
 router.get("/properties/:propertyId", requireAuth(), async (req, res) => {
   const { propertyId } = GetPropertyParams.parse(req.params);
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
   res.json(property);
 });
 
@@ -71,7 +75,10 @@ router.patch("/properties/:propertyId", requireAuth(), async (req, res) => {
   const { propertyId } = UpdatePropertyParams.parse(req.params);
   const body = UpdatePropertyBody.parse(req.body);
   const existing = await getOwnedProperty(propertyId, req.userId);
-  if (!existing) return res.status(404).json({ error: "Property not found" });
+  if (!existing) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
   // Drizzle's static types for .set() don't accept null for nullable columns,
   // but the runtime correctly maps null → SQL NULL for columns without notNull().
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -80,7 +87,10 @@ router.patch("/properties/:propertyId", requireAuth(), async (req, res) => {
     .set({ ...(body as any), updatedAt: new Date() })
     .where(and(eq(propertiesTable.id, propertyId), eq(propertiesTable.userId, req.userId)))
     .returning();
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
   res.json(property);
 });
 
@@ -88,7 +98,10 @@ router.get("/properties/:propertyId/summary", requireAuth(), async (req, res) =>
   const { propertyId } = GetPropertySummaryParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
   const assets = await db.select().from(assetsTable).where(eq(assetsTable.propertyId, propertyId));
   const totalAssets = assets.length;

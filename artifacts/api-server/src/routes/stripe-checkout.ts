@@ -1,21 +1,16 @@
 import { Router } from "express";
+import type Stripe from "stripe";
 import { db } from "@workspace/db";
 import { subscriptionsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getUncachableStripeClient } from "../stripeClient.js";
 import { logger } from "../lib/logger.js";
+import { getOrCreateSubscription } from "../lib/subscription.js";
+import { syncStripeSubscription } from "../lib/stripeSync.js";
+import { getAppUrl } from "../lib/appUrl.js";
 
 const router = Router();
-
-type SubscriptionTier = "essential" | "basic" | "managed" | "concierge";
-
-async function getOrCreateSubscription(userId: string) {
-  const existing = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId)).limit(1);
-  if (existing[0]) return existing[0];
-  const [created] = await db.insert(subscriptionsTable).values({ userId, tier: "essential" }).returning();
-  return created!;
-}
 
 // Find a Stripe price ID for the given tier by searching products in Stripe directly
 async function getPriceIdForTier(tier: "basic" | "managed" | "concierge"): Promise<string | null> {
@@ -83,14 +78,16 @@ router.post("/stripe/checkout", requireAuth(), async (req, res) => {
   const { tier } = req.body as { tier: "basic" | "managed" | "concierge" };
 
   if (!tier || !["basic", "managed", "concierge"].includes(tier)) {
-    return res.status(400).json({ error: "Invalid tier. Must be 'basic', 'managed', or 'concierge'." });
+    res.status(400).json({ error: "Invalid tier. Must be 'basic', 'managed', or 'concierge'." });
+    return;
   }
 
   const priceId = await getPriceIdForTier(tier);
   if (!priceId) {
-    return res.status(404).json({
+    res.status(404).json({
       error: "No active price found for this tier. Run the seed script first.",
     });
+    return;
   }
 
   const sub = await getOrCreateSubscription(req.userId);
@@ -113,20 +110,17 @@ router.post("/stripe/checkout", requireAuth(), async (req, res) => {
     customerId = await createFreshCustomer();
   }
 
-  const host = process.env.REPLIT_DOMAINS?.split(",")[0];
-  const basePath = process.env.BASE_PATH ?? "";
-  const appUrl = host
-    ? `https://${host}${basePath}`
-    : `http://localhost:${process.env.PORT}${basePath}`;
+  const appUrl = getAppUrl();
 
-  const sessionParams = {
+  const sessionParams: Stripe.Checkout.SessionCreateParams = {
     customer: customerId,
-    payment_method_types: ["card"] as const,
+    payment_method_types: ["card"],
     line_items: [{ price: priceId, quantity: 1 }],
-    mode: "subscription" as const,
+    mode: "subscription",
     success_url: `${appUrl}/dashboard?stripe_success=1&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/settings`,
     metadata: { userId: req.userId, tier },
+    subscription_data: { metadata: { userId: req.userId, tier } },
   };
 
   let session;
@@ -150,35 +144,31 @@ router.post("/stripe/checkout", requireAuth(), async (req, res) => {
 router.post("/stripe/sync", requireAuth(), async (req, res) => {
   const { sessionId } = req.body as { sessionId: string };
   if (!sessionId) {
-    return res.status(400).json({ error: "sessionId is required" });
+    res.status(400).json({ error: "sessionId is required" });
+    return;
   }
 
   const stripe = getUncachableStripeClient();
   const session = await stripe.checkout.sessions.retrieve(sessionId);
 
   if (session.payment_status !== "paid" && session.status !== "complete") {
-    return res.status(400).json({ error: "Checkout session not completed" });
+    res.status(400).json({ error: "Checkout session not completed" });
+    return;
   }
 
-  const tier = (session.metadata?.tier ?? "essential") as SubscriptionTier;
-  const stripeSubscriptionId =
-    typeof session.subscription === "string"
-      ? session.subscription
-      : (session.subscription as any)?.id ?? null;
-  const stripeCustomerId =
-    typeof session.customer === "string"
-      ? session.customer
-      : (session.customer as any)?.id ?? null;
+  // The session id comes from the browser, so make sure it's this user's checkout.
+  if (session.metadata?.userId !== req.userId) {
+    res.status(403).json({ error: "Checkout session does not belong to this user" });
+    return;
+  }
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : session.subscription?.id;
+  if (!subscriptionId) {
+    res.status(400).json({ error: "Checkout session has no subscription" });
+    return;
+  }
 
-  await db
-    .update(subscriptionsTable)
-    .set({
-      tier,
-      stripeCustomerId: stripeCustomerId ?? undefined,
-      stripeSubscriptionId: stripeSubscriptionId ?? undefined,
-      updatedAt: new Date(),
-    })
-    .where(eq(subscriptionsTable.userId, req.userId));
+  const tier = await syncStripeSubscription(subscriptionId, { userId: req.userId });
 
   res.json({ tier, propertyLimit: TIER_PROPERTY_LIMITS[tier] ?? 1 });
 });
@@ -187,15 +177,12 @@ router.post("/stripe/sync", requireAuth(), async (req, res) => {
 router.post("/stripe/portal", requireAuth(), async (req, res) => {
   const sub = await getOrCreateSubscription(req.userId);
   if (!sub.stripeCustomerId) {
-    return res.status(400).json({ error: "No Stripe customer found. Subscribe first." });
+    res.status(400).json({ error: "No Stripe customer found. Subscribe first." });
+    return;
   }
 
   const stripe = getUncachableStripeClient();
-  const host = process.env.REPLIT_DOMAINS?.split(",")[0];
-  const basePath = process.env.BASE_PATH ?? "";
-  const appUrl = host
-    ? `https://${host}${basePath}`
-    : `http://localhost:${process.env.PORT}${basePath}`;
+  const appUrl = getAppUrl();
 
   const portalSession = await stripe.billingPortal.sessions.create({
     customer: sub.stripeCustomerId,

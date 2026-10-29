@@ -26,12 +26,12 @@ export default function AdminDashboard() {
           <p className="text-muted-foreground">Platform-wide management and communication tools.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link href="/dashboard">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+          <Button asChild variant="outline" size="sm" className="gap-1.5 text-xs">
+            <Link href="/dashboard">
               Back to App
               <ArrowRight className="h-3.5 w-3.5" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
           <div className="bg-primary/10 p-3 rounded-xl">
             <LayoutDashboard className="h-6 w-6 text-primary" />
           </div>

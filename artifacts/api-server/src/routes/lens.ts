@@ -1,65 +1,45 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db } from "@workspace/db";
-import { assetsTable, maintenanceTasksTable, subscriptionsTable } from "@workspace/db";
+import { assetsTable, maintenanceTasksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOwnedAsset } from "../lib/access.js";
+import { aiRateLimit, refundAiUse, reserveAiUse } from "../lib/subscription.js";
+import { parseAiTasks } from "../lib/aiTasks.js";
 
 const router = Router();
-
-async function getSubCounts(userId: string) {
-  const [sub] = await db.select().from(subscriptionsTable).where(eq(subscriptionsTable.userId, userId)).limit(1);
-  return {
-    sub,
-    tier: sub?.tier ?? "essential",
-    scansUsed: sub?.aiScansUsed ?? 0,
-    plansUsed: sub?.aiPlansUsed ?? 0,
-  };
-}
-
-async function upsertSub(userId: string, patch: { aiScansUsed?: number; aiPlansUsed?: number }, hasSub: boolean) {
-  if (hasSub) {
-    await db
-      .update(subscriptionsTable)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(subscriptionsTable.userId, userId));
-  } else {
-    await db
-      .insert(subscriptionsTable)
-      .values({ userId, tier: "essential", aiScansUsed: 0, aiPlansUsed: 0, ...patch })
-      .onConflictDoNothing();
-  }
-}
 
 const ScanBody = z.object({
   imageBase64: z.string().min(10),
   mimeType: z.string().default("image/jpeg"),
 });
 
-router.post("/assets/scan", requireAuth(), async (req, res) => {
+router.post("/assets/scan", requireAuth(), aiRateLimit(), async (req, res) => {
   const { imageBase64, mimeType } = ScanBody.parse(req.body);
 
-  const { sub, tier, scansUsed } = await getSubCounts(req.userId);
-  if (tier === "essential" && scansUsed >= 1) {
-    return res.status(403).json({ error: "Free tier allows 1 AI data plate scan. Upgrade to Basic for unlimited scans." });
+  if (!(await reserveAiUse(req.userId, "scans"))) {
+    res.status(403).json({ error: "Free tier allows 1 AI data plate scan. Upgrade to Basic for unlimited scans." });
+    return;
   }
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-5.1",
-    max_completion_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "image_url",
-            image_url: { url: `data:${mimeType};base64,${imageBase64}` },
-          } as any,
-          {
-            type: "text",
-            text: `You are an expert at reading appliance, HVAC, and home-system specification plates and labels.
+  let raw: string;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5.1",
+      max_completion_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "image_url",
+              image_url: { url: `data:${mimeType};base64,${imageBase64}` },
+            } as any,
+            {
+              type: "text",
+              text: `You are an expert at reading appliance, HVAC, and home-system specification plates and labels.
 
 Examine this image and extract the following information. If a field cannot be determined from the image, return null.
 
@@ -77,40 +57,42 @@ Return ONLY a raw JSON object — no markdown fences, no explanation — with th
 For "manufactureDate": look for labels such as "MFR DATE", "MANUF DATE", "DATE OF MFR", "MANUFACTURE DATE", "MFG DATE", "DOM", or any date-like value near the unit's serial/model info. Always return in YYYY-MM format (month and year only — do not include the day).
 For "estimatedReplacementCost": provide your best estimate in USD based on brand/model/type — even if not printed on the label.
 For "suggestedName": a short plain-English name like "Carrier Central AC Unit" or "Rheem Water Heater".`,
-          },
-        ],
-      },
-    ],
-  });
+            },
+          ],
+        },
+      ],
+    });
+    raw = completion.choices[0]?.message?.content ?? "{}";
+  } catch (err) {
+    await refundAiUse(req.userId, "scans");
+    throw err;
+  }
 
-  const raw = completion.choices[0]?.message?.content ?? "{}";
   const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/, "").trim();
 
   try {
-    const extracted = JSON.parse(cleaned);
-
-    if (tier === "essential") {
-      await upsertSub(req.userId, { aiScansUsed: scansUsed + 1 }, !!sub);
-    }
-
-    res.json(extracted);
+    res.json(JSON.parse(cleaned));
   } catch {
+    await refundAiUse(req.userId, "scans");
     req.log.error({ raw }, "AI Lens: failed to parse OCR response");
-    res.status(500).json({ error: "Could not parse AI response", raw });
+    res.status(502).json({ error: "Could not read the label. Try a clearer photo." });
   }
 });
 
 const GenerateTasksParams = z.object({ assetId: z.string() });
 
-router.post("/assets/:assetId/generate-tasks", requireAuth(), async (req, res) => {
+router.post("/assets/:assetId/generate-tasks", requireAuth(), aiRateLimit(), async (req, res) => {
   const { assetId } = GenerateTasksParams.parse(req.params);
 
   const asset = await getOwnedAsset(assetId, req.userId);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+  if (!asset) {
+    res.status(404).json({ error: "Asset not found" });
+    return;
+  }
 
-  const { sub, tier, plansUsed } = await getSubCounts(req.userId);
-  if (tier === "essential" && plansUsed >= 1) {
-    return res.status(403).json({ error: "Free tier allows 1 AI maintenance plan. Upgrade to Basic for unlimited plans." });
+  if (!(await reserveAiUse(req.userId, "plans"))) {
+    res.status(403).json({ error: "Free tier allows 1 AI maintenance plan. Upgrade to Basic for unlimited plans." });
+    return;
   }
 
   const ageYears = asset.installDate
@@ -149,28 +131,31 @@ Field rules:
 - "isDiy": true if a careful homeowner can do it, false if a licensed tech is required
 - "estimatedCost": materials cost in USD (parts/supplies only), or null if no materials needed`;
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-5.1",
-    max_completion_tokens: 4096,
-    messages: [{ role: "user", content: prompt }],
-  });
-
-  const raw = completion.choices[0]?.message?.content ?? "[]";
-  const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/, "").trim();
-
-  let tasks: any[];
+  let raw: string;
   try {
-    tasks = JSON.parse(cleaned);
-  } catch {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-5.1",
+      max_completion_tokens: 4096,
+      messages: [{ role: "user", content: prompt }],
+    });
+    raw = completion.choices[0]?.message?.content ?? "[]";
+  } catch (err) {
+    await refundAiUse(req.userId, "plans");
+    throw err;
+  }
+
+  const tasks = parseAiTasks(raw);
+  if (!tasks) {
+    await refundAiUse(req.userId, "plans");
     req.log.error({ raw }, "Autonomous task gen: failed to parse AI response");
-    return res.status(500).json({ error: "AI response could not be parsed", raw });
+    res.status(502).json({ error: "Couldn't generate a plan right now. Please try again." });
+    return;
   }
 
   const today = new Date();
   const inserted = await Promise.all(
     tasks
-      .filter((t: any) => t.title && typeof t.intervalDays === "number")
-      .map((t: any) => {
+      .map((t) => {
         const due = new Date(today);
         due.setDate(due.getDate() + Math.min(t.intervalDays, 90));
         const fullDescription = t.howTo
@@ -196,10 +181,6 @@ Field rules:
     .update(assetsTable)
     .set({ status: "verified", updatedAt: new Date() })
     .where(eq(assetsTable.id, assetId));
-
-  if (tier === "essential") {
-    await upsertSub(req.userId, { aiPlansUsed: plansUsed + 1 }, !!sub);
-  }
 
   res.json({ tasks: inserted, taskCount: inserted.length });
 });

@@ -16,10 +16,10 @@ const mocks = vi.hoisted(() => {
   const getAuth = vi.fn(() => ({ userId: null as string | null }));
 
   // Clerk client
-  const clerkGetUser = vi.fn<[], Promise<{ emailAddresses: { emailAddress: string }[] }>>(() =>
+  const clerkGetUser = vi.fn<() => Promise<{ emailAddresses: { emailAddress: string }[] }>>(() =>
     Promise.resolve({ emailAddresses: [{ emailAddress: "test@example.com" }] })
   );
-  const clerkDeleteUser = vi.fn<[], Promise<void>>(() => Promise.resolve());
+  const clerkDeleteUser = vi.fn<(userId: string) => Promise<void>>(() => Promise.resolve());
 
   // Stripe
   const stripeSubscriptionsCancel = vi.fn(() => Promise.resolve({}));
@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => {
   const normalizeObjectEntityPath = vi.fn((p: string) => p);
 
   // DB transaction-level operations (tracked for assertions)
-  const txDelete = vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) }));
+  const txDelete = vi.fn((_table: { __table: string }) => ({ where: vi.fn().mockResolvedValue(undefined) }));
   const txUpdate = vi.fn(() => ({
     set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
   }));
@@ -225,7 +225,7 @@ describe("DELETE /api/user", () => {
 
     // The transaction should delete from all core tables
     const deletedTableNames = mocks.txDelete.mock.calls.map(
-      ([table]: [{ __table: string }]) => table.__table
+      ([table]) => table.__table
     );
     expect(deletedTableNames).toContain("userProfilesTable");
     expect(deletedTableNames).toContain("propertiesTable");

@@ -1,17 +1,20 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { getExpectedLifespan } from "@workspace/maintenance-specs";
 import { useColors } from "@/hooks/useColors";
+import { useTranslation } from "react-i18next";
 
-// ── Category config (matches web exactly) ────────────────────────────────────
-export const CATEGORY_CONFIG: Record<string, { emoji: string; color: string; bg: string; lifespan: number }> = {
-  HVAC:       { emoji: "❄️",  color: "#3b82f6", bg: "#3b82f615", lifespan: 15 },
-  Plumbing:   { emoji: "🔧",  color: "#06b6d4", bg: "#06b6d415", lifespan: 12 },
-  Electrical: { emoji: "⚡",  color: "#eab308", bg: "#eab30815", lifespan: 40 },
-  Roof:       { emoji: "🏠",  color: "#78716c", bg: "#78716c15", lifespan: 25 },
-  Appliance:  { emoji: "🫙",  color: "#8b5cf6", bg: "#8b5cf615", lifespan: 12 },
-  Structural: { emoji: "🏗️", color: "#22c55e", bg: "#22c55e15", lifespan: 50 },
-  Other:      { emoji: "📦",  color: "#94a3b8", bg: "#94a3b815", lifespan: 20 },
+// ── Category display config (colors and icons only) ──────────────────────────
+// Lifespans come from @workspace/maintenance-specs so the app agrees with the server.
+export const CATEGORY_CONFIG: Record<string, { emoji: string; color: string; bg: string }> = {
+  HVAC:       { emoji: "❄️",  color: "#3b82f6", bg: "#3b82f615" },
+  Plumbing:   { emoji: "🔧",  color: "#06b6d4", bg: "#06b6d415" },
+  Electrical: { emoji: "⚡",  color: "#eab308", bg: "#eab30815" },
+  Roof:       { emoji: "🏠",  color: "#78716c", bg: "#78716c15" },
+  Appliance:  { emoji: "🫙",  color: "#8b5cf6", bg: "#8b5cf615" },
+  Structural: { emoji: "🏗️", color: "#22c55e", bg: "#22c55e15" },
+  Other:      { emoji: "📦",  color: "#94a3b8", bg: "#94a3b815" },
 };
 
 // Category name normalisation (API may return lowercase or plural)
@@ -26,17 +29,19 @@ function normCategory(cat: string): string {
 
 // ── Score calculation (matches web exactly) ───────────────────────────────────
 export function calcAssetScore(asset: {
+  /** Refines the lifespan for well-known equipment (e.g. "Water Heater") */
+  name?: string;
   installDate?: string | null;
   warrantyExpiry?: string | null;
   status?: string;
   category: string;
 }): number {
   const cat = normCategory(asset.category);
-  const cfg = CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.Other!;
+  const lifespan = getExpectedLifespan(cat, asset.name ?? "");
   let score = 100;
   if (asset.installDate) {
     const ageYears = (Date.now() - new Date(asset.installDate).getTime()) / (365.25 * 24 * 3600 * 1000);
-    score -= Math.round(Math.min(ageYears / cfg.lifespan, 1) * 40);
+    score -= Math.round(Math.min(ageYears / lifespan, 1) * 40);
   }
   if (asset.status === "needs_attention") score -= 25;
   else if (asset.status === "unverified") score -= 5;
@@ -105,9 +110,10 @@ export interface AssetCardProps {
 
 export function AssetCard({ name, category, brand, model, serialNumber, installDate, warrantyExpiry, status, onPress }: AssetCardProps) {
   const colors = useColors();
+  const { t } = useTranslation();
   const cat = normCategory(category);
   const cfg = CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.Other!;
-  const score = calcAssetScore({ installDate, warrantyExpiry, status, category: cat });
+  const score = calcAssetScore({ name, installDate, warrantyExpiry, status, category: cat });
   const underWarranty = warrantyExpiry ? new Date(warrantyExpiry) > new Date() : false;
   const needsAttention = status === "needs_attention";
 
@@ -136,7 +142,7 @@ export function AssetCard({ name, category, brand, model, serialNumber, installD
         )}
         {serialNumber && (
           <Text style={[styles.serial, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-            S/N: {serialNumber}
+            {t("assetCard.serial", { serial: serialNumber })}
           </Text>
         )}
         {/* Badges */}
@@ -144,12 +150,12 @@ export function AssetCard({ name, category, brand, model, serialNumber, installD
           {underWarranty && (
             <View style={styles.warrantyBadge}>
               <Feather name="shield" size={9} color="#059669" />
-              <Text style={styles.warrantyText}>Warranty</Text>
+              <Text style={styles.warrantyText}>{t("assetCard.warranty")}</Text>
             </View>
           )}
           {needsAttention && (
             <View style={styles.attentionBadge}>
-              <Text style={styles.attentionText}>Needs Attention</Text>
+              <Text style={styles.attentionText}>{t("assetCard.needsAttention")}</Text>
             </View>
           )}
         </View>

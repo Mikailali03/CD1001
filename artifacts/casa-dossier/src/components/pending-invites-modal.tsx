@@ -1,7 +1,15 @@
 import { useState, useEffect } from "react";
 import { useUser } from "@clerk/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { useTranslation, Trans } from "react-i18next";
+import {
+  getInbox,
+  claimInboxTransfer,
+  acceptInboxCollaborator,
+  declineInboxCollaborator,
+  getListPropertiesQueryKey,
+  type Inbox,
+} from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,23 +24,6 @@ import {
   Check,
   Loader2,
 } from "lucide-react";
-
-type InboxTransferItem = {
-  id: string;
-  fromEmail: string;
-  property: { id: string; name: string; address: string; city?: string; state?: string };
-};
-
-type InboxCollaboratorItem = {
-  id: string;
-  invitedEmail: string;
-  property: { id: string; name: string; address: string; city?: string; state?: string };
-};
-
-type Inbox = {
-  transfers: InboxTransferItem[];
-  collaboratorInvites: InboxCollaboratorItem[];
-};
 
 function PropertyRow({ name, address, city, state }: { name: string; address: string; city?: string; state?: string }) {
   return (
@@ -55,8 +46,7 @@ export function PendingInvitesModal() {
   const { user } = useUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const authFetch = useAuthFetch();
-  const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const { t } = useTranslation();
 
   const [inbox, setInbox] = useState<Inbox | null>(null);
   const [open, setOpen] = useState(false);
@@ -65,10 +55,9 @@ export function PendingInvitesModal() {
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
-    authFetch(`${BASE}/api/inbox`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data: Inbox | null) => {
-        if (cancelled || !data) return;
+    getInbox()
+      .then((data) => {
+        if (cancelled) return;
         const hasItems = data.transfers.length > 0 || data.collaboratorInvites.length > 0;
         if (hasItems) {
           setInbox(data);
@@ -84,13 +73,12 @@ export function PendingInvitesModal() {
   async function claimTransfer(id: string, propertyName: string) {
     setPending((p) => ({ ...p, [id]: true }));
     try {
-      const res = await authFetch(`${BASE}/api/inbox/transfers/${id}/claim`, { method: "POST" });
-      if (!res.ok) throw new Error();
-      setInbox((prev) => prev ? { ...prev, transfers: prev.transfers.filter((t) => t.id !== id) } : prev);
-      queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
-      toast({ title: "Property claimed!", description: `"${propertyName}" has been added to your account.` });
+      await claimInboxTransfer(id);
+      setInbox((prev) => prev ? { ...prev, transfers: prev.transfers.filter((tr) => tr.id !== id) } : prev);
+      queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+      toast({ title: t("invites.toast.claimed"), description: t("invites.toast.claimedDesc", { name: propertyName }) });
     } catch {
-      toast({ title: "Could not claim property", variant: "destructive" });
+      toast({ title: t("invites.toast.claimFailed"), variant: "destructive" });
     } finally {
       setPending((p) => ({ ...p, [id]: false }));
     }
@@ -99,15 +87,14 @@ export function PendingInvitesModal() {
   async function acceptCollab(id: string, propertyName: string) {
     setPending((p) => ({ ...p, [id]: true }));
     try {
-      const res = await authFetch(`${BASE}/api/inbox/collaborators/${id}/accept`, { method: "POST" });
-      if (!res.ok) throw new Error();
+      await acceptInboxCollaborator(id);
       setOpen(false);
       setInbox((prev) => prev ? { ...prev, collaboratorInvites: prev.collaboratorInvites.filter((c) => c.id !== id) } : prev);
-      await queryClient.invalidateQueries({ queryKey: ["/api/properties"] });
-      await queryClient.refetchQueries({ queryKey: ["/api/properties"] });
-      toast({ title: "Invite accepted", description: `You now have access to "${propertyName}".` });
+      await queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() });
+      await queryClient.refetchQueries({ queryKey: getListPropertiesQueryKey() });
+      toast({ title: t("invites.toast.accepted"), description: t("invites.toast.acceptedDesc", { name: propertyName }) });
     } catch {
-      toast({ title: "Could not accept invite", variant: "destructive" });
+      toast({ title: t("invites.toast.acceptFailed"), variant: "destructive" });
       setPending((p) => ({ ...p, [id]: false }));
     }
   }
@@ -115,10 +102,10 @@ export function PendingInvitesModal() {
   async function declineCollab(id: string) {
     setPending((p) => ({ ...p, [id]: true }));
     try {
-      await authFetch(`${BASE}/api/inbox/collaborators/${id}`, { method: "DELETE" });
+      await declineInboxCollaborator(id);
       setInbox((prev) => prev ? { ...prev, collaboratorInvites: prev.collaboratorInvites.filter((c) => c.id !== id) } : prev);
     } catch {
-      toast({ title: "Could not decline invite", variant: "destructive" });
+      toast({ title: t("invites.toast.declineFailed"), variant: "destructive" });
     } finally {
       setPending((p) => ({ ...p, [id]: false }));
     }
@@ -137,9 +124,9 @@ export function PendingInvitesModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md p-0 gap-0 overflow-hidden" hideCloseButton>
-        <DialogTitle className="sr-only">Pending Property Invitations</DialogTitle>
+        <DialogTitle className="sr-only">{t("invites.srTitle")}</DialogTitle>
         <DialogDescription className="sr-only">
-          You have pending property deed transfers or collaboration invites.
+          {t("invites.srDescription")}
         </DialogDescription>
 
         {/* Header */}
@@ -151,18 +138,18 @@ export function PendingInvitesModal() {
                   <Home className="h-4 w-4 text-primary" />
                 </div>
                 <Badge variant="secondary" className="text-xs">
-                  {remainingItems} pending
+                  {t("invites.pendingCount", { count: remainingItems })}
                 </Badge>
               </div>
-              <h2 className="text-base font-semibold text-foreground">Property Invitations</h2>
+              <h2 className="text-base font-semibold text-foreground">{t("invites.title")}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Someone has shared access to a home with you.
+                {t("invites.subtitle")}
               </p>
             </div>
             <button
               onClick={() => setOpen(false)}
               className="rounded-md p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors shrink-0"
-              aria-label="Close"
+              aria-label={t("common.close")}
             >
               <X className="h-4 w-4" />
             </button>
@@ -173,35 +160,39 @@ export function PendingInvitesModal() {
         <div className="px-5 py-4 space-y-4 max-h-[60vh] overflow-y-auto">
 
           {/* Deed transfers */}
-          {inbox.transfers.map((t) => (
-            <div key={t.id} className="rounded-xl border bg-card p-4 space-y-3">
+          {inbox.transfers.map((tr) => (
+            <div key={tr.id} className="rounded-xl border bg-card p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <div className="bg-amber-100 rounded-md p-1">
                   <FileCheck className="h-3.5 w-3.5 text-amber-600" />
                 </div>
-                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">Deed Transfer</span>
+                <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">{t("invites.deedTransfer")}</span>
               </div>
 
               <PropertyRow
-                name={t.property.name}
-                address={t.property.address}
-                city={t.property.city}
-                state={t.property.state}
+                name={tr.property.name}
+                address={tr.property.address}
+                city={tr.property.city}
+                state={tr.property.state}
               />
 
               <p className="text-xs text-muted-foreground">
-                <span className="font-medium text-foreground">{t.fromEmail}</span> has transferred ownership of this home to you.
+                <Trans
+                  i18nKey="invites.transferredToYou"
+                  values={{ email: tr.fromEmail }}
+                  components={{ strong: <span className="font-medium text-foreground" /> }}
+                />
               </p>
 
               <div className="flex gap-2 pt-1">
                 <Button
                   size="sm"
                   className="flex-1 gap-1.5 h-8 text-xs"
-                  onClick={() => claimTransfer(t.id, t.property.name)}
-                  disabled={!!pending[t.id]}
+                  onClick={() => claimTransfer(tr.id, tr.property.name)}
+                  disabled={!!pending[tr.id]}
                 >
-                  {pending[t.id] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Accept & Claim Property
+                  {pending[tr.id] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  {t("invites.acceptAndClaim")}
                 </Button>
               </div>
             </div>
@@ -214,7 +205,7 @@ export function PendingInvitesModal() {
                 <div className="bg-blue-100 rounded-md p-1">
                   <UserCheck className="h-3.5 w-3.5 text-blue-600" />
                 </div>
-                <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Collaboration Invite</span>
+                <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">{t("invites.collabInvite")}</span>
               </div>
 
               <PropertyRow
@@ -225,7 +216,7 @@ export function PendingInvitesModal() {
               />
 
               <p className="text-xs text-muted-foreground">
-                You've been invited to co-manage this home's dossier.
+                {t("invites.collabInvitedDesc")}
               </p>
 
               <div className="flex gap-2 pt-1">
@@ -236,7 +227,7 @@ export function PendingInvitesModal() {
                   disabled={!!pending[c.id]}
                 >
                   {pending[c.id] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Accept
+                  {t("invites.accept")}
                 </Button>
                 <Button
                   size="sm"
@@ -245,7 +236,7 @@ export function PendingInvitesModal() {
                   onClick={() => declineCollab(c.id)}
                   disabled={!!pending[c.id]}
                 >
-                  Decline
+                  {t("invites.decline")}
                 </Button>
               </div>
             </div>
@@ -254,9 +245,9 @@ export function PendingInvitesModal() {
 
         {/* Footer */}
         <div className="border-t px-5 py-3 bg-muted/20 flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">You can also manage these from your properties page.</p>
+          <p className="text-xs text-muted-foreground">{t("invites.manageHint")}</p>
           <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 shrink-0" onClick={() => setOpen(false)}>
-            Later
+            {t("invites.later")}
             <ArrowRight className="h-3 w-3" />
           </Button>
         </div>

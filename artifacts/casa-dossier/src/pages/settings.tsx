@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthFetch } from "@/hooks/use-auth-fetch";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTranslation, Trans } from "react-i18next";
 import { useProperty } from "@/contexts/property-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldError } from "@/components/field-error";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -13,79 +14,63 @@ import {
   Bell, Shield, User, ArrowRightLeft, Clock, X, Copy,
   CheckCircle2, Loader2, AlertTriangle, ShieldCheck, Home, LayoutDashboard, ArrowRight,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format } from "@/lib/date";
 import { Link } from "wouter";
-import { useGetUserProfile, getGetUserProfileQueryKey } from "@workspace/api-client-react";
+import {
+  useGetUserProfile,
+  getGetUserProfileQueryKey,
+  useGetPendingPropertyTransfer,
+  getGetPendingPropertyTransferQueryKey,
+  useInitiatePropertyTransfer,
+  useCancelPropertyTransfer,
+} from "@workspace/api-client-react";
 
+// App base path (not the API), used to build the shareable claim link.
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-type PendingTransfer = {
-  id: string;
-  propertyId: string;
-  toEmail: string;
-  fromEmail: string;
-  token: string;
-  status: string;
-  createdAt: string;
-  expiresAt: string | null;
-};
 
 function DeedTransferCard() {
   const { activePropertyId, activeProperty } = useProperty();
   const queryClient = useQueryClient();
-  const authFetch = useAuthFetch();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const [recipientEmail, setRecipientEmail] = useState("");
   const [fromEmail] = useState("alex@example.com");
   const [confirmStep, setConfirmStep] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const { data: pendingTransfer, isLoading: transferLoading } = useQuery<PendingTransfer | null>({
-    queryKey: ["property-transfer", activePropertyId],
-    queryFn: async () => {
-      if (!activePropertyId) return null;
-      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/transfer`);
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: !!activePropertyId,
-  });
+  const transferKey = getGetPendingPropertyTransferQueryKey(activePropertyId ?? "");
+  const { data: pendingTransfer, isLoading: transferLoading } = useGetPendingPropertyTransfer(
+    activePropertyId ?? "",
+    { query: { queryKey: transferKey, enabled: !!activePropertyId } },
+  );
 
-  const inititateMutation = useMutation({
-    mutationFn: async () => {
-      const res = await authFetch(`${BASE}/api/properties/${activePropertyId}/transfer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ toEmail: recipientEmail, fromEmail }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error ?? "Transfer failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["property-transfer", activePropertyId] });
-      setRecipientEmail("");
-      setConfirmStep(false);
-      toast({ title: "Transfer initiated", description: "A claim link has been generated for the new owner." });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Transfer failed", description: err.message, variant: "destructive" });
-      setConfirmStep(false);
+  const inititateMutation = useInitiatePropertyTransfer({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: transferKey });
+        setRecipientEmail("");
+        setConfirmStep(false);
+        toast({ title: t("settings.transfer.toast.initiated"), description: t("settings.transfer.toast.initiatedDesc") });
+      },
+      onError: (err) => {
+        toast({
+          title: t("settings.transfer.toast.failed"),
+          description: err.data?.error ?? t("settings.transfer.toast.failed"),
+          variant: "destructive",
+        });
+        setConfirmStep(false);
+      },
     },
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: async (transferId: string) => {
-      const res = await authFetch(`${BASE}/api/transfers/${transferId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Could not cancel transfer");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["property-transfer", activePropertyId] });
-      toast({ title: "Transfer cancelled", description: "The escrow link has been revoked." });
+  const cancelMutation = useCancelPropertyTransfer({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: transferKey });
+        toast({ title: t("settings.transfer.toast.cancelled"), description: t("settings.transfer.toast.cancelledDesc") });
+      },
     },
   });
 
@@ -107,9 +92,9 @@ function DeedTransferCard() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <ArrowRightLeft className="h-5 w-5 text-muted-foreground" />
-            Digital Deed Transfer
+            {t("settings.transfer.title")}
           </CardTitle>
-          <CardDescription>Select a property to initiate a transfer.</CardDescription>
+          <CardDescription>{t("settings.transfer.selectProperty")}</CardDescription>
         </CardHeader>
       </Card>
     );
@@ -122,17 +107,20 @@ function DeedTransferCard() {
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
               <ArrowRightLeft className="h-5 w-5 text-muted-foreground" />
-              Digital Deed Transfer
+              {t("settings.transfer.title")}
             </CardTitle>
             <CardDescription>
-              Transfer the complete maintenance history of{" "}
-              <span className="font-medium text-foreground">{activeProperty.name}</span> to a new owner.
+              <Trans
+                i18nKey="settings.transfer.description"
+                values={{ name: activeProperty.name }}
+                components={{ strong: <span className="font-medium text-foreground" /> }}
+              />
             </CardDescription>
           </div>
           {pendingTransfer && (
             <Badge className="bg-amber-100 text-amber-700 border-amber-300 shrink-0">
               <Clock className="h-3 w-3 mr-1" />
-              In Escrow
+              {t("settings.transfer.inEscrow")}
             </Badge>
           )}
         </div>
@@ -146,21 +134,25 @@ function DeedTransferCard() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
               <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
                 <Clock className="h-4 w-4" />
-                Awaiting claim by {pendingTransfer.toEmail}
+                {t("settings.transfer.awaitingClaim", { email: pendingTransfer.toEmail })}
               </div>
               <p className="text-xs text-amber-700">
-                Initiated {format(new Date(pendingTransfer.createdAt), "MMM d, yyyy 'at' h:mm a")}.
+                {t("settings.transfer.initiatedOn", {
+                  date: format(new Date(pendingTransfer.createdAt), "PP"),
+                  time: format(new Date(pendingTransfer.createdAt), "p"),
+                })}
                 {pendingTransfer.expiresAt && (
-                  <> Expires {format(new Date(pendingTransfer.expiresAt), "MMM d, yyyy")}.</>
+                  <> {t("settings.transfer.expiresOn", { date: format(new Date(pendingTransfer.expiresAt), "PP") })}</>
                 )}
               </p>
 
               {/* Claim link */}
               <div className="space-y-1.5">
-                <p className="text-xs font-semibold text-amber-800">Claim Link — share with new owner:</p>
+                <p className="text-xs font-semibold text-amber-800">{t("settings.transfer.claimLinkLabel")}</p>
                 <div className="flex gap-2">
                   <Input
                     readOnly
+                    aria-label={t("settings.transfer.claimLinkAria")}
                     value={claimUrl}
                     className="text-xs bg-white border-amber-200 h-8 font-mono"
                   />
@@ -171,7 +163,7 @@ function DeedTransferCard() {
                     onClick={copyLink}
                   >
                     {copied ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? "Copied!" : "Copy"}
+                    {copied ? t("settings.transfer.copied") : t("settings.transfer.copy")}
                   </Button>
                 </div>
               </div>
@@ -179,18 +171,18 @@ function DeedTransferCard() {
 
             <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/60 text-xs text-muted-foreground">
               <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
-              The dossier stays with you until the new owner accepts. You can cancel at any time.
+              {t("settings.transfer.staysWithYou")}
             </div>
 
             <Button
               variant="outline"
               size="sm"
               className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5 w-full"
-              onClick={() => cancelMutation.mutate(pendingTransfer.id)}
+              onClick={() => cancelMutation.mutate({ transferId: pendingTransfer.id })}
               disabled={cancelMutation.isPending}
             >
               {cancelMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-              Cancel Transfer & Revoke Link
+              {t("settings.transfer.cancelAndRevoke")}
             </Button>
           </div>
         )}
@@ -201,42 +193,52 @@ function DeedTransferCard() {
             <div className="flex items-start gap-3 p-3 rounded-xl bg-muted/50 text-sm text-muted-foreground">
               <Home className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
               <span>
-                The new owner will receive a secure link to claim the full history — assets, service records, maintenance tasks, and AI reports — tied to this address, not to you.
+                {t("settings.transfer.explainer")}
               </span>
             </div>
 
             {!confirmStep ? (
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="recipient-email">New Owner's Email</Label>
+                  <Label htmlFor="recipient-email">{t("settings.transfer.newOwnerEmail")} <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Input
                     id="recipient-email"
                     type="email"
-                    placeholder="newowner@example.com"
+                    placeholder={t("settings.transfer.emailPlaceholder")}
                     value={recipientEmail}
-                    onChange={(e) => setRecipientEmail(e.target.value)}
+                    onChange={(e) => { setRecipientEmail(e.target.value); if (emailError) setEmailError(null); }}
+                    required
+                    aria-invalid={!!emailError}
+                    aria-describedby={emailError ? "recipient-email-error" : undefined}
                   />
+                  <FieldError id="recipient-email-error" message={emailError} />
                 </div>
                 <Button
                   className="w-full gap-2"
-                  disabled={!recipientEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)}
-                  onClick={() => setConfirmStep(true)}
+                  onClick={() => {
+                    const trimmed = recipientEmail.trim();
+                    if (!trimmed) { setEmailError(t("settings.transfer.emailRequired")); return; }
+                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) { setEmailError(t("settings.transfer.emailInvalid")); return; }
+                    setRecipientEmail(trimmed);
+                    setConfirmStep(true);
+                  }}
                 >
                   <ArrowRightLeft className="h-4 w-4" />
-                  Transfer Home Dossier
+                  {t("settings.transfer.transferButton")}
                 </Button>
               </div>
             ) : (
               <div className="space-y-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-destructive">
                   <AlertTriangle className="h-4 w-4" />
-                  Confirm Transfer
+                  {t("settings.transfer.confirmTitle")}
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  You are about to transfer the complete history of{" "}
-                  <span className="font-semibold text-foreground">{activeProperty.name}</span> to{" "}
-                  <span className="font-semibold text-foreground">{recipientEmail}</span>.
-                  A claim link will be placed in escrow until they accept.
+                  <Trans
+                    i18nKey="settings.transfer.confirmBody"
+                    values={{ name: activeProperty.name, email: recipientEmail }}
+                    components={{ strong: <span className="font-semibold text-foreground" /> }}
+                  />
                 </p>
                 <div className="flex gap-2">
                   <Button
@@ -246,18 +248,23 @@ function DeedTransferCard() {
                     onClick={() => setConfirmStep(false)}
                     disabled={inititateMutation.isPending}
                   >
-                    Go Back
+                    {t("settings.transfer.goBack")}
                   </Button>
                   <Button
                     size="sm"
                     className="flex-1 gap-1.5 bg-destructive hover:bg-destructive/90"
-                    onClick={() => inititateMutation.mutate()}
+                    onClick={() =>
+                      inititateMutation.mutate({
+                        propertyId: activePropertyId,
+                        data: { toEmail: recipientEmail, fromEmail },
+                      })
+                    }
                     disabled={inititateMutation.isPending}
                   >
                     {inititateMutation.isPending ? (
-                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Initiating…</>
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("settings.transfer.initiating")}</>
                     ) : (
-                      <><ShieldCheck className="h-3.5 w-3.5" /> Confirm & Send to Escrow</>
+                      <><ShieldCheck className="h-3.5 w-3.5" /> {t("settings.transfer.confirmAndSend")}</>
                     )}
                   </Button>
                 </div>
@@ -269,7 +276,7 @@ function DeedTransferCard() {
         {transferLoading && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
             <Loader2 className="h-4 w-4 animate-spin" />
-            Checking transfer status…
+            {t("settings.transfer.checkingStatus")}
           </div>
         )}
       </CardContent>
@@ -278,10 +285,11 @@ function DeedTransferCard() {
 }
 
 function AdminCard() {
+  const { t } = useTranslation();
   const { data: profile } = useGetUserProfile({
     query: { queryKey: getGetUserProfileQueryKey(), retry: false },
   });
-  const isAdmin = (profile as { role?: string } | undefined)?.role === "admin";
+  const isAdmin = profile?.role === "admin";
   if (!isAdmin) return null;
 
   return (
@@ -290,23 +298,23 @@ function AdminCard() {
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <LayoutDashboard className="h-5 w-5 text-primary" />
-            Admin Access
+            {t("settings.admin.title")}
             <Badge className="ml-1 text-[10px] font-semibold uppercase tracking-wider bg-primary/15 text-primary border-primary/20">
-              Admin
+              {t("settings.admin.badge")}
             </Badge>
           </CardTitle>
           <CardDescription>
-            You have admin privileges. Access the platform-wide admin dashboard to manage users, properties, and technicians.
+            {t("settings.admin.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/admin">
-            <Button className="gap-2">
+          <Button asChild className="gap-2">
+            <Link href="/admin">
               <LayoutDashboard className="h-4 w-4" />
-              Go to Admin Dashboard
+              {t("settings.admin.goToDashboard")}
               <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </CardContent>
       </Card>
     </div>
@@ -314,11 +322,12 @@ function AdminCard() {
 }
 
 export default function Settings() {
+  const { t } = useTranslation();
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto animate-in fade-in duration-500">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-primary">Settings</h1>
-        <p className="text-muted-foreground">Manage your account preferences and notifications.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">{t("settings.title")}</h1>
+        <p className="text-muted-foreground">{t("settings.subtitle")}</p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -327,24 +336,24 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <User className="h-5 w-5 text-muted-foreground" />
-              Profile Information
+              {t("settings.profile.title")}
             </CardTitle>
-            <CardDescription>Update your personal details.</CardDescription>
+            <CardDescription>{t("settings.profile.description")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name">{t("settings.profile.fullName")}</Label>
               <Input id="name" defaultValue="Alex Homeowner" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
+              <Label htmlFor="email">{t("settings.profile.email")}</Label>
               <Input id="email" type="email" defaultValue="alex@example.com" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
+              <Label htmlFor="phone">{t("settings.profile.phone")}</Label>
               <Input id="phone" type="tel" defaultValue="(555) 123-4567" />
             </div>
-            <Button>Save Changes</Button>
+            <Button>{t("common.saveChanges")}</Button>
           </CardContent>
         </Card>
 
@@ -352,31 +361,31 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Bell className="h-5 w-5 text-muted-foreground" />
-              Notifications
+              {t("settings.notifications.title")}
             </CardTitle>
-            <CardDescription>Choose what alerts you receive.</CardDescription>
+            <CardDescription>{t("settings.notifications.description")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-base">Maintenance Reminders</Label>
-                <p className="text-sm text-muted-foreground">Get notified when tasks are due.</p>
+                <Label htmlFor="notify-reminders" className="text-base">{t("settings.notifications.reminders")}</Label>
+                <p className="text-sm text-muted-foreground">{t("settings.notifications.remindersDesc")}</p>
               </div>
-              <Switch defaultChecked />
+              <Switch id="notify-reminders" defaultChecked />
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-base">Service Updates</Label>
-                <p className="text-sm text-muted-foreground">Alerts when pros update your records.</p>
+                <Label htmlFor="notify-service" className="text-base">{t("settings.notifications.service")}</Label>
+                <p className="text-sm text-muted-foreground">{t("settings.notifications.serviceDesc")}</p>
               </div>
-              <Switch defaultChecked />
+              <Switch id="notify-service" defaultChecked />
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
-                <Label className="text-base">Marketing Emails</Label>
-                <p className="text-sm text-muted-foreground">Tips, guides, and promotions.</p>
+                <Label htmlFor="notify-marketing" className="text-base">{t("settings.notifications.marketing")}</Label>
+                <p className="text-sm text-muted-foreground">{t("settings.notifications.marketingDesc")}</p>
               </div>
-              <Switch />
+              <Switch id="notify-marketing" />
             </div>
           </CardContent>
         </Card>
@@ -390,20 +399,20 @@ export default function Settings() {
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <Shield className="h-5 w-5 text-muted-foreground" />
-              Security
+              {t("settings.security.title")}
             </CardTitle>
-            <CardDescription>Manage your password and authentication.</CardDescription>
+            <CardDescription>{t("settings.security.description")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="current-password">Current Password</Label>
+              <Label htmlFor="current-password">{t("settings.security.currentPassword")}</Label>
               <Input id="current-password" type="password" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new-password">New Password</Label>
+              <Label htmlFor="new-password">{t("settings.security.newPassword")}</Label>
               <Input id="new-password" type="password" />
             </div>
-            <Button variant="outline">Update Password</Button>
+            <Button variant="outline">{t("settings.security.updatePassword")}</Button>
           </CardContent>
         </Card>
 

@@ -149,7 +149,7 @@ export function UsersTab() {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
+          <Input aria-label="Search users"
             className="pl-9"
             placeholder="Search by name or email…"
             value={search}
@@ -157,7 +157,7 @@ export function UsersTab() {
           />
         </div>
         <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-full sm:w-40">
+          <SelectTrigger aria-label="Filter by role" className="w-full sm:w-40">
             <UserCog className="h-4 w-4 mr-2 text-muted-foreground" />
             <SelectValue placeholder="All roles" />
           </SelectTrigger>
@@ -212,7 +212,7 @@ export function UsersTab() {
             {backfillResult.errorDetails && backfillResult.errorDetails.length > 0 && (
               <ul className="mt-2 space-y-0.5">
                 {backfillResult.errorDetails.map((e, i) => (
-                  <li key={i} className="text-[11px] text-amber-700">{e}</li>
+                  <li key={i} className="text-xs text-amber-700">{e}</li>
                 ))}
               </ul>
             )}

@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 21.5.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "REPLACE_WITH_DEV_API_DOMAIN",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bG95YWwtbGFicmFkb3ItOTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "casadossier.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "pk_test_bG95YWwtbGFicmFkb3ItOTQuY2xlcmsuYWNjb3VudHMuZGV2JA"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "casadossier.com",
+        "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY": "REPLACE_WITH_CLERK_PRODUCTION_PK_LIVE_KEY"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

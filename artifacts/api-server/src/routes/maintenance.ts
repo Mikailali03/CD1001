@@ -13,6 +13,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty, getAccessibleAsset } from "../lib/access.js";
+import { toDateOnly } from "../lib/dates.js";
 
 const CompleteTaskParams = z.object({ taskId: z.string() });
 const CompleteTaskBody = z.object({
@@ -33,7 +34,10 @@ router.get("/properties/:propertyId/inbox", requireAuth(), async (req, res) => {
   const { propertyId } = InboxParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
-  if (!property) return res.status(404).json({ error: "Property not found" });
+  if (!property) {
+    res.status(404).json({ error: "Property not found" });
+    return;
+  }
 
   const today = new Date();
   const cutoff = new Date(today);
@@ -76,7 +80,10 @@ router.get("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
   const { assetId } = ListMaintenanceTasksParams.parse(req.params);
 
   const asset = await getAccessibleAsset(assetId, req.userId);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+  if (!asset) {
+    res.status(404).json({ error: "Asset not found" });
+    return;
+  }
 
   const tasks = await db
     .select()
@@ -91,13 +98,17 @@ router.post("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
   const body = CreateMaintenanceTaskBody.parse(req.body);
 
   const asset = await getAccessibleAsset(assetId, req.userId);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+  if (!asset) {
+    res.status(404).json({ error: "Asset not found" });
+    return;
+  }
 
   const [task] = await db
     .insert(maintenanceTasksTable)
     .values({
       ...body,
       assetId,
+      nextDueDate: toDateOnly(body.nextDueDate),
       estimatedCost: body.estimatedCost != null ? String(body.estimatedCost) : null,
     })
     .returning();
@@ -112,20 +123,34 @@ router.patch("/maintenance/:taskId", requireAuth(), async (req, res) => {
     .select()
     .from(maintenanceTasksTable)
     .where(eq(maintenanceTasksTable.id, taskId));
-  if (!existing) return res.status(404).json({ error: "Task not found" });
+  if (!existing) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
 
   const asset = await getAccessibleAsset(existing.assetId, req.userId);
-  if (!asset) return res.status(403).json({ error: "Forbidden" });
+  if (!asset) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
+  // completedAt is deliberately dropped: completing goes through
+  // POST /maintenance/:id/complete so the next occurrence and service record
+  // get created.
+  const { completedAt: _completedAt, nextDueDate, ...rest } = body;
   const [task] = await db
     .update(maintenanceTasksTable)
     .set({
-      ...body,
+      ...rest,
+      nextDueDate: nextDueDate ? toDateOnly(nextDueDate) : undefined,
       estimatedCost: body.estimatedCost != null ? String(body.estimatedCost) : undefined,
     })
     .where(eq(maintenanceTasksTable.id, taskId))
     .returning();
-  if (!task) return res.status(404).json({ error: "Task not found" });
+  if (!task) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
   res.json(task);
 });
 
@@ -136,10 +161,16 @@ router.delete("/maintenance/:taskId", requireAuth(), async (req, res) => {
     .select()
     .from(maintenanceTasksTable)
     .where(eq(maintenanceTasksTable.id, taskId));
-  if (!existing) return res.status(404).json({ error: "Task not found" });
+  if (!existing) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
 
   const asset = await getAccessibleAsset(existing.assetId, req.userId);
-  if (!asset) return res.status(403).json({ error: "Forbidden" });
+  if (!asset) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   await db.delete(maintenanceTasksTable).where(eq(maintenanceTasksTable.id, taskId));
   res.status(204).send();
@@ -153,35 +184,22 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     .select()
     .from(maintenanceTasksTable)
     .where(eq(maintenanceTasksTable.id, taskId));
-  if (!existing) return res.status(404).json({ error: "Task not found" });
+  if (!existing) {
+    res.status(404).json({ error: "Task not found" });
+    return;
+  }
 
   const asset = await getAccessibleAsset(existing.assetId, req.userId);
-  if (!asset) return res.status(403).json({ error: "Forbidden" });
-
-  const [completedTask] = await db
-    .update(maintenanceTasksTable)
-    .set({ completedAt: new Date() })
-    .where(eq(maintenanceTasksTable.id, taskId))
-    .returning();
+  if (!asset) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
 
   const originalDueDate = new Date(existing.nextDueDate);
   const baseDate = originalDueDate > new Date() ? originalDueDate : new Date();
   const nextDate = new Date(baseDate);
   nextDate.setDate(nextDate.getDate() + existing.intervalDays);
   const nextDueDate = nextDate.toISOString().split("T")[0]!;
-
-  const [nextTask] = await db
-    .insert(maintenanceTasksTable)
-    .values({
-      assetId: existing.assetId,
-      title: existing.title,
-      description: existing.description,
-      intervalDays: existing.intervalDays,
-      nextDueDate,
-      isDiy: existing.isDiy,
-      estimatedCost: existing.estimatedCost,
-    })
-    .returning();
 
   const today = body.completedDate ?? new Date().toISOString().split("T")[0]!;
   const effectiveCost =
@@ -194,20 +212,52 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     body.technicianName?.trim() ||
     (body.isDiy !== false ? "Homeowner (DIY)" : undefined);
 
-  const [serviceRecord] = await db
-    .insert(serviceRecordsTable)
-    .values({
-      assetId: existing.assetId,
-      date: today,
-      description: body.notes?.trim() || `Completed: ${existing.title}`,
-      technicianName: techName,
-      companyName: body.companyName?.trim() || undefined,
-      cost: effectiveCost != null ? String(effectiveCost) : undefined,
-      receiptUrl: body.receiptUrl || undefined,
-    })
-    .returning();
+  // One transaction, and the completion is conditional on the task still being
+  // open — a double-tap or retried request can't create a second next task
+  // and a duplicate service record (which would double-count ledger costs).
+  const result = await db.transaction(async (tx) => {
+    const [completedTask] = await tx
+      .update(maintenanceTasksTable)
+      .set({ completedAt: new Date() })
+      .where(and(eq(maintenanceTasksTable.id, taskId), isNull(maintenanceTasksTable.completedAt)))
+      .returning();
+    if (!completedTask) return null;
 
-  res.json({ completedTask, nextTask, serviceRecord });
+    const [nextTask] = await tx
+      .insert(maintenanceTasksTable)
+      .values({
+        assetId: existing.assetId,
+        title: existing.title,
+        description: existing.description,
+        intervalDays: existing.intervalDays,
+        nextDueDate,
+        isDiy: existing.isDiy,
+        estimatedCost: existing.estimatedCost,
+      })
+      .returning();
+
+    const [serviceRecord] = await tx
+      .insert(serviceRecordsTable)
+      .values({
+        assetId: existing.assetId,
+        date: today,
+        description: body.notes?.trim() || `Completed: ${existing.title}`,
+        technicianName: techName,
+        companyName: body.companyName?.trim() || undefined,
+        cost: effectiveCost != null ? String(effectiveCost) : undefined,
+        receiptUrl: body.receiptUrl || undefined,
+      })
+      .returning();
+
+    return { completedTask, nextTask, serviceRecord };
+  });
+
+  if (!result) {
+    res.status(409).json({ error: "This task has already been completed." });
+    return;
+  }
+
+  res.json(result);
 });
 
 // ── User: upcoming tasks across all properties (for local push scheduling) ──
@@ -222,7 +272,10 @@ router.get("/maintenance/upcoming", requireAuth(), async (req, res) => {
     .from(propertiesTable)
     .where(eq(propertiesTable.userId, req.userId));
 
-  if (!userProperties.length) return res.json({ tasks: [] });
+  if (!userProperties.length) {
+    res.json({ tasks: [] });
+    return;
+  }
 
   const propertyIds = userProperties.map((p) => p.id);
 

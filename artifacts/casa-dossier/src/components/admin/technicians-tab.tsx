@@ -60,7 +60,7 @@ function TechnicianCard({ tech }: { tech: AdminTechnician }) {
             </div>
             <div>
               <p className="text-base font-bold leading-none">{tech.completedJobs}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Jobs Completed</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Jobs Completed</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -69,7 +69,7 @@ function TechnicianCard({ tech }: { tech: AdminTechnician }) {
             </div>
             <div>
               <p className="text-base font-bold leading-none">{tech.totalServiceRecords}</p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Service Records</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Service Records</p>
             </div>
           </div>
         </div>

@@ -1,9 +1,16 @@
-const { withPodfile } = require('@expo/config-plugins');
+// Re-exported by expo itself, so no direct @expo/config-plugins dependency is needed
+const { withPodfile } = require('expo/config-plugins');
 
 /**
  * Config plugin that injects explicit modular-header declarations for pods that
  * AppCheckCore requires but that the global `use_modular_headers!` flag alone
  * does not cover reliably on all CocoaPods versions.
+ *
+ * Why: @clerk/expo ships ios/ClerkGoogleSignIn.podspec, which depends on
+ * `GoogleSignIn ~> 9.0`. GoogleSignIn pulls in AppCheckCore, a Swift pod that
+ * imports GoogleUtilities and RecaptchaInterop as modules — with static
+ * frameworks those two must be built with modular headers or `pod install`
+ * fails ("does not define modules").
  *
  * What this adds to the generated Podfile (inside the main app target block):
  *   pod 'GoogleUtilities', :modular_headers => true

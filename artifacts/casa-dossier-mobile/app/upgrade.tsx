@@ -13,22 +13,22 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@clerk/expo";
+import { createStripeCheckout, createStripePortalSession } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "expo-haptics";
+import { Trans, useTranslation } from "react-i18next";
+import { useSubscription, TIER_RANK, type SubscriptionTier } from "@/hooks/useSubscription";
 
-type SubscriptionTier = "essential" | "basic" | "managed" | "concierge";
-const TIER_RANK: Record<SubscriptionTier, number> = { essential: 0, basic: 1, managed: 2, concierge: 3 };
 
+// Display text lives in upgrade.* (plan names, badges, features), resolved at render
 type Plan = {
   id: SubscriptionTier;
-  name: string;
   price: string;
-  priceNote: string;
+  /** upgrade.free / upgrade.forever / upgrade.perMonth */
+  priceKey?: "free";
   icon: keyof typeof Feather.glyphMap;
   accentColor: string;
-  badge?: string;
+  badge?: "mostPopular" | "forLandlords" | "bestValue";
   paid: boolean;
   features: string[];
 };
@@ -36,125 +36,68 @@ type Plan = {
 const PLANS: Plan[] = [
   {
     id: "essential",
-    name: "Essential",
-    price: "Free",
-    priceNote: "forever",
+    price: "",
+    priceKey: "free",
     icon: "shield",
     accentColor: "#94a3b8",
     paid: false,
-    features: [
-      "1 property",
-      "1 free AI asset scan",
-      "Manual maintenance tasks",
-      "Asset tracking",
-      "Service history log",
-      "DIY guides library",
-    ],
+    features: ["oneProperty", "oneFreeScan", "manualTasks", "assetTracking", "serviceLog", "diyGuides"],
   },
   {
     id: "basic",
-    name: "Basic",
     price: "$9.99",
-    priceNote: "/ month",
     icon: "star",
     accentColor: "#10b981",
-    badge: "Most Popular",
+    badge: "mostPopular",
     paid: true,
-    features: [
-      "1 property",
-      "Unlimited AI asset scans",
-      "AI-generated maintenance plans",
-      "Investment Ledger reporting",
-      "Capital Outlook projections",
-      "Asset health scoring",
-      "Full maintenance history",
-    ],
+    features: ["oneProperty", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "healthScoring", "fullHistory"],
   },
   {
     id: "managed",
-    name: "Managed",
     price: "$35",
-    priceNote: "/ month",
     icon: "briefcase",
     accentColor: "#3b82f6",
-    badge: "For Landlords",
+    badge: "forLandlords",
     paid: true,
-    features: [
-      "Up to 5 properties",
-      "Professional onboarding",
-      "Quarterly HVAC filter delivery",
-      "15% off CasaService calls",
-      "1 free service credit / year",
-      "Annual visual inspection",
-    ],
+    features: ["upToFive", "proOnboarding", "filterDelivery", "fifteenOff", "oneCredit", "inspection"],
   },
   {
     id: "concierge",
-    name: "Concierge",
     price: "$99",
-    priceNote: "/ month",
     icon: "award",
     accentColor: "#f59e0b",
-    badge: "Best Value",
+    badge: "bestValue",
     paid: true,
-    features: [
-      "Unlimited properties",
-      "Same-day priority support",
-      "25% off CasaService calls",
-      "4 free service credits / year",
-      "Dedicated home advisor",
-    ],
+    features: ["unlimitedProperties", "prioritySupport", "twentyFiveOff", "fourCredits", "advisor"],
   },
 ];
 
 export default function UpgradeScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const { getToken } = useAuth();
-  const qc = useQueryClient();
-
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const base = domain ? `https://${domain}` : "";
-
   const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
 
-  const { data: subscription, isLoading } = useQuery({
-    queryKey: ["subscription"],
-    queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch(`${base}/api/subscription`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Failed to load subscription");
-      return res.json() as Promise<{ tier: SubscriptionTier; propertyLimit: number; aiScansUsed: number }>;
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+  const { subscription, isLoading } = useSubscription();
 
   const currentTier: SubscriptionTier = subscription?.tier ?? "essential";
   const currentRank = TIER_RANK[currentTier];
 
   async function handleUpgrade(tier: SubscriptionTier) {
+    if (tier === "essential") return; // the free plan has no checkout
     Haptics.selectionAsync();
     setLoadingTier(tier);
     try {
-      const token = await getToken();
-      const res = await fetch(`${base}/api/stripe/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tier }),
-      });
-      if (!res.ok) throw new Error("Checkout failed");
-      const { url } = await res.json();
+      const { url } = await createStripeCheckout({ tier });
       if (typeof url === "string" && url.startsWith("https://")) {
         await Linking.openURL(url);
       } else {
         throw new Error("Invalid checkout URL");
       }
     } catch {
-      Alert.alert("Error", "Could not start checkout. Please try again or upgrade via the web app.");
+      Alert.alert(t("common.error"), t("upgrade.checkoutError"));
     } finally {
       setLoadingTier(null);
     }
@@ -164,18 +107,12 @@ export default function UpgradeScreen() {
     Haptics.selectionAsync();
     setLoadingTier("essential");
     try {
-      const token = await getToken();
-      const res = await fetch(`${base}/api/stripe/portal`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Portal failed");
-      const { url } = await res.json();
+      const { url } = await createStripePortalSession();
       if (typeof url === "string" && url.startsWith("https://")) {
         await Linking.openURL(url);
       }
     } catch {
-      Alert.alert("Error", "Could not open billing portal. Please try via the web app.");
+      Alert.alert(t("common.error"), t("upgrade.portalError"));
     } finally {
       setLoadingTier(null);
     }
@@ -185,7 +122,7 @@ export default function UpgradeScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[s.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} hitSlop={8} onPress={() => router.back()} style={s.backBtn} activeOpacity={0.7}>
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={s.headerCenter}>
@@ -194,10 +131,10 @@ export default function UpgradeScreen() {
           </View>
           <View>
             <Text style={[s.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-              Your Plan
+              {t("upgrade.yourPlan")}
             </Text>
             <Text style={[s.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Unlock more from Casa Dossier
+              {t("upgrade.headerSub")}
             </Text>
           </View>
         </View>
@@ -217,7 +154,11 @@ export default function UpgradeScreen() {
             <View style={[s.currentBanner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
               <Feather name="check-circle" size={16} color={colors.primary} />
               <Text style={[s.currentText, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                You're on the <Text style={{ fontFamily: "Inter_700Bold" }}>{PLANS.find((p) => p.id === currentTier)?.name ?? currentTier}</Text> plan
+                <Trans
+                  i18nKey="upgrade.onPlan"
+                  values={{ plan: t(`upgrade.plans.${currentTier}`, { defaultValue: currentTier }) }}
+                  components={{ b: <Text style={{ fontFamily: "Inter_700Bold" }} /> }}
+                />
               </Text>
             </View>
           )}
@@ -249,22 +190,22 @@ export default function UpgradeScreen() {
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}>
                       <Text style={[s.planName, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                        {plan.name}
+                        {t(`upgrade.plans.${plan.id}`)}
                       </Text>
                       {plan.badge && (
                         <View style={[s.planBadge, { backgroundColor: accent + "20" }]}>
-                          <Text style={[s.planBadgeText, { color: accent, fontFamily: "Inter_600SemiBold" }]}>{plan.badge}</Text>
+                          <Text style={[s.planBadgeText, { color: accent, fontFamily: "Inter_600SemiBold" }]}>{t(`upgrade.badges.${plan.badge}`)}</Text>
                         </View>
                       )}
                       {isCurrentPlan && (
                         <View style={[s.planBadge, { backgroundColor: accent + "20" }]}>
-                          <Text style={[s.planBadgeText, { color: accent, fontFamily: "Inter_600SemiBold" }]}>Current</Text>
+                          <Text style={[s.planBadgeText, { color: accent, fontFamily: "Inter_600SemiBold" }]}>{t("upgrade.current")}</Text>
                         </View>
                       )}
                     </View>
                     <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3, marginTop: 2 }}>
-                      <Text style={[s.planPrice, { color: accent, fontFamily: "Inter_700Bold" }]}>{plan.price}</Text>
-                      <Text style={[s.planPriceNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{plan.priceNote}</Text>
+                      <Text style={[s.planPrice, { color: accent, fontFamily: "Inter_700Bold" }]}>{plan.priceKey ? t("upgrade.free") : plan.price}</Text>
+                      <Text style={[s.planPriceNote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{plan.priceKey ? t("upgrade.forever") : t("upgrade.perMonth")}</Text>
                     </View>
                   </View>
                 </View>
@@ -274,7 +215,7 @@ export default function UpgradeScreen() {
                   {plan.features.map((feat) => (
                     <View key={feat} style={s.featureRow}>
                       <Feather name="check" size={13} color={accent} />
-                      <Text style={[s.featureText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{feat}</Text>
+                      <Text style={[s.featureText, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}>{t(`upgrade.features.${feat}`)}</Text>
                     </View>
                   ))}
                 </View>
@@ -293,7 +234,7 @@ export default function UpgradeScreen() {
                       <Feather name="external-link" size={14} color="#fff" />
                     )}
                     <Text style={[s.upgradeBtnText, { fontFamily: "Inter_600SemiBold" }]}>
-                      {busy ? "Opening…" : `Upgrade to ${plan.name}`}
+                      {busy ? t("upgrade.opening") : t("upgrade.upgradeTo", { plan: t(`upgrade.plans.${plan.id}`) })}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -306,7 +247,7 @@ export default function UpgradeScreen() {
                   >
                     <Feather name="credit-card" size={14} color={colors.mutedForeground} />
                     <Text style={[s.manageBtnText, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                      Manage Billing
+                      {t("upgrade.manageBilling")}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -315,7 +256,7 @@ export default function UpgradeScreen() {
           })}
 
           <Text style={[s.footnote, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Upgrade opens a secure Stripe checkout in your browser. Cancel anytime.
+            {t("upgrade.footnote")}
           </Text>
         </ScrollView>
       )}

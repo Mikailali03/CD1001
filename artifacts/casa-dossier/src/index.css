@@ -375,3 +375,16 @@
     inset: -1px;
   }
 }
+/* Respect the OS "reduce motion" setting: drop entrance/slide animations and
+   transitions app-wide. Loading spinners keep turning so progress is still
+   visible. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

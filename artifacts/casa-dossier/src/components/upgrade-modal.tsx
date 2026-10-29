@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Dialog,
   DialogContent,
@@ -25,13 +26,14 @@ import {
 
 type Plan = {
   id: SubscriptionTier;
-  name: string;
-  price: string;
-  priceNote: string;
+  /** Display price; "free" is translated, dollar amounts aren't. */
+  price: string | null;
+  monthly: boolean;
   icon: React.ReactNode;
   color: string;
   borderColor: string;
-  badge?: string;
+  badge?: "mostPopular" | "forLandlords" | "bestValue";
+  /** Keys under `upgrade.features`. */
   features: string[];
   paid: boolean;
 };
@@ -39,84 +41,53 @@ type Plan = {
 const PLANS: Plan[] = [
   {
     id: "essential",
-    name: "Essential",
-    price: "Free",
-    priceNote: "forever",
+    price: null,
+    monthly: false,
     icon: <Shield className="h-5 w-5" />,
     color: "text-muted-foreground",
     borderColor: "border-border",
     paid: false,
-    features: [
-      "1 property",
-      "1 free AI asset scan",
-      "Manual maintenance tasks",
-      "Asset tracking",
-      "Service history log",
-      "DIY guides library",
-    ],
+    features: ["oneProperty", "oneFreeScan", "manualTasks", "assetTracking", "serviceLog", "diyGuides"],
   },
   {
     id: "basic",
-    name: "Basic",
     price: "$9.99",
-    priceNote: "/ month",
+    monthly: true,
     icon: <Sparkles className="h-5 w-5" />,
     color: "text-emerald-600",
     borderColor: "border-emerald-200 dark:border-emerald-800",
-    badge: "Most Popular",
+    badge: "mostPopular",
     paid: true,
-    features: [
-      "1 property",
-      "Unlimited AI asset scans",
-      "AI-generated maintenance plans",
-      "Investment Ledger reporting",
-      "Capital Outlook projections",
-      "Asset health scoring",
-      "Full maintenance history",
-    ],
+    features: ["oneProperty", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "healthScoring", "fullHistory"],
   },
   {
     id: "managed",
-    name: "Managed",
     price: "$35",
-    priceNote: "/ month",
+    monthly: true,
     icon: <Star className="h-5 w-5" />,
     color: "text-blue-600",
     borderColor: "border-blue-200 dark:border-blue-800",
-    badge: "For Landlords",
+    badge: "forLandlords",
     paid: true,
-    features: [
-      "Up to 5 properties",
-      "Professional onboarding",
-      "Quarterly HVAC filter delivery",
-      "15% off CasaService calls",
-      "1 free service credit / year",
-      "Annual visual inspection",
-    ],
+    features: ["upToFive", "proOnboarding", "filterDelivery", "fifteenOff", "oneCredit", "inspection"],
   },
   {
     id: "concierge",
-    name: "Concierge",
     price: "$99",
-    priceNote: "/ month",
+    monthly: true,
     icon: <Crown className="h-5 w-5" />,
     color: "text-amber-600",
     borderColor: "border-amber-200 dark:border-amber-800",
-    badge: "Best Value",
+    badge: "bestValue",
     paid: true,
-    features: [
-      "Unlimited properties",
-      "Same-day priority support",
-      "25% off CasaService calls",
-      "4 free service credits / year",
-      "Dedicated home advisor",
-    ],
+    features: ["unlimitedProperties", "prioritySupport", "twentyFiveOff", "fourCredits", "advisor"],
   },
 ];
 
 export function UpgradeModal() {
-  const { subscription, upgradeModalOpen, closeUpgradeModal, upgradeTo, startCheckout, openBillingPortal } = useSubscription();
+  const { subscription, upgradeModalOpen, closeUpgradeModal, downgradeToFree, startCheckout, openBillingPortal } = useSubscription();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
@@ -128,19 +99,21 @@ export function UpgradeModal() {
 
     setLoadingTier(plan.id);
     try {
-      if (plan.id === "essential") {
-        await upgradeTo("essential");
-        toast({ title: "Downgraded to Essential", description: "Your plan has been updated." });
-        closeUpgradeModal();
-      } else if (hasStripeSubscription) {
+      if (hasStripeSubscription) {
+        // Plan changes and cancellations for paying customers go through
+        // Stripe so billing stays in sync; the webhook updates the tier.
         await openBillingPortal();
+      } else if (plan.id === "essential") {
+        await downgradeToFree();
+        toast({ title: t("upgrade.toast.downgraded"), description: t("upgrade.toast.downgradedDesc") });
+        closeUpgradeModal();
       } else {
         await startCheckout(plan.id as "basic" | "managed" | "concierge");
       }
-    } catch (err: any) {
+    } catch (err) {
       toast({
-        title: "Something went wrong",
-        description: err?.message ?? "Please try again.",
+        title: t("common.somethingWentWrong"),
+        description: err instanceof Error ? err.message : t("common.tryAgainLater"),
         variant: "destructive",
       });
     } finally {
@@ -153,7 +126,7 @@ export function UpgradeModal() {
     try {
       await openBillingPortal();
     } catch {
-      toast({ title: "Could not open billing portal", variant: "destructive" });
+      toast({ title: t("upgrade.toast.portalFailed"), variant: "destructive" });
     } finally {
       setPortalLoading(false);
     }
@@ -168,9 +141,9 @@ export function UpgradeModal() {
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
           </div>
-          <DialogTitle className="text-2xl font-bold">Choose Your Plan</DialogTitle>
+          <DialogTitle className="text-2xl font-bold">{t("upgrade.title")}</DialogTitle>
           <DialogDescription className="text-base">
-            Unlock AI-powered maintenance tracking and premium home services.
+            {t("upgrade.subtitle")}
           </DialogDescription>
         </DialogHeader>
 
@@ -183,12 +156,12 @@ export function UpgradeModal() {
             const isPaidSwitch = hasStripeSubscription && !isCurrent && plan.paid;
 
             function getButtonLabel() {
-              if (isCurrent) return <><Check className="h-3.5 w-3.5" />Active</>;
+              if (isCurrent) return <><Check className="h-3.5 w-3.5" />{t("upgrade.active")}</>;
               if (isLoading) return <Loader2 className="h-3.5 w-3.5 animate-spin" />;
-              if (isPaidSwitch) return <><ExternalLink className="h-3.5 w-3.5" />Switch Plan</>;
-              if (isUpgrade && plan.paid) return <><Zap className="h-3.5 w-3.5" />Upgrade</>;
-              if (isDowngrade) return "Downgrade";
-              return <><Zap className="h-3.5 w-3.5" />Upgrade</>;
+              if (isPaidSwitch) return <><ExternalLink className="h-3.5 w-3.5" />{t("upgrade.switchPlan")}</>;
+              if (isUpgrade && plan.paid) return <><Zap className="h-3.5 w-3.5" />{t("upgrade.upgrade")}</>;
+              if (isDowngrade) return t("upgrade.downgrade");
+              return <><Zap className="h-3.5 w-3.5" />{t("upgrade.upgrade")}</>;
             }
 
             function getButtonVariant() {
@@ -211,23 +184,25 @@ export function UpgradeModal() {
                     plan.id === "basic" ? "bg-emerald-600 text-white" :
                     plan.id === "managed" ? "bg-blue-600 text-white" : "bg-amber-500 text-white"
                   }`}>
-                    {plan.badge}
+                    {t(`upgrade.badges.${plan.badge}`)}
                   </Badge>
                 )}
                 {isCurrent && (
                   <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2 py-0.5 bg-primary text-primary-foreground">
-                    Current Plan
+                    {t("upgrade.currentPlan")}
                   </Badge>
                 )}
 
                 <div>
                   <div className={`flex items-center gap-2 mb-1 ${plan.color}`}>
                     {plan.icon}
-                    <span className="font-bold text-sm">{plan.name}</span>
+                    <span className="font-bold text-sm">{t(`upgrade.plans.${plan.id}`)}</span>
                   </div>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold">{plan.price}</span>
-                    <span className="text-xs text-muted-foreground">{plan.priceNote}</span>
+                    <span className="text-2xl font-bold">{plan.price ?? t("upgrade.free")}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {plan.monthly ? t("upgrade.perMonth") : t("upgrade.forever")}
+                    </span>
                   </div>
                 </div>
 
@@ -235,7 +210,7 @@ export function UpgradeModal() {
                   {plan.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-xs">
                       <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                      <span>{f}</span>
+                      <span>{t(`upgrade.features.${f}`)}</span>
                     </li>
                   ))}
                 </ul>
@@ -262,7 +237,7 @@ export function UpgradeModal() {
 
         {hasStripeSubscription && (
           <div className="mt-4 pt-4 border-t flex items-center justify-between text-sm text-muted-foreground">
-            <span>Manage billing, invoices, and payment methods</span>
+            <span>{t("upgrade.manageBilling")}</span>
             <Button
               variant="ghost"
               size="sm"
@@ -271,15 +246,15 @@ export function UpgradeModal() {
               onClick={handleManageBilling}
             >
               {portalLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Settings className="h-3.5 w-3.5" />}
-              Billing Portal
+              {t("upgrade.billingPortal")}
             </Button>
           </div>
         )}
 
         <p className="text-center text-xs text-muted-foreground mt-2">
           {hasStripeSubscription
-            ? "Subscription changes take effect immediately."
-            : "Secure checkout powered by Stripe. Cancel anytime."}
+            ? t("upgrade.changesImmediate")
+            : t("upgrade.secureCheckout")}
         </p>
       </DialogContent>
     </Dialog>

@@ -222,6 +222,8 @@ router.get("/admin/properties", ...adminAuth, async (req, res) => {
       yearBuilt: propertiesTable.yearBuilt,
       sqft: propertiesTable.sqft,
       photoUrl: propertiesTable.photoUrl,
+      latitude: propertiesTable.latitude,
+      longitude: propertiesTable.longitude,
       userId: propertiesTable.userId,
       createdAt: propertiesTable.createdAt,
       ownerFirstName: userProfilesTable.firstName,

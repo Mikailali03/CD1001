@@ -1,6 +1,6 @@
 import { Storage, File } from "@google-cloud/storage";
 import { Readable } from "stream";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import {
   ObjectAclPolicy,
   ObjectPermission,
@@ -106,7 +106,10 @@ export class ObjectStorageService {
     return new Response(webStream, { headers });
   }
 
-  async getObjectEntityUploadURL(): Promise<string> {
+  // Uploads are namespaced by a hash of the uploader's user id, so the server
+  // can later tell whether an objectPath submitted by a client was actually
+  // uploaded by that client (see isUploadedBy).
+  async getObjectEntityUploadURL(ownerUserId: string): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
       throw new Error(
@@ -116,7 +119,7 @@ export class ObjectStorageService {
     }
 
     const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+    const fullPath = `${privateObjectDir}/uploads/${uploadOwnerKey(ownerUserId)}/${objectId}`;
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
@@ -206,6 +209,18 @@ export class ObjectStorageService {
   }
 }
 
+function uploadOwnerKey(userId: string): string {
+  return createHash("sha256").update(userId).digest("hex").slice(0, 32);
+}
+
+const UPLOAD_PATH_RE = /^\/objects\/uploads\/([0-9a-f]{32})\/[0-9a-f-]{36}$/;
+
+/** True if `objectPath` is an upload issued to `userId` by getObjectEntityUploadURL. */
+export function isUploadedBy(objectPath: string, userId: string): boolean {
+  const match = UPLOAD_PATH_RE.exec(objectPath);
+  return match !== null && match[1] === uploadOwnerKey(userId);
+}
+
 function parseObjectPath(path: string): {
   bucketName: string;
   objectName: string;
@@ -262,6 +277,6 @@ async function signObjectURL({
     );
   }
 
-  const { signed_url: signedURL } = await response.json();
+  const { signed_url: signedURL } = (await response.json()) as { signed_url: string };
   return signedURL;
 }

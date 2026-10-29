@@ -28,12 +28,12 @@ function PropertySwitcher() {
 
   if (properties.length === 0) {
     return (
-      <Link href="/properties">
-        <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground h-8 text-xs">
+      <Button asChild variant="ghost" size="sm" className="gap-2 text-muted-foreground h-8 text-xs">
+        <Link href="/properties">
           <Plus className="h-3.5 w-3.5" />
           {t("header.addProperty")}
-        </Button>
-      </Link>
+        </Link>
+      </Button>
     );
   }
 
@@ -89,33 +89,29 @@ function GenerateReportButton() {
   const { t } = useTranslation();
   if (!activeProperty) return null;
   return (
-    <Link href={`/properties/${activeProperty.id}/report`}>
-      <Button variant="outline" size="sm" className="gap-2 h-8 text-xs font-medium hidden sm:inline-flex">
+    <Button asChild variant="outline" size="sm" className="gap-2 h-8 text-xs font-medium hidden sm:inline-flex">
+      <Link href={`/properties/${activeProperty.id}/report`}>
         <FileText className="h-3.5 w-3.5" />
         {t("header.generateReport")}
-      </Button>
-    </Link>
+      </Link>
+    </Button>
   );
 }
 
 const TIER_CONFIG = {
   essential: {
-    label: "Essential",
     icon: <Shield className="h-3 w-3" />,
     className: "bg-muted text-muted-foreground border-border hover:bg-muted/80",
   },
   basic: {
-    label: "Basic",
     icon: <Star className="h-3 w-3" />,
     className: "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100/80 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800",
   },
   managed: {
-    label: "Managed",
     icon: <Star className="h-3 w-3" />,
     className: "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-100/80 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800",
   },
   concierge: {
-    label: "Concierge",
     icon: <Crown className="h-3 w-3" />,
     className: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100/80 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800",
   },
@@ -123,6 +119,7 @@ const TIER_CONFIG = {
 
 function SubscriptionBadge() {
   const { subscription, openUpgradeModal } = useSubscription();
+  const { t } = useTranslation();
   if (!subscription) return null;
 
   const tier = subscription.tier;
@@ -132,10 +129,10 @@ function SubscriptionBadge() {
     <button
       onClick={openUpgradeModal}
       className={`hidden sm:inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold transition-colors ${config.className}`}
-      title="Manage subscription"
+      title={t("header.manageSubscription")}
     >
       {config.icon}
-      {config.label}
+      {t(`upgrade.plans.${tier}`)}
       {tier === "essential" && <Zap className="h-2.5 w-2.5 ml-0.5" />}
     </button>
   );
@@ -144,22 +141,23 @@ function SubscriptionBadge() {
 function UserMenu() {
   const { signOut } = useClerk();
   const { user } = useUser();
+  const { activeProperty } = useProperty();
   const { t } = useTranslation();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, "");
 
   const { data: profile } = useGetUserProfile({
     query: { queryKey: getGetUserProfileQueryKey(), retry: false },
   });
-  const isAdmin = (profile as { role?: string } | undefined)?.role === "admin";
+  const isAdmin = profile?.role === "admin";
 
   const displayName = user?.firstName
     ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ""}`
-    : user?.emailAddresses?.[0]?.emailAddress ?? "Account";
+    : user?.emailAddresses?.[0]?.emailAddress ?? t("header.account");
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2 h-8 text-xs font-medium">
+        <Button variant="ghost" size="sm" className="gap-2 h-8 text-xs font-medium" aria-label={t("header.accountMenuFor", { name: displayName })}>
           <User className="h-3.5 w-3.5" />
           <span className="max-w-[120px] truncate hidden sm:inline">{displayName}</span>
           <ChevronDown className="h-3 w-3 text-muted-foreground" />
@@ -170,6 +168,19 @@ function UserMenu() {
           {user?.emailAddresses?.[0]?.emailAddress}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        {/* The header's Generate Report button is hidden on small screens. */}
+        {activeProperty && (
+          <DropdownMenuItem asChild className="sm:hidden">
+            <Link
+              href={`/properties/${activeProperty.id}/report`}
+              className="flex items-center gap-2 text-sm cursor-pointer"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {t("header.generateReport")}
+            </Link>
+          </DropdownMenuItem>
+        )}
+        {activeProperty && <DropdownMenuSeparator className="sm:hidden" />}
         {isAdmin && (
           <DropdownMenuItem asChild>
             <Link

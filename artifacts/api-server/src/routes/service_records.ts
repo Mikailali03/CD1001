@@ -10,6 +10,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleAsset } from "../lib/access.js";
+import { toDateOnly } from "../lib/dates.js";
 
 const router = Router();
 
@@ -17,7 +18,10 @@ router.get("/assets/:assetId/records", requireAuth(), async (req, res) => {
   const { assetId } = ListServiceRecordsParams.parse(req.params);
 
   const asset = await getAccessibleAsset(assetId, req.userId);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+  if (!asset) {
+    res.status(404).json({ error: "Asset not found" });
+    return;
+  }
 
   const records = await db
     .select()
@@ -32,11 +36,23 @@ router.post("/assets/:assetId/records", requireAuth(), async (req, res) => {
   const body = CreateServiceRecordBody.parse(req.body);
 
   const asset = await getAccessibleAsset(assetId, req.userId);
-  if (!asset) return res.status(404).json({ error: "Asset not found" });
+  if (!asset) {
+    res.status(404).json({ error: "Asset not found" });
+    return;
+  }
 
+  // "verified" is never client-settable: only records created by a CasaService
+  // technician completing a marketplace job are verified.
+  const { verified: _verified, date, nextServiceDate, ...rest } = body;
   const [record] = await db
     .insert(serviceRecordsTable)
-    .values({ ...body, assetId, cost: body.cost != null ? String(body.cost) : null })
+    .values({
+      ...rest,
+      assetId,
+      date: toDateOnly(date),
+      nextServiceDate: toDateOnly(nextServiceDate) ?? null,
+      cost: body.cost != null ? String(body.cost) : null,
+    })
     .returning();
   res.status(201).json(record);
 });
@@ -50,10 +66,16 @@ router.get("/records/:recordId", requireAuth(), async (req, res) => {
     .where(eq(serviceRecordsTable.id, recordId));
 
   const row = rows[0];
-  if (!row) return res.status(404).json({ error: "Record not found" });
+  if (!row) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
 
   const accessibleAsset = await getAccessibleAsset(row.assetId, req.userId);
-  if (!accessibleAsset) return res.status(404).json({ error: "Record not found" });
+  if (!accessibleAsset) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
 
   res.json(row.record);
 });

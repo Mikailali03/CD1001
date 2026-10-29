@@ -141,7 +141,7 @@ export function WelcomeModal({ forceOpen = false }: { forceOpen?: boolean }) {
             <button
               onClick={dismiss}
               className="rounded-md p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="Close"
+              aria-label={t("common.close")}
             >
               <X className="h-4 w-4" />
             </button>

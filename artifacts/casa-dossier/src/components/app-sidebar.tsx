@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useTranslation } from "react-i18next";
 import { LanguageToggle } from "./language-toggle";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   LayoutDashboard,
+  Building2,
   Package,
   BookOpen,
   UserSearch,
@@ -31,7 +33,8 @@ export function AppSidebar() {
   const { t } = useTranslation();
 
   const navigation = [
-    { name: t("nav.dashboard"),     href: "/",               icon: LayoutDashboard },
+    { name: t("nav.dashboard"),     href: "/dashboard",      icon: LayoutDashboard },
+    { name: t("nav.properties"),    href: "/properties",     icon: Building2 },
     { name: t("nav.myAssets"),      href: "/assets",         icon: Package },
     { name: t("nav.digitalLocker"), href: "/locker",         icon: Images },
     { name: t("nav.capitalOutlook"),href: "/capital-outlook",icon: TrendingUp },
@@ -43,11 +46,32 @@ export function AppSidebar() {
     if (isMobile) setOpenMobile(false);
   }
 
+  // On desktop the rail expands while hovered *or* while keyboard focus is
+  // inside it, so Tab users get the labels too. Escape collapses it.
+  const hovered = useRef(false);
+  const focused = useRef(false);
+  function sync() {
+    if (!isMobile) setOpen(hovered.current || focused.current);
+  }
+
   return (
     <Sidebar
       collapsible="icon"
-      onMouseEnter={() => !isMobile && setOpen(true)}
-      onMouseLeave={() => !isMobile && setOpen(false)}
+      onMouseEnter={() => { hovered.current = true; sync(); }}
+      onMouseLeave={() => { hovered.current = false; sync(); }}
+      onFocus={() => { focused.current = true; sync(); }}
+      onBlur={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        focused.current = false;
+        sync();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !isMobile) {
+          focused.current = false;
+          hovered.current = false;
+          setOpen(false);
+        }
+      }}
     >
       <SidebarHeader className="border-b px-3 py-5 overflow-hidden">
         <div className="flex items-center gap-2.5 min-w-0">
@@ -56,22 +80,21 @@ export function AppSidebar() {
           </div>
           <div className="overflow-hidden group-data-[collapsible=icon]:hidden">
             <p className="font-bold text-base leading-none text-primary whitespace-nowrap">Casa Dossier</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-nowrap">{t("nav.tagline")}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">{t("nav.tagline")}</p>
           </div>
         </div>
       </SidebarHeader>
 
       <SidebarContent className="pt-4">
         <SidebarGroup>
-          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 px-4 mb-1 group-data-[collapsible=icon]:hidden">
+          <SidebarGroupLabel className="text-xs uppercase tracking-widest text-muted-foreground/60 px-4 mb-1 group-data-[collapsible=icon]:hidden">
             {t("nav.homeownerPortal")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigation.map((item) => {
                 const isActive =
-                  location === item.href ||
-                  (item.href !== "/" && location.startsWith(item.href));
+                  location === item.href || location.startsWith(`${item.href}/`);
                 return (
                   <SidebarMenuItem key={item.name}>
                     <SidebarMenuButton

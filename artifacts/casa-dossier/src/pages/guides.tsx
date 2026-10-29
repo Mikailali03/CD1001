@@ -4,9 +4,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Clock, Wrench, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
+import { useTranslation } from "react-i18next";
 
 export default function Guides() {
   const { data: guides, isLoading } = useListGuides();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
@@ -36,8 +38,8 @@ export default function Guides() {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto animate-in fade-in duration-500">
       <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight text-primary">DIY Guide Library</h1>
-        <p className="text-muted-foreground">Step-by-step instructions for common home maintenance tasks.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-primary">{t("guides.title")}</h1>
+        <p className="text-muted-foreground">{t("guides.subtitle")}</p>
       </div>
 
       {guides && guides.length > 0 ? (
@@ -48,8 +50,8 @@ export default function Guides() {
                 <CardHeader>
                   <div className="flex justify-between items-start mb-2">
                     <Badge variant="outline">{guide.category}</Badge>
-                    <Badge className={getDifficultyColor(guide.difficulty)} variant="outline" style={{ textTransform: 'capitalize' }}>
-                      {guide.difficulty}
+                    <Badge className={getDifficultyColor(guide.difficulty)} variant="outline">
+                      {t(`guides.difficulty.${guide.difficulty}`, { defaultValue: guide.difficulty })}
                     </Badge>
                   </div>
                   <CardTitle className="line-clamp-2 leading-tight group-hover:text-primary transition-colors">
@@ -63,12 +65,12 @@ export default function Guides() {
                 </CardContent>
                 <CardFooter className="pt-4 border-t text-sm text-muted-foreground flex justify-between items-center bg-muted/20">
                   <div className="flex gap-4">
-                    <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5"/> {guide.estimatedMinutes}m</span>
+                    <span className="flex items-center gap-1.5"><Clock className="h-3.5 w-3.5"/> {t("guides.minutesShort", { count: guide.estimatedMinutes })}</span>
                     {guide.toolsNeeded && guide.toolsNeeded.length > 0 && (
-                      <span className="flex items-center gap-1.5"><Wrench className="h-3.5 w-3.5"/> {guide.toolsNeeded.length} tools</span>
+                      <span className="flex items-center gap-1.5"><Wrench className="h-3.5 w-3.5"/> {t("guides.toolCount", { count: guide.toolsNeeded.length })}</span>
                     )}
                   </div>
-                  <ArrowRight className="h-4 w-4 text-primary opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
+                  <ArrowRight className="h-4 w-4 text-primary opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0" />
                 </CardFooter>
               </Card>
             </Link>
@@ -77,9 +79,9 @@ export default function Guides() {
       ) : (
         <div className="text-center py-20 bg-muted/30 rounded-xl border border-dashed">
           <BookOpen className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-foreground">No guides available</h3>
+          <h3 className="text-lg font-medium text-foreground">{t("guides.emptyTitle")}</h3>
           <p className="text-muted-foreground max-w-sm mx-auto mt-2">
-            Check back later for maintenance guides and DIY tutorials.
+            {t("guides.emptyBody")}
           </p>
         </div>
       )}

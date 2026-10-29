@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -11,13 +11,19 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
-import { useListProperties } from "@workspace/api-client-react";
+import { getGetCapitalOutlookQueryKey, useGetCapitalOutlook } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
+import { useSelectedProperty } from "@/context/PropertyContext";
+import { EmptyState } from "@/components/EmptyState";
+import { useSubscription, isUpgradeRequiredError } from "@/hooks/useSubscription";
 import { CATEGORY_CONFIG } from "@/components/AssetCard";
+import { BarChart } from "@/components/capital/BarChart";
+import { LifeBar } from "@/components/capital/LifeBar";
+import { URGENCY_CONFIG, type Urgency } from "@/components/capital/urgency";
+import { Trans, useTranslation } from "react-i18next";
+import { intlLocale } from "@/lib/dates";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-type Urgency = "critical" | "warning" | "good" | "unknown";
 
 type AssetOutlook = {
   id: string;
@@ -53,7 +59,7 @@ type CapitalOutlookData = {
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 function fmt(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat(intlLocale(), { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
 function normCategory(cat: string): string {
@@ -64,164 +70,40 @@ function normCategory(cat: string): string {
   return map[cat?.toLowerCase()] ?? cat;
 }
 
-const URGENCY_CONFIG: Record<Urgency, { label: string; textColor: string; bg: string; borderColor: string; barColor: string }> = {
-  critical: { label: "Replace Soon",  textColor: "#dc2626", bg: "#fef2f2", borderColor: "#fca5a5", barColor: "#ef4444" },
-  warning:  { label: "Plan Ahead",    textColor: "#d97706", bg: "#fffbeb", borderColor: "#fcd34d", barColor: "#f59e0b" },
-  good:     { label: "Good Shape",    textColor: "#059669", bg: "#d1fae5", borderColor: "#6ee7b7", barColor: "#22c55e" },
-  unknown:  { label: "No Data",       textColor: "#6b7280", bg: "#f3f4f6", borderColor: "#e5e7eb", barColor: "#94a3b8" },
-};
 
 const CATEGORY_ICONS: Record<string, string> = {
   HVAC: "❄️", Plumbing: "🔧", Electrical: "⚡", Roof: "🏠", Appliance: "🫙", Structural: "🏗️", Other: "📦",
 };
 
-// ── SVG Bar Chart ──────────────────────────────────────────────────────────────
-function BarChart({ data, currentYear, colors }: { data: TimelineEntry[]; currentYear: number; colors: ReturnType<typeof useColors> }) {
-  const { Svg, Rect, Line, Text: SvgText } = require("react-native-svg");
-  const width = 340, height = 180, padL = 44, padR = 8, padT = 10, padB = 28;
-  const chartW = width - padL - padR;
-  const chartH = height - padT - padB;
-  const maxCost = Math.max(...data.map((d) => d.projectedCost), 1);
-  const barW = Math.min(Math.floor(chartW / data.length) - 3, 40);
-
-  function barColor(year: number) {
-    const diff = year - currentYear;
-    if (diff <= 0) return "#ef4444";
-    if (diff <= 3) return "#f59e0b";
-    if (diff <= 8) return "#3b82f6";
-    return "#22c55e";
-  }
-
-  const yLabels = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxCost * f));
-
-  return (
-    <View style={{ alignItems: "center" }}>
-      <Svg width={width} height={height}>
-        {/* Y-axis labels + grid */}
-        {yLabels.map((v, i) => {
-          const y = padT + chartH - (v / maxCost) * chartH;
-          return (
-            <React.Fragment key={i}>
-              <Line x1={padL - 4} y1={y} x2={padL + chartW} y2={y}
-                stroke={colors.border} strokeWidth={0.5} strokeDasharray="3 3" />
-              <SvgText x={padL - 6} y={y + 3} fontSize={8} fill={colors.mutedForeground} textAnchor="end">
-                {v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
-              </SvgText>
-            </React.Fragment>
-          );
-        })}
-
-        {/* Bars */}
-        {data.map((entry, i) => {
-          const barH = Math.max((entry.projectedCost / maxCost) * chartH, entry.projectedCost > 0 ? 2 : 0);
-          const x = padL + (i * chartW) / data.length + (chartW / data.length - barW) / 2;
-          const y = padT + chartH - barH;
-          const isToday = entry.year === currentYear;
-          return (
-            <React.Fragment key={entry.year}>
-              <Rect
-                x={x} y={y} width={barW} height={barH}
-                fill={barColor(entry.year)}
-                fillOpacity={entry.projectedCost > 0 ? 1 : 0.12}
-                rx={3}
-              />
-              {isToday && (
-                <Line
-                  x1={x + barW / 2} y1={padT} x2={x + barW / 2} y2={padT + chartH}
-                  stroke={colors.primary} strokeWidth={1.5} strokeDasharray="3 2"
-                />
-              )}
-              <SvgText
-                x={x + barW / 2} y={height - 6}
-                fontSize={8} fill={colors.mutedForeground} textAnchor="middle"
-              >
-                {entry.year % 2 === 0 || data.length <= 8 ? String(entry.year) : ""}
-              </SvgText>
-            </React.Fragment>
-          );
-        })}
-      </Svg>
-
-      {/* Legend */}
-      <View style={chartStyles.legend}>
-        {[
-          { color: "#ef4444", label: "Past due" },
-          { color: "#f59e0b", label: "≤3 yr" },
-          { color: "#3b82f6", label: "4–8 yr" },
-          { color: "#22c55e", label: "9+ yr" },
-        ].map(({ color, label }) => (
-          <View key={label} style={chartStyles.legendItem}>
-            <View style={[chartStyles.legendDot, { backgroundColor: color }]} />
-            <Text style={[chartStyles.legendText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{label}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const chartStyles = StyleSheet.create({
-  legend: { flexDirection: "row", gap: 12, flexWrap: "wrap", justifyContent: "center", marginTop: 6 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 4 },
-  legendDot: { width: 8, height: 8, borderRadius: 2 },
-  legendText: { fontSize: 10 },
-});
-
-// ── Life bar ───────────────────────────────────────────────────────────────────
-function LifeBar({ percent, urgency }: { percent: number; urgency: Urgency }) {
-  const color = URGENCY_CONFIG[urgency].barColor;
-  return (
-    <View style={lifeStyles.track}>
-      <View style={[lifeStyles.fill, { width: `${Math.min(percent, 100)}%`, backgroundColor: color }]} />
-    </View>
-  );
-}
-const lifeStyles = StyleSheet.create({
-  track: { height: 5, borderRadius: 3, backgroundColor: "#E8E5DF", overflow: "hidden", marginVertical: 4 },
-  fill: { height: 5, borderRadius: 3 },
-});
-
 // ── Main screen ────────────────────────────────────────────────────────────────
 export default function CapitalOutlookScreen() {
   const router = useRouter();
+  const { t } = useTranslation();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
-  const { data: properties = [] } = useListProperties();
-  const propertyId = (properties[0] as any)?.id as string | undefined;
+  const { selectedProperty, isLoading: propsLoading } = useSelectedProperty();
+  const propertyId = selectedProperty?.id;
+  // No properties at all: show the empty state instead of waiting forever for a propertyId
+  const noProperty = !propsLoading && !propertyId;
+  const { isLoading: subLoading, isFreeTier } = useSubscription();
 
-  const [data, setData] = useState<CapitalOutlookData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  // Free plan can't use Capital Outlook — don't fire a request the server will reject
+  const outlook = useGetCapitalOutlook(propertyId ?? "", {
+    query: {
+      queryKey: getGetCapitalOutlookQueryKey(propertyId ?? ""),
+      enabled: !!propertyId && !subLoading && !isFreeTier,
+      retry: (n, err) => !isUpgradeRequiredError(err) && n < 2,
+    },
+  });
+  const data: CapitalOutlookData | undefined = outlook.data;
+  const upgradeRequired = isUpgradeRequiredError(outlook.error);
+  const loading = outlook.isPending;
+  const error = outlook.isError && !upgradeRequired;
+  const locked = isFreeTier || upgradeRequired;
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
   const currentYear = new Date().getFullYear();
-
-  useEffect(() => {
-    if (!propertyId) return;
-    setLoading(true);
-    setError(false);
-    let cancelled = false;
-    (async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${baseUrl}/api/properties/${propertyId}/capital-outlook`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error();
-        const d = await res.json();
-        if (!cancelled) setData(d);
-      } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [propertyId]);
 
   // Sort & trim timeline
   const chartData = data
@@ -248,7 +130,7 @@ export default function CapitalOutlookScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPad, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("common.goBack")} hitSlop={8} onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
           <Feather name="chevron-left" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
@@ -256,7 +138,7 @@ export default function CapitalOutlookScreen() {
             <Feather name="trending-up" size={16} color={colors.primary} />
           </View>
           <Text style={[styles.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            Capital Outlook
+            {t("capitalOutlook.title")}
           </Text>
         </View>
         {/* Urgency badges */}
@@ -276,7 +158,42 @@ export default function CapitalOutlookScreen() {
         </View>
       </View>
 
-      {loading ? (
+      {noProperty ? (
+        <EmptyState
+          icon="home"
+          title={t("common.noPropertyYet")}
+          description={t("capitalOutlook.noPropertyDesc")}
+          actionLabel={t("common.addAProperty")}
+          onAction={() => router.push("/properties")}
+        />
+      ) : subLoading ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={colors.primary} size="large" />
+        </View>
+      ) : locked ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32, gap: 16 }}>
+          <View style={[styles.lockIconWrap, { backgroundColor: "#10b981" + "15" }]}>
+            <Feather name="lock" size={28} color="#10b981" />
+          </View>
+          <Text style={[{ fontSize: 18, fontFamily: "Inter_700Bold", color: colors.foreground, textAlign: "center" }]}>
+            {t("common.basicPlanRequired")}
+          </Text>
+          <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 }]}>
+            <Trans
+              i18nKey="capitalOutlook.lockedDesc"
+              components={{ b: <Text style={{ fontFamily: "Inter_600SemiBold", color: colors.foreground }} /> }}
+            />
+          </Text>
+          <TouchableOpacity
+            style={[styles.upgradeBtn, { backgroundColor: "#10b981" }]}
+            onPress={() => router.push("/upgrade")}
+            activeOpacity={0.8}
+          >
+            <Feather name="star" size={14} color="#fff" />
+            <Text style={[styles.upgradeBtnText, { fontFamily: "Inter_600SemiBold" }]}>{t("common.upgradeToBasic")}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : loading ? (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
@@ -284,7 +201,7 @@ export default function CapitalOutlookScreen() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
           <Feather name="alert-triangle" size={36} color={colors.mutedForeground + "60"} />
           <Text style={[{ fontSize: 14, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Could not load Capital Outlook data.
+            {t("capitalOutlook.loadFailed")}
           </Text>
         </View>
       ) : (
@@ -294,7 +211,7 @@ export default function CapitalOutlookScreen() {
         >
           {/* Subtitle */}
           <Text style={[styles.subtitle, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Projected replacement costs for your home's major systems — so you're never surprised.
+            {t("capitalOutlook.subtitle")}
           </Text>
 
           {/* KPI cards */}
@@ -303,10 +220,10 @@ export default function CapitalOutlookScreen() {
               <View style={[styles.kpiIcon, { backgroundColor: colors.primary + "20" }]}>
                 <Feather name="dollar-sign" size={16} color={colors.primary} />
               </View>
-              <Text style={[styles.kpiLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Total Tracked Value</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.totalTrackedValue")}</Text>
               <Text style={[styles.kpiValue, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>{fmt(data.totalTrackedValue)}</Text>
               <Text style={[styles.kpiSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {assetsWithCost.length} asset{assetsWithCost.length !== 1 ? "s" : ""}
+                {t("capitalOutlook.assetCount", { count: assetsWithCost.length })}
               </Text>
             </View>
 
@@ -314,7 +231,7 @@ export default function CapitalOutlookScreen() {
               <View style={[styles.kpiIcon, { backgroundColor: colors.muted }]}>
                 <Feather name="calendar" size={16} color={colors.mutedForeground} />
               </View>
-              <Text style={[styles.kpiLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Next 5-Year Spend</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.next5Years")}</Text>
               <Text style={[styles.kpiValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{fmt(data.summary.next5YearCost)}</Text>
               <Text style={[styles.kpiSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                 {currentYear}–{currentYear + 4}
@@ -325,7 +242,7 @@ export default function CapitalOutlookScreen() {
               <View style={[styles.kpiIcon, { backgroundColor: colors.muted }]}>
                 <Feather name="trending-up" size={16} color={colors.mutedForeground} />
               </View>
-              <Text style={[styles.kpiLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Next 10-Year Spend</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.next10Years")}</Text>
               <Text style={[styles.kpiValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{fmt(data.summary.next10YearCost)}</Text>
               <Text style={[styles.kpiSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                 {currentYear}–{currentYear + 9}
@@ -350,14 +267,20 @@ export default function CapitalOutlookScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.alertTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-                  Next Up: <Text style={{ color: colors.primary }}>{data.summary.nextReplacement.name}</Text>
+                  <Trans
+                    i18nKey="capitalOutlook.nextUp"
+                    values={{ name: data.summary.nextReplacement.name }}
+                    components={{ b: <Text style={{ color: colors.primary }} /> }}
+                  />
                 </Text>
                 <Text style={[styles.alertSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {`Projected ${data.summary.nextReplacement.year} (${
-                    data.summary.nextReplacement.year - currentYear <= 0
-                      ? "overdue"
-                      : `${data.summary.nextReplacement.year - currentYear}yr away`
-                  }) — est. ${fmt(data.summary.nextReplacement.cost)}`}
+                  {data.summary.nextReplacement.year - currentYear <= 0
+                    ? t("capitalOutlook.nextOverdue", { year: data.summary.nextReplacement.year, cost: fmt(data.summary.nextReplacement.cost) })
+                    : t("capitalOutlook.nextIn", {
+                        year: data.summary.nextReplacement.year,
+                        count: data.summary.nextReplacement.year - currentYear,
+                        cost: fmt(data.summary.nextReplacement.cost),
+                      })}
                 </Text>
               </View>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
@@ -369,11 +292,11 @@ export default function CapitalOutlookScreen() {
             <View style={styles.sectionHeader}>
               <Feather name="trending-up" size={13} color={colors.mutedForeground} />
               <Text style={[styles.sectionTitle, { color: colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                REPLACEMENT COST TIMELINE
+                {t("capitalOutlook.timelineTitle")}
               </Text>
             </View>
             <Text style={[styles.sectionSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              Year-by-year capital expenditure projection
+              {t("capitalOutlook.timelineDesc")}
             </Text>
 
             {chartData.some((d) => d.projectedCost > 0) ? (
@@ -384,10 +307,10 @@ export default function CapitalOutlookScreen() {
               <View style={styles.emptyChart}>
                 <Feather name="trending-up" size={32} color={colors.mutedForeground + "40"} />
                 <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 8 }]}>
-                  No replacement data yet
+                  {t("capitalOutlook.noData")}
                 </Text>
                 <Text style={[{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }]}>
-                  Add assets with replacement costs to see the timeline
+                  {t("capitalOutlook.noDataDesc")}
                 </Text>
               </View>
             )}
@@ -395,14 +318,14 @@ export default function CapitalOutlookScreen() {
 
           {/* Asset breakdown */}
           <Text style={[styles.breakdownTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            Asset Breakdown
+            {t("capitalOutlook.assetBreakdown")}
           </Text>
 
           {sortedAssets.length === 0 ? (
             <View style={[styles.emptyAssets, { borderColor: colors.border }]}>
               <Feather name="trending-up" size={32} color={colors.mutedForeground + "40"} />
               <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_500Medium", marginTop: 8 }]}>
-                No assets to analyze
+                {t("capitalOutlook.noAssets")}
               </Text>
             </View>
           ) : (
@@ -428,11 +351,11 @@ export default function CapitalOutlookScreen() {
                         {asset.name}
                       </Text>
                       <Text style={[styles.assetMeta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]} numberOfLines={1}>
-                        {[asset.brand, asset.model].filter(Boolean).join(" · ") || cat}
+                        {[asset.brand, asset.model].filter(Boolean).join(" · ") || t(`categories.${cat}`, { defaultValue: cat })}
                       </Text>
                     </View>
                     <View style={[styles.urgencyPill, { backgroundColor: cfg.bg, borderColor: cfg.borderColor }]}>
-                      <Text style={[styles.urgencyPillText, { color: cfg.textColor, fontFamily: "Inter_700Bold" }]}>{cfg.label}</Text>
+                      <Text style={[styles.urgencyPillText, { color: cfg.textColor, fontFamily: "Inter_700Bold" }]}>{t(`capitalOutlook.urgency.${asset.urgency}`)}</Text>
                     </View>
                   </View>
 
@@ -441,10 +364,10 @@ export default function CapitalOutlookScreen() {
                     <View style={{ marginTop: 10 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                         <Text style={[{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                          Life used: {asset.percentLifeUsed}%
+                          {t("capitalOutlook.lifeUsed", { pct: asset.percentLifeUsed })}
                         </Text>
                         <Text style={[{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                          {asset.expectedLifespanYears}yr lifespan
+                          {t("capitalOutlook.lifespanYears", { count: asset.expectedLifespanYears })}
                         </Text>
                       </View>
                       <LifeBar percent={asset.percentLifeUsed} urgency={asset.urgency} />
@@ -454,24 +377,24 @@ export default function CapitalOutlookScreen() {
                   {/* Stats row */}
                   <View style={styles.statsRow}>
                     <View style={styles.statCell}>
-                      <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Installed</Text>
+                      <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.installed")}</Text>
                       <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
                         {asset.installYear ?? "—"}
                       </Text>
                     </View>
                     <View style={[styles.statCell, { borderLeftWidth: 1, borderLeftColor: colors.border }]}>
-                      <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Replace by</Text>
+                      <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.replaceBy")}</Text>
                       <Text style={[styles.statValue, { color: cfg.textColor, fontFamily: "Inter_700Bold" }]}>
                         {asset.replacementYear ?? "—"}
                         {asset.yearsRemaining != null && (
                           <Text style={{ fontFamily: "Inter_400Regular", color: colors.mutedForeground, fontSize: 10 }}>
-                            {" "}({asset.yearsRemaining <= 0 ? "past" : `${asset.yearsRemaining}yr`})
+                            {" "}({asset.yearsRemaining <= 0 ? t("capitalOutlook.past") : t("capitalOutlook.yearsShort", { count: asset.yearsRemaining })})
                           </Text>
                         )}
                       </Text>
                     </View>
                     <View style={[styles.statCell, { borderLeftWidth: 1, borderLeftColor: colors.border }]}>
-                      <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>Est. Cost</Text>
+                      <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.estCost")}</Text>
                       <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
                         {asset.replacementCost != null ? fmt(asset.replacementCost) : "—"}
                       </Text>
@@ -483,7 +406,7 @@ export default function CapitalOutlookScreen() {
           )}
 
           <Text style={[styles.disclaimer, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Replacement timelines are estimates based on industry-standard lifespans. Costs are in today's dollars and do not account for inflation.
+            {t("capitalOutlook.disclaimer")}
           </Text>
         </ScrollView>
       )}
@@ -549,4 +472,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 10 },
   statValue: { fontSize: 13 },
   disclaimer: { fontSize: 11, textAlign: "center", lineHeight: 16, marginTop: 8, marginBottom: 4 },
+  lockIconWrap: { width: 64, height: 64, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  upgradeBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 24, paddingVertical: 13, borderRadius: 12, marginTop: 8 },
+  upgradeBtnText: { color: "#fff", fontSize: 14 },
 });

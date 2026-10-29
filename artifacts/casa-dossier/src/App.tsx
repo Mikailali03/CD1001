@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ClerkProvider, SignIn, SignUp, Show, useClerk, useAuth } from "@clerk/react";
 import { shadcn } from "@clerk/themes";
 import { Switch, Route, useLocation, Router as WouterRouter, Redirect, useSearch } from "wouter";
@@ -12,6 +12,7 @@ import { setExtraHeaders, setAuthTokenGetter, useGetUserProfile, getGetUserProfi
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowRight, Eye, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 // Pages
 import Landing from "@/pages/landing";
@@ -21,7 +22,6 @@ import Properties from "@/pages/properties";
 import PropertyDetail from "@/pages/property-detail";
 import MyAssets from "@/pages/assets";
 import AssetDetail from "@/pages/asset-detail";
-import IntakeForm from "@/pages/intake";
 import Guides from "@/pages/guides";
 import GuideDetail from "@/pages/guide-detail";
 import Marketplace from "@/pages/marketplace";
@@ -32,6 +32,8 @@ import ClaimTransfer from "@/pages/claim";
 import PropertyReport from "@/pages/report";
 import AdminDashboard from "@/pages/admin-dashboard";
 import NotFound from "@/pages/not-found";
+import AssetLabels from "@/pages/asset-labels";
+import AssetRedirect from "@/pages/asset-redirect";
 
 const queryClient = new QueryClient();
 
@@ -150,7 +152,7 @@ function TechnicianAwareRedirect() {
     );
   }
 
-  const role = (profile as { role?: string } | undefined)?.role;
+  const role = profile?.role;
 
   if (!isError && role === "technician") {
     window.location.href = "/tech/";
@@ -206,6 +208,23 @@ function StripeSuccessSync() {
   return null;
 }
 
+function AdminRoute() {
+  const { data: profile, isLoading } = useGetUserProfile({
+    query: { queryKey: getGetUserProfileQueryKey(), retry: false },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (profile?.role !== "admin") return <NotFound />;
+  return <AdminDashboard />;
+}
+
 function AppRoutes() {
   return (
     <AppLayout>
@@ -216,7 +235,6 @@ function AppRoutes() {
         <Route path="/properties" component={Properties} />
         <Route path="/properties/:id" component={PropertyDetail} />
         <Route path="/properties/:propertyId/assets/:assetId" component={AssetDetail} />
-        <Route path="/intake" component={IntakeForm} />
         <Route path="/guides" component={Guides} />
         <Route path="/guides/:id" component={GuideDetail} />
         <Route path="/locker" component={DigitalLocker} />
@@ -225,7 +243,7 @@ function AppRoutes() {
         <Route path="/settings" component={Settings} />
         <Route path="/claim/:token" component={ClaimTransfer} />
         <Route path="/properties/:id/report" component={PropertyReport} />
-        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin" component={AdminRoute} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
@@ -234,8 +252,32 @@ function AppRoutes() {
 
 function OnboardingGate({ children }: { children: React.ReactNode }) {
   const { properties, isLoading } = useProperty();
-  if (!isLoading && properties.length === 0) return <Onboarding />;
+  const [location] = useLocation();
+  // Stays true from property creation until the user leaves the final step, so
+  // the properties refetch during onboarding doesn't swap in the app mid-flow.
+  const [inOnboardingFlow, setInOnboardingFlow] = useState(false);
+
+  if (location.startsWith("/claim/")) return <>{children}</>;
+  if (inOnboardingFlow || (!isLoading && properties.length === 0)) {
+    return (
+      <Onboarding
+        onFlowStart={() => setInOnboardingFlow(true)}
+        onFinish={() => setInOnboardingFlow(false)}
+      />
+    );
+  }
   return <>{children}</>;
+}
+
+function SignedOutRedirect() {
+  const [location] = useLocation();
+  const search = useSearch();
+
+  if (location.startsWith("/claim/")) {
+    const returnTo = `${basePath}${location}${search ? `?${search}` : ""}`;
+    return <Redirect to={`/sign-in?redirect_url=${encodeURIComponent(returnTo)}`} />;
+  }
+  return <Redirect to="/" />;
 }
 
 function ProtectedApp() {
@@ -251,7 +293,7 @@ function ProtectedApp() {
         </PropertyProvider>
       </Show>
       <Show when="signed-out">
-        <Redirect to="/" />
+        <SignedOutRedirect />
       </Show>
     </>
   );
@@ -262,23 +304,25 @@ function ProtectedApp() {
 // ---------------------------------------------------------------------------
 
 function DemoBanner() {
+  const { t } = useTranslation();
   return (
     <div className="sticky top-0 z-50 flex items-center justify-between gap-3 bg-amber-400 px-3 py-2 text-amber-900">
       <div className="flex items-center gap-2 text-sm font-medium min-w-0">
         <Eye className="h-4 w-4 shrink-0" />
-        <span className="hidden sm:inline">Demo mode — you're exploring a sample home. No account needed.</span>
-        <span className="sm:hidden text-xs">Demo mode</span>
+        <span className="hidden sm:inline">{t("demo.banner")}</span>
+        <span className="sm:hidden text-xs">{t("demo.bannerShort")}</span>
       </div>
-      <a href={`${basePath}/sign-up`} className="shrink-0">
-        <Button
-          size="sm"
-          className="h-7 gap-1.5 bg-amber-900 text-amber-50 hover:bg-amber-800 text-xs font-semibold"
-        >
-          <span className="hidden sm:inline">Create free account</span>
-          <span className="sm:hidden">Sign up free</span>
+      <Button
+        asChild
+        size="sm"
+        className="shrink-0 h-7 gap-1.5 bg-amber-900 text-amber-50 hover:bg-amber-800 text-xs font-semibold"
+      >
+        <a href={`${basePath}/sign-up`}>
+          <span className="hidden sm:inline">{t("demo.createAccount")}</span>
+          <span className="sm:hidden">{t("demo.signUpShort")}</span>
           <ArrowRight className="h-3.5 w-3.5" />
-        </Button>
-      </a>
+        </a>
+      </Button>
     </div>
   );
 }
@@ -353,7 +397,13 @@ function DemoApp() {
     <WouterRouter base={`${basePath}/demo`}>
       <PropertyProvider>
         <SubscriptionProvider>
-          <DemoAppRoutes />
+          <Switch>
+            {/* Printable labels sit outside AppLayout so print isn't clipped, matching the signed-in route. */}
+            <Route path="/properties/:id/labels" component={AssetLabels} />
+            <Route>
+              <DemoAppRoutes />
+            </Route>
+          </Switch>
         </SubscriptionProvider>
       </PropertyProvider>
     </WouterRouter>
@@ -390,6 +440,9 @@ function SignUpPage() {
 
 function ClerkProviderWithRoutes() {
   const [, setLocation] = useLocation();
+  // Re-renders on language change so the custom Clerk titles follow it.
+  // @clerk/localizations isn't installed, so the rest of Clerk's UI stays English.
+  const { t } = useTranslation();
 
   return (
     <ClerkProvider
@@ -404,14 +457,14 @@ function ClerkProviderWithRoutes() {
       localization={{
         signIn: {
           start: {
-            title: "Welcome back",
-            subtitle: "Sign in to your Casa Dossier account",
+            title: t("auth.signInTitle"),
+            subtitle: t("auth.signInSubtitle"),
           },
         },
         signUp: {
           start: {
-            title: "Create your account",
-            subtitle: "Start documenting your home today",
+            title: t("auth.signUpTitle"),
+            subtitle: t("auth.signUpSubtitle"),
           },
         },
       }}
@@ -428,6 +481,11 @@ function ClerkProviderWithRoutes() {
             <Route path="/sign-up/*?" component={SignUpPage} />
             {/* Demo route — public, no Clerk auth required */}
             <Route path="/demo/*?" component={DemoApp} />
+            {/* QR Identity Protocol: public scan landing + full-page printable labels (outside AppLayout so print isn't clipped) */}
+            <Route path="/a/:assetId" component={AssetRedirect} />
+            <Route path="/properties/:id/labels">
+              {() => <ProtectedRoute component={AssetLabels} />}
+            </Route>
             <Route>
               {() => <ProtectedApp />}
             </Route>

@@ -15,6 +15,7 @@ import { Feather } from "@expo/vector-icons";
 import {
   useListProperties,
   useListAssets,
+  getListAssetsQueryKey,
   useCreateMarketplaceJob,
   getListMarketplaceJobsQueryKey,
 } from "@workspace/api-client-react";
@@ -22,12 +23,14 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import * as Haptics from "expo-haptics";
+import { useTranslation } from "react-i18next";
 
 const URGENCY_OPTIONS = [
-  { value: "low",       label: "Low",       sub: "Not urgent — just planning ahead",     color: "#94a3b8" },
-  { value: "medium",    label: "Medium",    sub: "Moderate — within the next few weeks", color: "#d97706" },
-  { value: "high",      label: "High",      sub: "Soon — within the next few days",      color: "#ea580c" },
-  { value: "emergency", label: "Emergency", sub: "Needs immediate attention",             color: "#dc2626" },
+  // Label: findPro.urgency.<value>, description: findPro.urgencySub.<value>
+  { value: "low",       color: "#94a3b8" },
+  { value: "medium",    color: "#d97706" },
+  { value: "high",      color: "#ea580c" },
+  { value: "emergency", color: "#dc2626" },
 ] as const;
 
 const ATLANTA_PREFIXES = ["300", "301", "302", "303"];
@@ -44,6 +47,7 @@ export default function FindAProTab() {
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const params = useLocalSearchParams<{ propertyId?: string; assetId?: string }>();
 
   const { data: properties = [] } = useListProperties();
@@ -61,14 +65,14 @@ export default function FindAProTab() {
   }, [params.propertyId, params.assetId]);
 
   const { data: assets = [] } = useListAssets(propertyId, undefined, {
-    query: { enabled: !!propertyId, queryKey: ["assets", propertyId] as const },
+    query: { enabled: !!propertyId, queryKey: getListAssetsQueryKey(propertyId) },
   });
 
   const createJob = useCreateMarketplaceJob();
 
   const selectedProp = properties.find((p) => p.id === propertyId);
   const selectedAsset = assets.find((a) => a.id === assetId);
-  const inArea = selectedProp ? inAtlantaArea((selectedProp as any).state, (selectedProp as any).zipCode) : true;
+  const inArea = selectedProp ? inAtlantaArea(selectedProp.state, selectedProp.zipCode) : true;
 
   function resetForm() {
     setPropertyId("");
@@ -82,7 +86,7 @@ export default function FindAProTab() {
 
   function handleSubmit() {
     if (!assetId || !description.trim()) {
-      Alert.alert("Missing info", "Please select an asset and describe the issue.");
+      Alert.alert(t("findPro.missingInfo"), t("findPro.missingInfoDesc"));
       return;
     }
     createJob.mutate(
@@ -91,12 +95,12 @@ export default function FindAProTab() {
         onSuccess: () => {
           qc.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert("Request Posted!", "Qualified pros in your area will be notified.", [
-            { text: "OK", onPress: resetForm },
+          Alert.alert(t("findPro.posted"), t("findPro.postedDesc"), [
+            { text: t("common.ok"), onPress: resetForm },
           ]);
         },
         onError: () => {
-          Alert.alert("Error", "Could not post your request. Please try again.");
+          Alert.alert(t("common.error"), t("findPro.postFailed"));
         },
       }
     );
@@ -111,10 +115,10 @@ export default function FindAProTab() {
         </View>
         <View>
           <Text style={[s.headerTitle, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-            Find a Pro
+            {t("findPro.title")}
           </Text>
           <Text style={[s.headerSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Post a service request to local technicians
+            {t("findPro.subtitle")}
           </Text>
         </View>
       </View>
@@ -125,14 +129,14 @@ export default function FindAProTab() {
       >
         {/* Property picker */}
         <View style={{ gap: 8 }}>
-          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Property</Text>
+          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{t("findPro.propertyLabel")}</Text>
           <TouchableOpacity
             onPress={() => { Haptics.selectionAsync(); setPropertyOpen((o) => !o); setAssetOpen(false); }}
             style={[s.picker, { backgroundColor: colors.card, borderColor: colors.border }]}
             activeOpacity={0.7}
           >
             <Text style={[s.pickerText, { color: selectedProp ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {selectedProp ? (selectedProp as any).name ?? (selectedProp as any).address ?? "My Home" : "Choose a property…"}
+              {selectedProp ? selectedProp.name || selectedProp.address || t("common.myHome") : t("findPro.chooseProperty")}
             </Text>
             <Feather name={propertyOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -140,13 +144,15 @@ export default function FindAProTab() {
             <View style={[s.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {properties.map((p) => (
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: p.id === propertyId }}
                   key={p.id}
                   onPress={() => { Haptics.selectionAsync(); setPropertyId(p.id); setAssetId(""); setPropertyOpen(false); }}
                   style={[s.dropdownItem, { borderBottomColor: colors.border, backgroundColor: p.id === propertyId ? colors.primary + "12" : "transparent" }]}
                   activeOpacity={0.7}
                 >
                   <Text style={[s.dropdownText, { color: colors.foreground, fontFamily: p.id === propertyId ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
-                    {(p as any).name ?? (p as any).address ?? "My Home"}
+                    {p.name || p.address || t("common.myHome")}
                   </Text>
                   {p.id === propertyId && <Feather name="check" size={14} color={colors.primary} />}
                 </TouchableOpacity>
@@ -157,10 +163,10 @@ export default function FindAProTab() {
 
         {/* Asset picker */}
         <View style={{ gap: 8 }}>
-          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Which item needs service?</Text>
+          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{t("findPro.assetLabel")}</Text>
           <TouchableOpacity
             onPress={() => {
-              if (!propertyId) { Alert.alert("Select a property first"); return; }
+              if (!propertyId) { Alert.alert(t("findPro.selectPropertyFirst")); return; }
               Haptics.selectionAsync(); setAssetOpen((o) => !o); setPropertyOpen(false);
             }}
             style={[s.picker, { backgroundColor: colors.card, borderColor: colors.border, opacity: !propertyId ? 0.5 : 1 }]}
@@ -168,8 +174,8 @@ export default function FindAProTab() {
           >
             <Text style={[s.pickerText, { color: selectedAsset ? colors.foreground : colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
               {selectedAsset
-                ? `${selectedAsset.name}${(selectedAsset as any).brand ? ` — ${(selectedAsset as any).brand}` : ""}`
-                : propertyId ? "Choose an asset…" : "Select a property first"}
+                ? `${selectedAsset.name}${selectedAsset.brand ? ` — ${selectedAsset.brand}` : ""}`
+                : propertyId ? t("findPro.chooseAsset") : t("findPro.selectPropertyFirst")}
             </Text>
             <Feather name={assetOpen ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
           </TouchableOpacity>
@@ -177,13 +183,15 @@ export default function FindAProTab() {
             <View style={[s.dropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {assets.map((a) => (
                 <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: a.id === assetId }}
                   key={a.id}
                   onPress={() => { Haptics.selectionAsync(); setAssetId(a.id); setAssetOpen(false); }}
                   style={[s.dropdownItem, { borderBottomColor: colors.border, backgroundColor: a.id === assetId ? colors.primary + "12" : "transparent" }]}
                   activeOpacity={0.7}
                 >
                   <Text style={[s.dropdownText, { color: colors.foreground, fontFamily: a.id === assetId ? "Inter_600SemiBold" : "Inter_400Regular" }]}>
-                    {a.name}{(a as any).brand ? ` — ${(a as any).brand}` : ""}
+                    {a.name}{a.brand ? ` — ${a.brand}` : ""}
                   </Text>
                   {a.id === assetId && <Feather name="check" size={14} color={colors.primary} />}
                 </TouchableOpacity>
@@ -197,9 +205,9 @@ export default function FindAProTab() {
           <View style={[s.warningBox, { backgroundColor: "#fffbeb", borderColor: "#fde68a" }]}>
             <Feather name="alert-triangle" size={15} color="#d97706" style={{ marginTop: 1 }} />
             <View style={{ flex: 1 }}>
-              <Text style={[s.warningTitle, { fontFamily: "Inter_600SemiBold" }]}>Outside our service area</Text>
+              <Text style={[s.warningTitle, { fontFamily: "Inter_600SemiBold" }]}>{t("findPro.outsideAreaTitle")}</Text>
               <Text style={[s.warningText, { fontFamily: "Inter_400Regular" }]}>
-                CasaService currently serves the Atlanta metro area (within 50 miles). We'll notify you when we expand to your area!
+                {t("findPro.outsideAreaBody")}
               </Text>
             </View>
           </View>
@@ -207,10 +215,12 @@ export default function FindAProTab() {
 
         {/* Urgency */}
         <View style={{ gap: 8 }}>
-          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>How urgent is this?</Text>
+          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{t("findPro.urgencyLabel")}</Text>
           <View style={{ gap: 6 }}>
             {URGENCY_OPTIONS.map((opt) => (
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ selected: urgency === opt.value }}
                 key={opt.value}
                 onPress={() => { Haptics.selectionAsync(); setUrgency(opt.value); }}
                 style={[s.urgencyRow, {
@@ -222,9 +232,9 @@ export default function FindAProTab() {
                 <View style={[s.urgencyDot, { backgroundColor: opt.color }]} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.urgencyLabel, { color: urgency === opt.value ? opt.color : colors.foreground, fontFamily: urgency === opt.value ? "Inter_600SemiBold" : "Inter_500Medium" }]}>
-                    {opt.label}
+                    {t(`findPro.urgency.${opt.value}`)}
                   </Text>
-                  <Text style={[s.urgencySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{opt.sub}</Text>
+                  <Text style={[s.urgencySub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t(`findPro.urgencySub.${opt.value}`)}</Text>
                 </View>
                 {urgency === opt.value && <Feather name="check-circle" size={16} color={opt.color} />}
               </TouchableOpacity>
@@ -235,12 +245,12 @@ export default function FindAProTab() {
         {/* Phone */}
         <View style={{ gap: 8 }}>
           <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            Contact phone <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(shown to the pro after they accept)</Text>
+            {t("findPro.phoneLabel")} <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>{t("findPro.phoneHint")}</Text>
           </Text>
           <TextInput
             value={phone}
             onChangeText={setPhone}
-            placeholder="e.g. (555) 123-4567"
+            placeholder={t("findPro.phonePlaceholder")}
             placeholderTextColor={colors.mutedForeground}
             keyboardType="phone-pad"
             style={[s.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}
@@ -249,11 +259,11 @@ export default function FindAProTab() {
 
         {/* Description */}
         <View style={{ gap: 8 }}>
-          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>Describe what's going on</Text>
+          <Text style={[s.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{t("findPro.descriptionLabel")}</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
-            placeholder="e.g. My AC unit stopped cooling. It runs but only blows warm air."
+            placeholder={t("findPro.descriptionPlaceholder")}
             placeholderTextColor={colors.mutedForeground}
             multiline
             numberOfLines={4}
@@ -269,12 +279,12 @@ export default function FindAProTab() {
           activeOpacity={0.8}
         >
           {createJob.isPending ? (
-            <ActivityIndicator color="#fff" size="small" />
+            <ActivityIndicator color={colors.primaryForeground} size="small" />
           ) : (
-            <Feather name="send" size={16} color="#fff" />
+            <Feather name="send" size={16} color={colors.primaryForeground} />
           )}
-          <Text style={[s.submitText, { fontFamily: "Inter_600SemiBold" }]}>
-            {createJob.isPending ? "Posting…" : "Post Request"}
+          <Text style={[s.submitText, { color: colors.primaryForeground, fontFamily: "Inter_600SemiBold" }]}>
+            {createJob.isPending ? t("findPro.posting") : t("findPro.postRequest")}
           </Text>
         </TouchableOpacity>
       </KeyboardAwareScrollViewCompat>
@@ -303,5 +313,5 @@ const s = StyleSheet.create({
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14 },
   textarea: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, minHeight: 100, textAlignVertical: "top" },
   submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 14, paddingVertical: 15 },
-  submitText: { color: "#fff", fontSize: 15 },
+  submitText: { fontSize: 15 },
 });

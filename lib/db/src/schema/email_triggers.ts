@@ -9,6 +9,7 @@ export const TRIGGER_EVENTS = [
   "overdue_maintenance",
   "asset_end_of_life",
   "property_transfer_initiated",
+  "collaborator_invited",
   "new_feature_announcement",
   "monthly_update",
   "custom",

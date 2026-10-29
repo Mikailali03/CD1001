@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { PropertyFormModal } from "@/components/PropertyFormModal";
-import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import {
   View,
   Text,
@@ -11,445 +10,37 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  useListProperties,
   useGetPropertySummary,
-  useListMarketplaceJobs,
-  type MarketplaceJob,
+  getGetInboxQueryKey,
+  getGetPropertyMaintenanceInboxQueryKey,
+  getGetPropertySummaryQueryKey,
+  getListPropertiesQueryKey,
+  getListMarketplaceJobsQueryKey,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { MaintenanceInbox } from "@/components/MaintenanceInbox";
 import { HealthScoreModal } from "@/components/HealthScoreModal";
 import { PendingInvitesSheet, type Inbox } from "@/components/PendingInvitesSheet";
-import { useAuth } from "@clerk/expo";
+import { EmptyState } from "@/components/EmptyState";
+import { ActiveServiceRequests } from "@/components/home/ActiveServiceRequests";
+import { ActivityRow } from "@/components/home/ActivityRow";
+import { HealthScoreWidget, type Grade } from "@/components/home/HealthScoreWidget";
+import { InviteBanner } from "@/components/home/InviteBanner";
+import { LedgerCard } from "@/components/home/LedgerCard";
+import { NoPropertyView } from "@/components/home/NoPropertyView";
+import { PropertyHeader } from "@/components/home/PropertyHeader";
+import { SectionHeader } from "@/components/home/SectionHeader";
+import { Skeleton } from "@/components/home/Skeleton";
+import { StatCard, statStyles } from "@/components/home/StatCard";
+import { useInbox } from "@/context/InboxContext";
+import { useSelectedProperty } from "@/context/PropertyContext";
 import * as Haptics from "expo-haptics";
-import { format } from "date-fns";
-
-// ── Grade config (matches web exactly) ────────────────────────────────────────
-const GRADE_CONFIG = {
-  A: { color: "#3d7a5f", bg: "#3d7a5f12", label: "Excellent", cta: "Your home is in great shape!" },
-  B: { color: "#4b7fb5", bg: "#4b7fb512", label: "Good",      cta: "A few quick tasks will get you to A." },
-  C: { color: "#c8853a", bg: "#c8853a12", label: "Fair",      cta: "Several items need attention." },
-  D: { color: "#b85a2a", bg: "#b85a2a12", label: "Poor",      cta: "Significant backlog detected." },
-  F: { color: "#c0392b", bg: "#c0392b0e", label: "Critical",  cta: "Immediate action recommended." },
-} as const;
-
-type Grade = keyof typeof GRADE_CONFIG;
-
-// ── Active Service Requests ───────────────────────────────────────────────────
-const URGENCY_BORDER: Record<string, string> = {
-  emergency: "#dc2626",
-  high:      "#ea580c",
-  medium:    "#d97706",
-  low:       "#94a3b8",
-};
-const URGENCY_ICON: Record<string, keyof typeof Feather.glyphMap> = {
-  emergency: "alert-circle",
-  high:      "alert-circle",
-  medium:    "clock",
-  low:       "clock",
-};
-
-function ActiveServiceRequests({ colors, onJobPress, propertyId }: { colors: ReturnType<typeof useColors>; onJobPress: (id: string) => void; propertyId?: string }) {
-  const { data: jobs } = useListMarketplaceJobs();
-  const activeJobs = (jobs ?? []).filter(
-    (j: MarketplaceJob) =>
-      (!propertyId || (j as any).propertyId === propertyId) &&
-      (j.status === "open" ||
-      j.status === "claimed" ||
-      (j.status as string) === "en_route" ||
-      (j.status as string) === "arrived")
-  );
-  if (!activeJobs.length) return null;
-
-  return (
-    <View style={activeStyles.wrap}>
-      {/* Header */}
-      <View style={activeStyles.header}>
-        <View style={activeStyles.headerLeft}>
-          <View style={[activeStyles.headerIcon, { backgroundColor: colors.primary + "15" }]}>
-            <Feather name="tool" size={13} color={colors.primary} />
-          </View>
-          <Text style={[activeStyles.headerTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            Active Service Requests
-          </Text>
-          <View style={[activeStyles.countBadge, { backgroundColor: colors.primary + "18" }]}>
-            <Text style={[activeStyles.countText, { color: colors.primary, fontFamily: "Inter_700Bold" }]}>
-              {activeJobs.length}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Horizontal card scroll */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: 10, paddingRight: 20 }}
-        style={{ marginLeft: -20, paddingLeft: 20 }}
-      >
-        {activeJobs.map((job: MarketplaceJob) => {
-          const urgency = job.urgency ?? "medium";
-          const accentColor = URGENCY_BORDER[urgency] ?? "#d97706";
-          const iconName = URGENCY_ICON[urgency] ?? "clock";
-          const jobStatus = job.status as string;
-          const scheduledAt = (job as any).scheduledAt;
-
-          const STATUS_LABEL: Record<string, string> = {
-            open:     "Awaiting Pro",
-            claimed:  "Pro Assigned",
-            en_route: "On the Way",
-            arrived:  "Arrived",
-          };
-          const STATUS_BG: Record<string, string> = {
-            open:     colors.muted,
-            claimed:  colors.primary + "18",
-            en_route: "#3b82f620",
-            arrived:  "#10b98120",
-          };
-          const STATUS_COLOR: Record<string, string> = {
-            open:     colors.mutedForeground,
-            claimed:  colors.primary,
-            en_route: "#3b82f6",
-            arrived:  "#10b981",
-          };
-
-          return (
-            <TouchableOpacity
-              key={job.id}
-              activeOpacity={0.72}
-              onPress={() => { Haptics.selectionAsync(); onJobPress(job.id); }}
-              style={[
-                activeStyles.card,
-                {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  borderLeftColor: accentColor,
-                },
-              ]}
-            >
-              {/* Top row: icon + asset name + badge */}
-              <View style={activeStyles.cardTop}>
-                <Feather name={iconName} size={13} color={accentColor} />
-                <Text
-                  style={[activeStyles.assetName, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}
-                  numberOfLines={1}
-                >
-                  {job.assetName}
-                </Text>
-                <View style={[
-                  activeStyles.statusBadge,
-                  { backgroundColor: STATUS_BG[jobStatus] ?? colors.muted },
-                ]}>
-                  <Text style={[
-                    activeStyles.statusText,
-                    { color: STATUS_COLOR[jobStatus] ?? colors.mutedForeground, fontFamily: "Inter_600SemiBold" },
-                  ]}>
-                    {STATUS_LABEL[jobStatus] ?? jobStatus}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Description */}
-              <Text
-                style={[activeStyles.desc, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}
-                numberOfLines={2}
-              >
-                {job.description}
-              </Text>
-
-              {/* Scheduled row (once a pro is assigned) */}
-              {jobStatus !== "open" && (
-                <View style={activeStyles.scheduleRow}>
-                  <Feather name="calendar" size={11} color={colors.mutedForeground} />
-                  {scheduledAt ? (
-                    <Text style={[activeStyles.scheduleText, { color: colors.foreground, fontFamily: "Inter_500Medium" }]}>
-                      {format(new Date(scheduledAt), "MMM d 'at' h:mm a")}
-                    </Text>
-                  ) : (
-                    <Text style={[activeStyles.scheduleText, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                      Service date pending
-                    </Text>
-                  )}
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-}
-
-const activeStyles = StyleSheet.create({
-  wrap: { marginBottom: 16 },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
-  headerIcon: { width: 26, height: 26, borderRadius: 7, alignItems: "center", justifyContent: "center" },
-  headerTitle: { fontSize: 14 },
-  countBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 },
-  countText: { fontSize: 11 },
-  card: {
-    width: 240,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderLeftWidth: 4,
-    padding: 12,
-    gap: 6,
-  },
-  cardTop: { flexDirection: "row", alignItems: "center", gap: 6 },
-  assetName: { flex: 1, fontSize: 12 },
-  statusBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 99 },
-  statusText: { fontSize: 10 },
-  desc: { fontSize: 12, lineHeight: 17 },
-  scheduleRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
-  scheduleText: { fontSize: 11 },
-});
-
-// ── Health Score Widget (matches web's HealthScoreWidget) ─────────────────────
-function HealthScoreWidget({ score, grade, overdueCount }: { score: number; grade: Grade; overdueCount: number }) {
-  const cfg = GRADE_CONFIG[grade];
-  const radius = 26, stroke = 5;
-  const circ = 2 * Math.PI * radius;
-  const dash = (score / 100) * circ;
-
-  return (
-    <View style={[hStyles.wrap, { borderColor: cfg.color + "44", backgroundColor: "rgba(255,255,255,0.9)" }]}>
-      {/* SVG ring */}
-      <View style={hStyles.ringWrap}>
-        <Svg width={66} height={66} style={{ transform: [{ rotate: "-90deg" }] }}>
-          <Circle cx={33} cy={33} r={radius} fill="none" stroke={cfg.bg} strokeWidth={stroke} />
-          <Circle
-            cx={33} cy={33} r={radius} fill="none"
-            stroke={cfg.color} strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${dash} ${circ}`}
-          />
-        </Svg>
-        <View style={StyleSheet.absoluteFill}>
-          <View style={hStyles.ringCenter}>
-            <Text style={[hStyles.score, { color: cfg.color, fontFamily: "Inter_700Bold" }]}>{score}</Text>
-            <Text style={[hStyles.scoreLabel, { color: "#9CA3AF", fontFamily: "Inter_400Regular" }]}>/100</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Grade info */}
-      <View style={hStyles.info}>
-        <View style={hStyles.gradeRow}>
-          <Text style={[hStyles.gradeText, { color: cfg.color, fontFamily: "Inter_700Bold" }]}>Grade {grade}</Text>
-          <View style={[hStyles.gradePill, { backgroundColor: cfg.bg }]}>
-            <Text style={[hStyles.gradePillText, { color: cfg.color, fontFamily: "Inter_700Bold" }]}>{cfg.label}</Text>
-          </View>
-        </View>
-        <Text style={[hStyles.ctaText, { color: "#6B7A8E", fontFamily: "Inter_400Regular" }]}>{cfg.cta}</Text>
-        {overdueCount > 0 && (
-          <View style={hStyles.overdueRow}>
-            <Feather name="trending-up" size={11} color={cfg.color} />
-            <Text style={[hStyles.overdueText, { color: cfg.color, fontFamily: "Inter_600SemiBold" }]}>
-              See improvement plan
-            </Text>
-          </View>
-        )}
-      </View>
-      <Feather name="chevron-right" size={16} color="#9CA3AF" />
-    </View>
-  );
-}
-
-const hStyles = StyleSheet.create({
-  wrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 12,
-    borderWidth: 2,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  ringWrap: { width: 66, height: 66, position: "relative" },
-  ringCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 0 },
-  score: { fontSize: 18, lineHeight: 20 },
-  scoreLabel: { fontSize: 9 },
-  info: { flex: 1, gap: 3 },
-  gradeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  gradeText: { fontSize: 13 },
-  gradePill: { borderRadius: 99, paddingHorizontal: 6, paddingVertical: 2 },
-  gradePillText: { fontSize: 10 },
-  ctaText: { fontSize: 11 },
-  overdueRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-  overdueText: { fontSize: 11 },
-});
-
-// ── Minimal inline SVG components ─────────────────────────────────────────────
-function Svg({ width, height, style, children }: any) {
-  const { Svg: RNSvg } = require("react-native-svg");
-  return <RNSvg width={width} height={height} style={style}>{children}</RNSvg>;
-}
-function Circle(props: any) {
-  const { Circle: RNCircle } = require("react-native-svg");
-  return <RNCircle {...props} />;
-}
-
-// ── Stat Card ─────────────────────────────────────────────────────────────────
-function StatCard({
-  title, value, icon, valueColor, sub, colors,
-}: {
-  title: string; value: string | number; icon: keyof typeof Feather.glyphMap;
-  valueColor?: string; sub?: string; colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={statStyles.header}>
-        <Text style={[statStyles.title, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>{title}</Text>
-        <Feather name={icon} size={14} color={colors.mutedForeground} />
-      </View>
-      <Text style={[statStyles.value, { color: valueColor ?? colors.foreground, fontFamily: "Inter_700Bold" }]}>
-        {value}
-      </Text>
-      {sub ? (
-        <Text style={[statStyles.sub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{sub}</Text>
-      ) : null}
-    </View>
-  );
-}
-
-const statStyles = StyleSheet.create({
-  card: { flex: 1, borderRadius: 12, borderWidth: 1, padding: 14, gap: 4 },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 11, lineHeight: 14 },
-  value: { fontSize: 24 },
-  sub: { fontSize: 11, marginTop: 2 },
-});
-
-// ── Investment Ledger Card ────────────────────────────────────────────────────
-function LedgerCard({ colors, onPress }: { colors: ReturnType<typeof useColors>; onPress: () => void }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.75}
-      style={[ledgerStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}
-    >
-      <View style={ledgerStyles.top}>
-        <View style={[ledgerStyles.iconBox, { backgroundColor: colors.primary + "1A" }]}>
-          <Feather name="file-text" size={18} color={colors.primary} />
-        </View>
-        <View style={ledgerStyles.topText}>
-          <Text style={[ledgerStyles.topTitle, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-            Investment Ledger
-          </Text>
-          <Text style={[ledgerStyles.topSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            Spending by category · expected vs actual
-          </Text>
-        </View>
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-      </View>
-      <View style={[ledgerStyles.footer, { borderTopColor: colors.border, backgroundColor: colors.muted + "33" }]}>
-        {[
-          { icon: "dollar-sign" as const, label: "Track spend", sub: "by system" },
-          { icon: "trending-up" as const, label: "Compare", sub: "est. vs actual" },
-          { icon: "file-text" as const, label: "Full ledger", sub: "all records" },
-        ].map(({ icon, label, sub }) => (
-          <View key={label} style={[ledgerStyles.cell, { borderLeftColor: colors.border }]}>
-            <Feather name={icon} size={12} color={colors.primary} />
-            <Text style={[ledgerStyles.cellLabel, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{label}</Text>
-            <Text style={[ledgerStyles.cellSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{sub}</Text>
-          </View>
-        ))}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-const ledgerStyles = StyleSheet.create({
-  wrap: { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
-  top: { flexDirection: "row", alignItems: "center", padding: 16, gap: 12 },
-  iconBox: { width: 40, height: 40, borderRadius: 10, alignItems: "center", justifyContent: "center" },
-  topText: { flex: 1, gap: 2 },
-  topTitle: { fontSize: 14 },
-  topSub: { fontSize: 11 },
-  footer: { flexDirection: "row", borderTopWidth: 1 },
-  cell: { flex: 1, alignItems: "center", gap: 2, paddingVertical: 12, paddingHorizontal: 8, borderLeftWidth: StyleSheet.hairlineWidth },
-  cellLabel: { fontSize: 11 },
-  cellSub: { fontSize: 10 },
-});
-
-// ── Recent Activity Row ────────────────────────────────────────────────────────
-function ActivityRow({
-  description, assetName, companyName, date, colors,
-}: {
-  description: string; assetName?: string; companyName?: string; date: string;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View style={[actStyles.row, { borderBottomColor: colors.border }]}>
-      <View style={[actStyles.icon, { backgroundColor: colors.muted }]}>
-        <Feather name="file-text" size={13} color={colors.primary} />
-      </View>
-      <View style={actStyles.content}>
-        <Text style={[actStyles.desc, { color: colors.foreground, fontFamily: "Inter_500Medium" }]} numberOfLines={2}>
-          {description}
-        </Text>
-        <View style={actStyles.metaRow}>
-          {assetName ? (
-            <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {assetName} · 
-            </Text>
-          ) : null}
-          {companyName === "CasaService" ? (
-            <CasaServiceBadge />
-          ) : (
-            <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-              {companyName ?? "Service"}
-            </Text>
-          )}
-          <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-            {" · "}{format(new Date(date), "MMM d, yyyy")}
-          </Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-const actStyles = StyleSheet.create({
-  row: { flexDirection: "row", gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  icon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 2 },
-  content: { flex: 1, gap: 3 },
-  desc: { fontSize: 13, lineHeight: 18 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 2 },
-  meta: { fontSize: 11 },
-});
-
-// ── Section header ─────────────────────────────────────────────────────────────
-function SectionHeader({ title, colors }: { title: string; colors: ReturnType<typeof useColors> }) {
-  return (
-    <Text style={[secStyles.title, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>
-      {title}
-    </Text>
-  );
-}
-const secStyles = StyleSheet.create({ title: { fontSize: 14, marginBottom: 10 } });
-
-// ── Skeleton ──────────────────────────────────────────────────────────────────
-function Skeleton({ height, width, borderRadius, colors }: {
-  height: number; width?: number | string; borderRadius?: number;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View style={{
-      height, width: (width ?? "100%") as any,
-      borderRadius: borderRadius ?? 8,
-      backgroundColor: colors.muted,
-    }} />
-  );
-}
+import { useTranslation } from "react-i18next";
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function HomeScreen() {
@@ -457,47 +48,53 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { getToken } = useAuth();
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const [healthModalOpen, setHealthModalOpen] = useState(false);
   const [invitesSheetOpen, setInvitesSheetOpen] = useState(false);
-  const [inboxOverride, setInboxOverride] = useState<Inbox | null>(null);
   const [addPropertyOpen, setAddPropertyOpen] = useState(false);
 
-  const domain = process.env.EXPO_PUBLIC_DOMAIN;
-  const baseUrl = domain ? `https://${domain}` : "";
+  // Pending invites (shared query from InboxContext)
+  const inbox = useInbox();
 
-  // Fetch pending invites
-  const { data: inboxData } = useQuery<Inbox>({
-    queryKey: ["inbox"],
-    queryFn: async () => {
-      const token = await getToken();
-      const res = await fetch(`${baseUrl}/api/inbox`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return { transfers: [], collaboratorInvites: [] };
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
+  // After an accept/decline: show the change immediately, then re-sync with the server
+  const handleInboxChange = (updated: Inbox) => {
+    queryClient.setQueryData(getGetInboxQueryKey(), updated);
+    queryClient.invalidateQueries({ queryKey: getGetInboxQueryKey() });
+    if (updated.transfers.length + updated.collaboratorInvites.length === 0) {
+      setInvitesSheetOpen(false);
+    }
+  };
 
-  // Use local override (optimistic updates) or server data
-  const inbox: Inbox = inboxOverride ?? inboxData ?? { transfers: [], collaboratorInvites: [] };
-
-  const { data: properties = [], isLoading: propsLoading } = useListProperties();
-  const selectedProperty = properties[selectedIdx];
+  const {
+    properties,
+    selectedProperty,
+    setSelectedPropertyId,
+    isLoading: propsLoading,
+    isError: propsError,
+    refetch: refetchProperties,
+  } = useSelectedProperty();
 
   const { data: summary, isLoading: summaryLoading } = useGetPropertySummary(
     selectedProperty?.id ?? "",
-    { query: { enabled: !!selectedProperty?.id, queryKey: ["property-summary", selectedProperty?.id] } }
+    { query: { enabled: !!selectedProperty?.id, queryKey: getGetPropertySummaryQueryKey(selectedProperty?.id ?? "") } }
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const propertyId = selectedProperty?.id;
     await Promise.all([
-      queryClient.invalidateQueries(),
+      // Only what the dashboard shows: properties, summary, inbox, maintenance and jobs
+      queryClient.invalidateQueries({ queryKey: getListPropertiesQueryKey() }),
+      ...(propertyId
+        ? [
+            queryClient.invalidateQueries({ queryKey: getGetPropertySummaryQueryKey(propertyId) }),
+            queryClient.invalidateQueries({ queryKey: getGetPropertyMaintenanceInboxQueryKey(propertyId) }),
+          ]
+        : []),
+      queryClient.invalidateQueries({ queryKey: getGetInboxQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() }),
       new Promise((r) => setTimeout(r, 600)),
     ]);
     setRefreshing(false);
@@ -507,23 +104,16 @@ export default function HomeScreen() {
   const isLoading = propsLoading;
 
   // Extract data
-  const s = summary as any;
-  const healthScore: number = s?.healthScore ?? 0;
-  const healthGrade: Grade = (s?.healthGrade as Grade) ?? "C";
-  const totalAssets: number = s?.totalAssets ?? 0;
-  const verifiedAssets: number = s?.verifiedAssets ?? 0;
-  const overdueCount: number = s?.overdueTaskCount ?? 0;
-  const assetsByCategory: { category: string; count: number }[] = s?.assetsByCategory ?? [];
-  const recentRecords: any[] = s?.recentRecords ?? [];
-  const overdueTasks: any[] = s?.overdueTasks ?? [];
-  const assetScores: any[] = s?.assetScores ?? [];
-  const location = selectedProperty
-    ? [selectedProperty.city, selectedProperty.state].filter(Boolean).join(", ")
-    : "";
-  const sp = selectedProperty as any;
-  const bedrooms = sp?.bedrooms;
-  const bathrooms = sp?.bathrooms;
-  const sqft = sp?.sqft;
+  const s = summary;
+  const healthScore = s?.healthScore ?? 0;
+  const healthGrade: Grade = s?.healthGrade ?? "C";
+  const totalAssets = s?.totalAssets ?? 0;
+  const verifiedAssets = s?.verifiedAssets ?? 0;
+  const overdueCount = s?.overdueTaskCount ?? 0;
+  const assetsByCategory = s?.assetsByCategory ?? [];
+  const recentRecords = s?.recentRecords ?? [];
+  const overdueTasks = s?.overdueTasks ?? [];
+  const assetScores = s?.assetScores ?? [];
 
   if (isLoading) {
     return (
@@ -540,6 +130,21 @@ export default function HomeScreen() {
     );
   }
 
+  // A failed load isn't the same as having no properties — offer a retry instead of "No property yet"
+  if (propsError && properties.length === 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: topPad }}>
+        <EmptyState
+          icon="wifi-off"
+          title={t("home.loadFailed")}
+          description={t("common.checkConnection")}
+          actionLabel={t("common.retry")}
+          onAction={() => { Haptics.selectionAsync(); refetchProperties(); }}
+        />
+      </View>
+    );
+  }
+
   if (properties.length === 0) {
     const emptyPendingCount = inbox.transfers.length + inbox.collaboratorInvites.length;
     return (
@@ -548,61 +153,14 @@ export default function HomeScreen() {
           visible={invitesSheetOpen}
           inbox={inbox}
           onClose={() => setInvitesSheetOpen(false)}
-          onInboxChange={(updated) => {
-            setInboxOverride(updated);
-            if (updated.transfers.length + updated.collaboratorInvites.length === 0) {
-              setInvitesSheetOpen(false);
-            }
-          }}
+          onInboxChange={handleInboxChange}
         />
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 32 }}>
-          {emptyPendingCount > 0 && (
-            <TouchableOpacity
-              style={[inviteBannerStyles.banner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "33", marginBottom: 24, width: "100%" }]}
-              onPress={() => { Haptics.selectionAsync(); setInvitesSheetOpen(true); }}
-              activeOpacity={0.8}
-            >
-              <View style={[inviteBannerStyles.iconWrap, { backgroundColor: colors.primary + "20" }]}>
-                <Feather name="mail" size={14} color={colors.primary} />
-              </View>
-              <View style={inviteBannerStyles.textWrap}>
-                <Text style={[inviteBannerStyles.title, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                  {emptyPendingCount === 1 ? "You have a property invitation" : `You have ${emptyPendingCount} property invitations`}
-                </Text>
-                <Text style={[inviteBannerStyles.sub, { color: colors.primary + "bb", fontFamily: "Inter_400Regular" }]}>
-                  Tap to accept or decline
-                </Text>
-              </View>
-              <View style={[inviteBannerStyles.badge, { backgroundColor: colors.primary }]}>
-                <Text style={[inviteBannerStyles.badgeText, { fontFamily: "Inter_700Bold" }]}>{emptyPendingCount}</Text>
-              </View>
-              <Feather name="chevron-right" size={16} color={colors.primary} />
-            </TouchableOpacity>
-          )}
-          <View style={[{ backgroundColor: colors.muted, borderRadius: 20, padding: 24, marginBottom: 20 }]}>
-            <Feather name="home" size={48} color={colors.mutedForeground} style={{ opacity: 0.4 }} />
-          </View>
-          <Text style={{ fontSize: 20, fontFamily: "Inter_600SemiBold", color: colors.foreground, marginBottom: 8 }}>
-            No property yet
-          </Text>
-          <Text style={{ fontSize: 14, color: colors.mutedForeground, textAlign: "center", fontFamily: "Inter_400Regular", marginBottom: 28 }}>
-            Add your first home to start tracking health scores, assets, and maintenance.
-          </Text>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setAddPropertyOpen(true); }}
-            activeOpacity={0.85}
-            style={{
-              flexDirection: "row", alignItems: "center", gap: 8,
-              backgroundColor: colors.primary, borderRadius: 14,
-              paddingHorizontal: 24, paddingVertical: 14,
-            }}
-          >
-            <Feather name="plus" size={18} color={colors.primaryForeground} />
-            <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.primaryForeground }}>
-              Add Property
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <NoPropertyView
+          pendingCount={emptyPendingCount}
+          onOpenInvites={() => setInvitesSheetOpen(true)}
+          onAddProperty={() => setAddPropertyOpen(true)}
+          colors={colors}
+        />
         <PropertyFormModal
           mode="add"
           visible={addPropertyOpen}
@@ -632,12 +190,7 @@ export default function HomeScreen() {
       visible={invitesSheetOpen}
       inbox={inbox}
       onClose={() => setInvitesSheetOpen(false)}
-      onInboxChange={(updated) => {
-        setInboxOverride(updated);
-        if (updated.transfers.length + updated.collaboratorInvites.length === 0) {
-          setInvitesSheetOpen(false);
-        }
-      }}
+      onInboxChange={handleInboxChange}
     />
     <ScrollView
       style={{ backgroundColor: colors.background }}
@@ -652,112 +205,48 @@ export default function HomeScreen() {
           <FlatList
             horizontal
             data={properties}
+            extraData={selectedProperty?.id}
             keyExtractor={(p) => p.id}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 8, paddingBottom: 14 }}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                style={[chipStyles.chip, {
-                  backgroundColor: index === selectedIdx ? colors.primary : colors.card,
-                  borderColor: index === selectedIdx ? colors.primary : colors.border,
-                }]}
-                onPress={() => { setSelectedIdx(index); Haptics.selectionAsync(); }}
-              >
-                <Feather name="home" size={12} color={index === selectedIdx ? colors.primaryForeground : colors.mutedForeground} />
-                <Text style={[chipStyles.chipText, {
-                  color: index === selectedIdx ? colors.primaryForeground : colors.foreground,
-                  fontFamily: "Inter_500Medium",
-                }]} numberOfLines={1}>
-                  {item.name ?? item.address ?? "Property"}
-                </Text>
-              </TouchableOpacity>
-            )}
+            renderItem={({ item }) => {
+              const isSelected = item.id === selectedProperty?.id;
+              return (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  style={[chipStyles.chip, {
+                    backgroundColor: isSelected ? colors.primary : colors.card,
+                    borderColor: isSelected ? colors.primary : colors.border,
+                  }]}
+                  onPress={() => { setSelectedPropertyId(item.id); Haptics.selectionAsync(); }}
+                >
+                  <Feather name="home" size={12} color={isSelected ? colors.primaryForeground : colors.mutedForeground} />
+                  <Text style={[chipStyles.chipText, {
+                    color: isSelected ? colors.primaryForeground : colors.foreground,
+                    fontFamily: "Inter_500Medium",
+                  }]} numberOfLines={1}>
+                    {item.name || item.address || t("home.propertyFallback")}
+                  </Text>
+                </TouchableOpacity>
+              );
+            }}
           />
         )}
 
         {/* Pending invites banner */}
         {pendingInviteCount > 0 && (
-          <TouchableOpacity
-            style={[inviteBannerStyles.banner, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "33" }]}
-            onPress={() => { Haptics.selectionAsync(); setInvitesSheetOpen(true); }}
-            activeOpacity={0.8}
-          >
-            <View style={[inviteBannerStyles.iconWrap, { backgroundColor: colors.primary + "20" }]}>
-              <Feather name="mail" size={14} color={colors.primary} />
-            </View>
-            <View style={inviteBannerStyles.textWrap}>
-              <Text style={[inviteBannerStyles.title, { color: colors.primary, fontFamily: "Inter_600SemiBold" }]}>
-                {pendingInviteCount === 1
-                  ? "You have a property invitation"
-                  : `You have ${pendingInviteCount} property invitations`}
-              </Text>
-              <Text style={[inviteBannerStyles.sub, { color: colors.primary + "bb", fontFamily: "Inter_400Regular" }]}>
-                Tap to accept or decline
-              </Text>
-            </View>
-            <View style={[inviteBannerStyles.badge, { backgroundColor: colors.primary }]}>
-              <Text style={[inviteBannerStyles.badgeText, { fontFamily: "Inter_700Bold" }]}>
-                {pendingInviteCount}
-              </Text>
-            </View>
-            <Feather name="chevron-right" size={16} color={colors.primary} />
-          </TouchableOpacity>
+          <InviteBanner count={pendingInviteCount} onPress={() => setInvitesSheetOpen(true)} colors={colors} />
         )}
 
         {/* Property header */}
-        <View style={{ marginBottom: 14, gap: 4 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Text style={[propStyles.name, { color: colors.foreground, fontFamily: "Inter_700Bold", flex: 1 }]} numberOfLines={1}>
-              {(selectedProperty as any)?.name ?? (selectedProperty as any)?.address ?? "My Home"}
-            </Text>
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); router.push("/properties"); }}
-              style={[propStyles.viewAllBtn, { borderColor: colors.border, backgroundColor: colors.card }]}
-              activeOpacity={0.7}
-            >
-              <Text style={[propStyles.viewAllText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
-                All Properties
-              </Text>
-              <Feather name="chevron-right" size={12} color={colors.primary} />
-            </TouchableOpacity>
-          </View>
-          {location ? (
-            <View style={propStyles.row}>
-              <Feather name="map-pin" size={13} color={colors.mutedForeground} />
-              <Text style={[propStyles.location, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {location}
-              </Text>
-            </View>
-          ) : null}
-          {(bedrooms || bathrooms || sqft) ? (
-            <View style={propStyles.row}>
-              {bedrooms ? (
-                <View style={propStyles.specItem}>
-                  <Feather name="layout" size={12} color={colors.mutedForeground} />
-                  <Text style={[propStyles.spec, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {bedrooms} bd
-                  </Text>
-                </View>
-              ) : null}
-              {bathrooms ? (
-                <View style={propStyles.specItem}>
-                  <Feather name="droplet" size={12} color={colors.mutedForeground} />
-                  <Text style={[propStyles.spec, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {bathrooms} ba
-                  </Text>
-                </View>
-              ) : null}
-              {sqft ? (
-                <View style={propStyles.specItem}>
-                  <Feather name="maximize" size={12} color={colors.mutedForeground} />
-                  <Text style={[propStyles.spec, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                    {Number(sqft).toLocaleString()} sqft
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-        </View>
+        {selectedProperty && (
+          <PropertyHeader
+            property={selectedProperty}
+            colors={colors}
+            onViewAll={() => { Haptics.selectionAsync(); router.push("/properties"); }}
+          />
+        )}
 
         {/* Active service requests */}
         <ActiveServiceRequests
@@ -791,31 +280,31 @@ export default function HomeScreen() {
         {/* 3 stat cards */}
         <View style={{ flexDirection: "row", gap: 10, marginBottom: 12 }}>
           <StatCard
-            title={"Tracked\nAssets"}
+            title={t("home.stats.trackedAssets")}
             value={totalAssets}
             icon="package"
-            sub={`${verifiedAssets} of ${totalAssets} verified`}
+            sub={t("home.stats.verifiedOf", { verified: verifiedAssets, total: totalAssets })}
             colors={colors}
           />
           <StatCard
-            title={"Overdue\nTasks"}
+            title={t("home.stats.overdueTasks")}
             value={overdueCount}
             icon="alert-circle"
             valueColor={overdueCount > 0 ? colors.destructive : colors.foreground}
-            sub={overdueCount > 0 ? "See improvement plan" : "All clear"}
+            sub={overdueCount > 0 ? t("home.seeImprovementPlan") : t("home.stats.allClear")}
             colors={colors}
           />
           <View style={[statStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={statStyles.header}>
               <Text style={[statStyles.title, { color: colors.mutedForeground, fontFamily: "Inter_500Medium" }]}>
-                {"By\nSystem"}
+                {t("home.stats.bySystem")}
               </Text>
             </View>
             {assetsByCategory.slice(0, 2).map((cat) => (
               <View key={cat.category} style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 }}>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary }} />
                 <Text style={{ fontSize: 10, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }} numberOfLines={1}>
-                  {cat.category} {cat.count}
+                  {t(`categories.${cat.category}`, { defaultValue: cat.category })} {cat.count}
                 </Text>
               </View>
             ))}
@@ -841,8 +330,8 @@ export default function HomeScreen() {
         {/* Recent Service Activity */}
         {recentRecords.length > 0 && (
           <View style={[sectionStyles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <SectionHeader title="Recent Service Activity" colors={colors} />
-            {recentRecords.slice(0, 5).map((record: any) => (
+            <SectionHeader title={t("home.recentActivity")} colors={colors} />
+            {recentRecords.slice(0, 5).map((record) => (
               <ActivityRow
                 key={record.id}
                 description={record.description}
@@ -860,10 +349,10 @@ export default function HomeScreen() {
           <View style={[sectionStyles.card, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 32 }]}>
             <Feather name="file-text" size={36} color={colors.mutedForeground} style={{ opacity: 0.25, marginBottom: 10 }} />
             <Text style={{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_500Medium" }}>
-              No service records yet
+              {t("home.noRecords")}
             </Text>
             <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular", textAlign: "center", marginTop: 4, maxWidth: 220 }}>
-              Service history will appear here as you log work done on your home's systems.
+              {t("home.noRecordsDesc")}
             </Text>
           </View>
         )}
@@ -878,52 +367,6 @@ const chipStyles = StyleSheet.create({
   chipText: { fontSize: 13 },
 });
 
-const propStyles = StyleSheet.create({
-  name: { fontSize: 22 },
-  row: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-  location: { fontSize: 13 },
-  specItem: { flexDirection: "row", alignItems: "center", gap: 3, marginRight: 10 },
-  spec: { fontSize: 12 },
-  viewAllBtn: {
-    flexDirection: "row", alignItems: "center", gap: 3,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, borderWidth: 1,
-  },
-  viewAllText: { fontSize: 12 },
-});
-
 const sectionStyles = StyleSheet.create({
   card: { borderRadius: 12, borderWidth: 1, padding: 16, marginBottom: 16 },
-});
-
-const inviteBannerStyles = StyleSheet.create({
-  banner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 14,
-  },
-  iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  textWrap: { flex: 1 },
-  title: { fontSize: 13 },
-  sub: { fontSize: 11, marginTop: 2 },
-  badge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 5,
-  },
-  badgeText: { fontSize: 11, color: "#fff" },
 });

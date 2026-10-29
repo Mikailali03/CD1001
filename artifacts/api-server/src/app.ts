@@ -1,4 +1,4 @@
-import express, { type Express } from "express";
+import express, { type ErrorRequestHandler, type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import { clerkMiddleware } from "@clerk/express";
@@ -8,6 +8,7 @@ import {
   clerkProxyMiddleware,
   getClerkProxyHost,
 } from "./middlewares/clerkProxyMiddleware";
+import { ZodError } from "zod";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { WebhookHandlers } from "./webhookHandlers";
@@ -41,7 +42,8 @@ app.post(
   async (req, res) => {
     const signature = req.headers["stripe-signature"];
     if (!signature) {
-      return res.status(400).json({ error: "Missing stripe-signature header" });
+      res.status(400).json({ error: "Missing stripe-signature header" });
+      return;
     }
     try {
       const sig = Array.isArray(signature) ? signature[0] : signature;
@@ -56,7 +58,34 @@ app.post(
 
 app.use(CLERK_PROXY_PATH, clerkProxyMiddleware());
 
-app.use(cors({ credentials: true, origin: true }));
+// Browsers may only call the API from our own front-ends. Native mobile
+// requests send no Origin header and are unaffected.
+const allowedHosts = new Set(
+  [
+    ...(process.env.REPLIT_DOMAINS?.split(",") ?? []),
+    process.env.REPLIT_DEV_DOMAIN,
+    process.env.REPLIT_EXPO_DEV_DOMAIN,
+    ...(process.env.CORS_ALLOWED_HOSTS?.split(",") ?? []),
+  ]
+    .map((h) => h?.trim())
+    .filter(Boolean),
+);
+
+function isAllowedOrigin(origin: string): boolean {
+  try {
+    const { hostname, host } = new URL(origin);
+    return hostname === "localhost" || hostname === "127.0.0.1" || allowedHosts.has(host) || allowedHosts.has(hostname);
+  } catch {
+    return false;
+  }
+}
+
+app.use(
+  cors({
+    credentials: true,
+    origin: (origin, callback) => callback(null, !origin || isAllowedOrigin(origin)),
+  }),
+);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -70,5 +99,23 @@ app.use(
 );
 
 app.use("/api", router);
+
+// Express 5 forwards rejected async handlers here. Invalid input is the
+// client's fault (400); anything else is logged and reported generically so
+// internal details and stack traces never reach the response.
+const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
+  if (res.headersSent) {
+    req.log.error({ err }, "Error after response started");
+    return;
+  }
+  // zod v3 and v4 both name their error class "ZodError".
+  if (err instanceof ZodError || err?.name === "ZodError") {
+    res.status(400).json({ error: "Invalid request", issues: err.issues });
+    return;
+  }
+  req.log.error({ err }, "Unhandled error");
+  res.status(500).json({ error: "Something went wrong. Please try again." });
+};
+app.use(errorHandler);
 
 export default app;

@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, index, text, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const lockerFoldersTable = pgTable("locker_folders", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -6,7 +6,9 @@ export const lockerFoldersTable = pgTable("locker_folders", {
   name: text("name").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("locker_folders_user_id_idx").on(t.userId),
+]);
 
 export const lockerFilesTable = pgTable("locker_files", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -17,7 +19,10 @@ export const lockerFilesTable = pgTable("locker_files", {
   contentType: text("content_type").notNull().default("image/jpeg"),
   size: integer("size"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (t) => [
+  index("locker_files_user_id_idx").on(t.userId),
+  index("locker_files_object_path_idx").on(t.objectPath),
+]);
 
 export type LockerFolder = typeof lockerFoldersTable.$inferSelect;
 export type LockerFile = typeof lockerFilesTable.$inferSelect;

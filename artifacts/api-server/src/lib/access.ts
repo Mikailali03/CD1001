@@ -3,10 +3,18 @@ import { propertiesTable, assetsTable, propertyCollaboratorsTable } from "@works
 import { eq, and, or } from "drizzle-orm";
 import { clerkClient } from "@clerk/express";
 
-async function getUserEmail(userId: string): Promise<string | null> {
+/**
+ * The user's primary email, lowercased, or null if it isn't verified.
+ * Invites and transfers are addressed by email, so this is what proves the
+ * signed-in user is the intended recipient.
+ */
+export async function getVerifiedEmail(userId: string): Promise<string | null> {
   try {
     const user = await clerkClient.users.getUser(userId);
-    return user.emailAddresses[0]?.emailAddress ?? null;
+    const primary =
+      user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId) ?? user.emailAddresses[0];
+    if (!primary || primary.verification?.status !== "verified") return null;
+    return primary.emailAddress.toLowerCase();
   } catch {
     return null;
   }
@@ -40,7 +48,9 @@ export async function getAccessibleProperty(propertyId: string, userId: string) 
     );
   if (byUserId) return byUserId.property;
 
-  const email = await getUserEmail(userId);
+  // A still-pending invite addressed to the user's verified email is accepted
+  // on first access. Invites already accepted by another account stay theirs.
+  const email = await getVerifiedEmail(userId);
   if (email) {
     const [byEmail] = await db
       .select({ property: propertiesTable, collab: propertyCollaboratorsTable })
@@ -50,13 +60,19 @@ export async function getAccessibleProperty(propertyId: string, userId: string) 
         and(
           eq(propertyCollaboratorsTable.propertyId, propertyId),
           eq(propertyCollaboratorsTable.invitedEmail, email),
+          eq(propertyCollaboratorsTable.status, "pending"),
         )
       );
     if (byEmail) {
       await db
         .update(propertyCollaboratorsTable)
         .set({ acceptedUserId: userId, status: "accepted" })
-        .where(eq(propertyCollaboratorsTable.id, byEmail.collab.id));
+        .where(
+          and(
+            eq(propertyCollaboratorsTable.id, byEmail.collab.id),
+            eq(propertyCollaboratorsTable.status, "pending"),
+          )
+        );
       return byEmail.property;
     }
   }

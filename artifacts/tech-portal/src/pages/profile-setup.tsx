@@ -24,20 +24,27 @@ export default function ProfileSetup() {
 
   useEffect(() => {
     if (profile) {
-      setDisplayName((profile as any).displayName ?? user?.fullName ?? "");
+      setDisplayName([profile.firstName, profile.lastName].filter(Boolean).join(" ") || (user?.fullName ?? ""));
       setPhone((profile as any).phone ?? "");
     } else if (user) {
       setDisplayName(user.fullName ?? "");
     }
   }, [profile, user]);
 
+  const isTechnician = profile?.role === "technician" || profile?.role === "admin";
+
   function handleSave() {
+    // The API stores first/last name separately; the role is assigned by an admin.
+    const [firstName, ...rest] = displayName.trim().split(/\s+/);
     upsert.mutate(
-      { data: { role: "technician", displayName: displayName.trim(), phone: phone.trim() || undefined } as any },
+      { data: { firstName, lastName: rest.join(" "), email: user?.primaryEmailAddress?.emailAddress, phone: phone.trim() || undefined } as any },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["getUserProfile"] });
-          toast({ title: "Profile saved", description: "Your technician profile is active." });
+          toast({
+            title: "Profile saved",
+            description: isTechnician ? "Your technician profile is active." : "We'll review your account and enable job access.",
+          });
         },
         onError: () => {
           toast({ title: "Error", description: "Could not save profile. Try again.", variant: "destructive" });
@@ -140,12 +147,16 @@ export default function ProfileSetup() {
 
                 <div className="flex items-center gap-2 pt-1">
                   <div className="flex items-center gap-2 flex-1">
-                    <Badge variant="secondary" className="text-xs gap-1">
-                      <CheckCircle2 className="h-3 w-3 text-green-600" />
-                      Verified Technician
-                    </Badge>
-                    {(profile as any)?.role === "technician" && (
-                      <Badge variant="outline" className="text-xs text-green-700 border-green-300">Active</Badge>
+                    {isTechnician ? (
+                      <>
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                          Verified Technician
+                        </Badge>
+                        <Badge variant="outline" className="text-xs text-green-700 border-green-300">Active</Badge>
+                      </>
+                    ) : (
+                      <Badge variant="outline" className="text-xs text-amber-700 border-amber-300">Awaiting approval</Badge>
                     )}
                   </div>
                   <Button
