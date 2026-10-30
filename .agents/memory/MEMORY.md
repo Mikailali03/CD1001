@@ -1,0 +1,1 @@
+- [Metro install/watch races](metro-install-watch-races.md) — transient pnpm package paths can crash Expo after unrelated workspace installs; do not recreate them as dependencies.

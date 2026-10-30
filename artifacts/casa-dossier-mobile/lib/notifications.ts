@@ -24,10 +24,12 @@ const SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 type Perm = { granted: boolean; canAskAgain: boolean };
 
 export async function getNotificationPermission(): Promise<Perm> {
+  if (Platform.OS === "web") return { granted: false, canAskAgain: false };
   return (await Notifications.getPermissionsAsync()) as unknown as Perm;
 }
 
 export async function requestNotificationPermission(): Promise<Perm> {
+  if (Platform.OS === "web") return { granted: false, canAskAgain: false };
   // Android 13+ only shows the system prompt once a channel exists
   await ensureAndroidChannel();
   return (await Notifications.requestPermissionsAsync()) as unknown as Perm;
