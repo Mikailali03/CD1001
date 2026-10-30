@@ -89,6 +89,11 @@ packageExtensions:
     peerDependenciesMeta:
       "@types/react":
         optional: true
+  # react-native-svg imports `buffer` (src/utils/fetchData.ts) without
+  # declaring it, so Metro only resolved it by luck of hoisting.
+  react-native-svg:
+    dependencies:
+      buffer: "^6.0.3"
 
 overrides:
   # viem 2.50+ depends on an unpublished pkg.pr.new build of `ox` with no
