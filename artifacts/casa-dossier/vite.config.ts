@@ -53,6 +53,11 @@ export default defineConfig({
     },
     dedupe: ["react", "react-dom"],
   },
+  // Pre-bundle these at startup so Vite doesn't discover them mid-session and
+  // re-optimize, which serves stale-dep 504s to already-open tabs.
+  optimizeDeps: {
+    include: ["qrcode"],
+  },
   root: path.resolve(import.meta.dirname),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
