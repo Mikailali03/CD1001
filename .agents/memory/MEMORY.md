@@ -1,2 +1,2 @@
 - [Metro install/watch races](metro-install-watch-races.md) — transient pnpm package paths can crash Expo after unrelated workspace installs; do not recreate them as dependencies.
-- [Expo Go preview transport](expo-preview-transport.md) — browser success does not prove phone connectivity; CLI can print HTTP-based exp links for an HTTPS-only proxy.
+- [Expo Go preview handshake](expo-preview-transport.md) — native signing headers can trigger a blocking CLI login prompt that ordinary browser/JSON checks miss.

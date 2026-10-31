@@ -1,10 +1,14 @@
 ---
-name: Expo Go preview transport
-description: HTTPS transport and evidence boundaries when diagnosing Expo Go timeouts.
+name: Expo Go preview handshake
+description: Native manifest signing requests, optional login prompts, and HTTPS transport when diagnosing phone timeouts.
 ---
 
 Do not equate a working browser preview or successful native bundle compilation with a successful launch in Expo Go.
 
-**Why:** Expo SDK 54's CLI can print an `exp://` link even with an HTTPS packager proxy configured. During investigation, the Expo endpoint served HTTPS manifests and bundles while direct HTTP connections failed. The secure Expo Go scheme is `exps://`; the ordinary printed QR may still encode the insecure scheme.
+**Why:** An ordinary JSON manifest request returned immediately, but requesting it with Expo Go's `expo-expect-signature` header stalled at an interactive CLI login prompt. With an EAS project configured and no CLI session, SDK 54 tries to obtain a development signing certificate before replying. Browser and basic bundle checks missed that native-only branch. The user confirmed that changing to the secure QR alone did not solve the timeout.
 
-**How to apply:** Check the protocol as well as the hostname, and verify the manifest's device/debugger host belongs to the Expo service rather than the regular website. Supply a secure link or QR when appropriate. Keep development hostnames dynamic. Explicitly distinguish verified server connectivity from an actual phone launch; the secure-link workaround has not yet been confirmed on the user's device.
+**How to apply:** Include `expo-platform: ios`, `expo-protocol-version: 1`, `expo-expect-signature: keyid="expo-root",alg="rsa-v1_5-sha256"` and multipart acceptance when checking startup. For SDK 54, Expo's supported `--offline` development mode avoids optional certificate fetching and the prompt; app networking and production signing remain unchanged. Do not combine `--offline` with `--localhost`, which the CLI rejects. Keep explicit dependency validation separate because offline startup skips that check.
+
+**SDK boundary:** This is not a workaround for Expo Go 57's required managed sign-in. On SDK 57 upgrades, follow the Expo skill's managed authentication instructions rather than carrying this flag forward blindly.
+
+**Transport:** The CLI can also print an `exp://` link for an HTTPS packager proxy. The secure Expo Go scheme is `exps://`. Verify native/debugger hostnames belong to the Expo service, keep hosts dynamic, and distinguish successful handshake/bundle responses from a confirmed device launch.
