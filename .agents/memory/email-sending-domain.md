@@ -4,7 +4,8 @@ description: User's selected sending domain for Casa Dossier notification emails
 ---
 
 Use `notifications.casadossier.com` as the domain for outgoing user-notification emails, not `casadossier.com`.
+The user selected the `no-reply` mailbox on this subdomain.
 
-**Why:** The user explicitly corrected the sending-domain choice.
+**Why:** The user explicitly corrected the sending-domain choice and confirmed the mailbox.
 
 **How to apply:** Verify the subdomain and use a complete From email address under it. Do not revert to a sender on the main domain.
