@@ -36,6 +36,39 @@ tags:
     description: Admin-only platform management endpoints
 
 paths:
+  /maps/tiles/{z}/{x}/{y}:
+    get:
+      operationId: getMapTile
+      tags: [technician]
+      summary: Authenticated CARTO basemap tile (API key stays on the server)
+      parameters:
+        - name: z
+          in: path
+          required: true
+          schema: { type: integer, minimum: 8, maximum: 18 }
+        - name: x
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - name: y
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: PNG map tile
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid tile coordinates
+        "401":
+          description: Sign-in required
+        "502":
+          description: Map provider unavailable
+        "503":
+          description: Map key not configured
+
   /healthz:
     get:
       operationId: healthCheck

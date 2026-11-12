@@ -2,3 +2,4 @@
 - [Expo Go preview handshake](expo-preview-transport.md) — native signing headers can trigger a blocking CLI login prompt that ordinary browser/JSON checks miss.
 - [Email sending domain](email-sending-domain.md) — use notifications.casadossier.com for notification email, not the main domain.
 - [Workspace typecheck prerequisites](workspace-typecheck-prerequisites.md) — stale shared declarations can produce false missing-export errors in both mobile and API checks.
+- [CARTO basemap requirements](carto-basemap-requirements.md) — raster tiles require a key since September 2026; HTTP 200 can still be an error-notice image.

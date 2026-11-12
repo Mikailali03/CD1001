@@ -25,10 +25,12 @@ import lockerRouter from "./locker";
 import pushTokensRouter from "./push-tokens";
 import internalRouter from "./internal";
 import qrRouter from "./qr";
+import mapTilesRouter from "./map-tiles";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(mapTilesRouter);
 router.use(storageRouter);
 router.use(subscriptionRouter);
 router.use(stripeCheckoutRouter);

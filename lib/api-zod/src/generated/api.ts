@@ -8,6 +8,22 @@
 import * as zod from "zod";
 
 /**
+ * @summary Authenticated CARTO basemap tile (API key stays on the server)
+ */
+export const getMapTilePathZMin = 8;
+export const getMapTilePathZMax = 18;
+
+export const getMapTilePathXMin = 0;
+
+export const getMapTilePathYMin = 0;
+
+export const GetMapTileParams = zod.object({
+  z: zod.coerce.number().min(getMapTilePathZMin).max(getMapTilePathZMax),
+  x: zod.coerce.number().min(getMapTilePathXMin),
+  y: zod.coerce.number().min(getMapTilePathYMin),
+});
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({

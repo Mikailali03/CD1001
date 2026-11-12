@@ -99,6 +99,7 @@ function createUrgencyIcon(urgency: string) {
 }
 
 export default function MapPage() {
+  const [mapError, setMapError] = useState(false);
   const { signOut } = useAuth();
   const { user } = useUser();
   const { data: rawJobs = [], isLoading: jobsLoading } = useListOpenMarketplaceJobs();
@@ -148,11 +149,12 @@ export default function MapPage() {
       maxBoundsViscosity: 0.85,
       minZoom: 8,
     });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    L.tileLayer("/api/maps/tiles/{z}/{x}/{y}", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd",
+      minZoom: 8,
+      maxNativeZoom: 18,
       maxZoom: 20,
-    }).addTo(map);
+    }).on("tileerror", () => setMapError(true)).addTo(map);
     mapInstanceRef.current = map;
     return () => {
       map.remove();
@@ -303,6 +305,14 @@ export default function MapPage() {
         {/* Map */}
         <div className="flex-1 relative">
           <div ref={mapRef} className="absolute inset-0" />
+          {mapError && (
+            <div role="alert" className="absolute top-4 left-16 right-4 z-10 rounded-lg border border-destructive/30 bg-card p-3 text-sm shadow-sm">
+              <p>Map tiles could not load. Job listings are still available.</p>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => window.location.reload()}>
+                Reload map
+              </Button>
+            </div>
+          )}
           <div className="absolute bottom-4 right-4 bg-card/90 border border-border rounded-lg px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm z-10 pointer-events-none">
             Atlanta metro · 50-mile radius
           </div>
