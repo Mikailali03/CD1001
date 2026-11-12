@@ -25,7 +25,7 @@ export function CompleteSheet({ task, visible, onClose, onConfirm, colors }: Omi
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
+  const [cost, setCost] = useState("");
   const [isDiy, setIsDiy] = useState(task.isDiy ?? true);
   const [techName, setTechName] = useState("");
   const [company, setCompany] = useState("");
@@ -89,7 +89,7 @@ export function CompleteSheet({ task, visible, onClose, onConfirm, colors }: Omi
                 <TextInput
                   value={cost}
                   onChangeText={setCost}
-                  placeholder="0.00"
+                  placeholder={task.estimatedCost ? `est. ${Number(task.estimatedCost)}` : "0.00"}
                   placeholderTextColor={colors.mutedForeground}
                   keyboardType="decimal-pad"
                   style={[cs.textInput, { color: colors.foreground, fontFamily: "Inter_400Regular", flex: 1 }]}

@@ -27,10 +27,16 @@ export function LargeRadialGauge({ score }: { score: number }) {
 }
 
 // ── Life-used bar ──────────────────────────────────────────────────────────────
-export function LifeBar({ installDate, category, name }: { installDate: string | null; category: string; name: string }) {
+export function LifeBar({ installDate, category, name, lifespanYears }: {
+  installDate: string | null;
+  category: string;
+  name: string;
+  /** Region-adjusted lifespan from the API, when available. */
+  lifespanYears?: number | null;
+}) {
   const { t } = useTranslation();
   if (!installDate) return null;
-  const lifespan = getExpectedLifespan(category, name);
+  const lifespan = lifespanYears ?? getExpectedLifespan(category, name);
   const ageYears = (Date.now() - new Date(installDate).getTime()) / (365.25 * 24 * 3600 * 1000);
   const pct = Math.min(Math.round((ageYears / lifespan) * 100), 100);
   const barColor = pct >= 80 ? "#ef4444" : pct >= 60 ? "#f59e0b" : "#22c55e";

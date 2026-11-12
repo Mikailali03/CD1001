@@ -63,7 +63,7 @@ router.get("/properties/:propertyId/ledger", requireAuth(), requireTier("basic")
     .where(eq(assetsTable.propertyId, propertyId));
 
   if (assets.length === 0) {
-    res.json({ records: [], byCategory: [], totals: { actual: 0, expected: 0 } });
+    res.json({ records: [], byCategory: [], totals: { actual: 0, expected: 0, estimatedCompleted: 0 } });
     return;
   }
 
@@ -95,8 +95,14 @@ router.get("/properties/:propertyId/ledger", requireAuth(), requireTier("basic")
   const actualByCat: Record<string, number> = {};
   const expectedByCat: Record<string, number> = {};
 
+  // Only owner-entered costs are actual spend; estimates carried over from
+  // completed tasks are totalled separately.
+  let estimatedCompleted = 0;
   for (const r of records) {
-    if (!r.cost) continue;
+    if (!r.cost) {
+      if (r.estimatedCost) estimatedCompleted += parseFloat(r.estimatedCost);
+      continue;
+    }
     const cat = assetMap.get(r.assetId)?.category ?? "Other";
     actualByCat[cat] = (actualByCat[cat] ?? 0) + parseFloat(r.cost);
   }
@@ -129,6 +135,7 @@ router.get("/properties/:propertyId/ledger", requireAuth(), requireTier("basic")
     totals: {
       actual:   Math.round(totalActual   * 100) / 100,
       expected: Math.round(totalExpected * 100) / 100,
+      estimatedCompleted: Math.round(estimatedCompleted * 100) / 100,
     },
   });
 });

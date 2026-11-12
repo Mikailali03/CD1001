@@ -2,6 +2,9 @@ import type { RequestHandler } from "express";
 import { db } from "@workspace/db";
 import { subscriptionsTable, TIER_RANK, type SubscriptionTier } from "@workspace/db";
 import { and, eq, lt, ne, or, sql } from "drizzle-orm";
+import { isDemoUser } from "./demo.js";
+import { rateLimit, RATE_LIMITS } from "./rateLimit.js";
+import { requireAi } from "../middlewares/requireAi.js";
 
 export async function getOrCreateSubscription(userId: string) {
   // Insert-if-missing first so two concurrent first requests can't both try
@@ -18,6 +21,11 @@ export function tierAtLeast(tier: SubscriptionTier | null | undefined, min: Subs
 /** Server-side paywall: 403 unless the signed-in user's plan is `min` or higher. */
 export function requireTier(min: SubscriptionTier): RequestHandler {
   return async (req, res, next) => {
+    // The read-only demo shows every Basic feature (e.g. Capital Outlook).
+    if (isDemoUser(req.userId)) {
+      next();
+      return;
+    }
     const [sub] = await db
       .select({ tier: subscriptionsTable.tier })
       .from(subscriptionsTable)
@@ -31,9 +39,13 @@ export function requireTier(min: SubscriptionTier): RequestHandler {
   };
 }
 
+// Plans that can be bought right now. Managed and Concierge are hidden until
+// their perks exist; existing subscribers keep them, and the webhook still syncs them.
+export const PURCHASABLE_TIERS: readonly SubscriptionTier[] = ["basic"];
+
 // Free-tier allowance per AI feature. Paid tiers are unlimited (but still
 // subject to the per-user rate limit in aiRateLimit).
-const FREE_AI_ALLOWANCE = 1;
+export const FREE_AI_ALLOWANCE = 5;
 
 type AiFeature = "scans" | "plans";
 
@@ -70,22 +82,11 @@ export async function refundAiUse(userId: string, kind: AiFeature): Promise<void
 }
 
 // Per-user cap on AI calls, independent of plan, so one account can't run up
-// an unbounded OpenAI bill. In-memory, so it's per server instance — a cost
-// backstop rather than an exact quota.
-const AI_WINDOW_MS = 60 * 60 * 1000;
-const AI_MAX_PER_WINDOW = 30;
-const aiCalls = new Map<string, number[]>();
-
+// an unbounded OpenAI bill. Counted in Postgres, so it holds across instances.
+// Also answers 503 up front when no OpenAI key is configured, before anything
+// is counted or reserved.
 export function aiRateLimit(): RequestHandler {
-  return (req, res, next) => {
-    const now = Date.now();
-    const recent = (aiCalls.get(req.userId) ?? []).filter((t) => now - t < AI_WINDOW_MS);
-    if (recent.length >= AI_MAX_PER_WINDOW) {
-      res.status(429).json({ error: "Too many AI requests. Please try again later." });
-      return;
-    }
-    recent.push(now);
-    aiCalls.set(req.userId, recent);
-    next();
-  };
+  const limiter = rateLimit({ ...RATE_LIMITS.ai, message: "Too many AI requests. Please try again later." });
+  const ai = requireAi();
+  return (req, res, next) => ai(req, res, () => limiter(req, res, next));
 }

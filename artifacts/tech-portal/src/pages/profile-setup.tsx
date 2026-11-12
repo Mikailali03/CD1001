@@ -43,7 +43,10 @@ export default function ProfileSetup() {
           queryClient.invalidateQueries({ queryKey: ["getUserProfile"] });
           toast({
             title: "Profile saved",
-            description: isTechnician ? "Your technician profile is active." : "We'll review your account and enable job access.",
+            // Technician access is granted by the Casa Dossier team, never by saving a profile.
+            description: isTechnician
+              ? "Your technician profile is active."
+              : "Your details are saved. Job access is granted by the Casa Dossier team; if you work with us, ask your CasaService contact to enable it.",
           });
         },
         onError: () => {
@@ -156,7 +159,7 @@ export default function ProfileSetup() {
                         <Badge variant="outline" className="text-xs text-green-700 border-green-300">Active</Badge>
                       </>
                     ) : (
-                      <Badge variant="outline" className="text-xs text-amber-700 border-amber-300">Awaiting approval</Badge>
+                      <Badge variant="outline" className="text-xs text-muted-foreground">No job access</Badge>
                     )}
                   </div>
                   <Button

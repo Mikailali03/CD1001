@@ -68,15 +68,22 @@ export function AssetHeroCard({ asset, score, onEdit }: { asset: Asset; score: n
                 </span>
               </div>
             )}
-            {!!asset.replacementCost && (
+            {!!asset.replacementCost ? (
               <div className="text-xs">
                 <span className="text-muted-foreground">{t("assetDetail.hero.estReplacement")} </span>
                 <span className="font-semibold">${Number(asset.replacementCost).toLocaleString()}</span>
               </div>
-            )}
+            ) : asset.estimatedReplacementCost != null ? (
+              <div className="text-xs" title={t("common.estimateNote")}>
+                <span className="text-muted-foreground">{t("assetDetail.hero.estReplacement")} </span>
+                <span className="font-semibold">
+                  {t("common.estimatedAmount", { amount: `$${Number(asset.estimatedReplacementCost).toLocaleString()}` })}
+                </span>
+              </div>
+            ) : null}
           </div>
           <div className="pt-2 max-w-xs">
-            <LifeBar installDate={asset.installDate ?? null} category={asset.category} name={asset.name} />
+            <LifeBar installDate={asset.installDate ?? null} category={asset.category} name={asset.name} lifespanYears={asset.expectedLifespanYears} />
           </div>
         </div>
       </div>

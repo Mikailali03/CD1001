@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/field-error";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   Bell, Shield, User, ArrowRightLeft, Clock, X, Copy,
@@ -16,13 +17,23 @@ import {
 } from "lucide-react";
 import { format } from "@/lib/date";
 import { Link } from "wouter";
+import { useClerk, useUser } from "@clerk/react";
 import {
   useGetUserProfile,
   getGetUserProfileQueryKey,
+  upsertUserProfile,
   useGetPendingPropertyTransfer,
   getGetPendingPropertyTransferQueryKey,
   useInitiatePropertyTransfer,
   useCancelPropertyTransfer,
+  useListLockerFiles,
+  getListLockerFilesQueryKey,
+  useGetNotificationPreferences,
+  getGetNotificationPreferencesQueryKey,
+  updateNotificationPreferences,
+  setReminderSubscription,
+  type NotificationPreferences,
+  type UpdateNotificationPreferencesBody,
 } from "@workspace/api-client-react";
 
 // App base path (not the API), used to build the shareable claim link.
@@ -35,10 +46,14 @@ function DeedTransferCard() {
   const { t } = useTranslation();
 
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [fromEmail] = useState("alex@example.com");
+  const [includeDocuments, setIncludeDocuments] = useState(true);
   const [confirmStep, setConfirmStep] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Locker documents tagged to this home can go with it.
+  const { data: lockerFiles = [] } = useListLockerFiles(undefined, { query: { queryKey: getListLockerFilesQueryKey() } });
+  const homeDocumentCount = lockerFiles.filter((f) => f.propertyId && f.propertyId === activePropertyId).length;
 
   const transferKey = getGetPendingPropertyTransferQueryKey(activePropertyId ?? "");
   const { data: pendingTransfer, isLoading: transferLoading } = useGetPendingPropertyTransfer(
@@ -213,6 +228,19 @@ function DeedTransferCard() {
                   />
                   <FieldError id="recipient-email-error" message={emailError} />
                 </div>
+                {homeDocumentCount > 0 && (
+                  <Label className="flex items-start gap-2.5 text-sm font-normal cursor-pointer">
+                    <Checkbox
+                      checked={includeDocuments}
+                      onCheckedChange={(v) => setIncludeDocuments(v === true)}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      {t("settings.transfer.includeDocuments", { count: homeDocumentCount })}
+                      <span className="block text-xs text-muted-foreground">{t("settings.transfer.includeDocumentsHint")}</span>
+                    </span>
+                  </Label>
+                )}
                 <Button
                   className="w-full gap-2"
                   onClick={() => {
@@ -256,7 +284,7 @@ function DeedTransferCard() {
                     onClick={() =>
                       inititateMutation.mutate({
                         propertyId: activePropertyId,
-                        data: { toEmail: recipientEmail, fromEmail },
+                        data: { toEmail: recipientEmail, includeDocuments: homeDocumentCount > 0 && includeDocuments },
                       })
                     }
                     disabled={inititateMutation.isPending}
@@ -279,6 +307,193 @@ function DeedTransferCard() {
             {t("settings.transfer.checkingStatus")}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function NotificationsCard() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const queryKey = getGetNotificationPreferencesQueryKey();
+  const { data: prefs } = useGetNotificationPreferences({ query: { queryKey } });
+
+  async function save(change: () => Promise<NotificationPreferences>) {
+    try {
+      queryClient.setQueryData(queryKey, await change());
+    } catch {
+      toast({ title: t("settings.notifications.saveFailed"), variant: "destructive" });
+    }
+  }
+
+  const toggles: { key: keyof UpdateNotificationPreferencesBody; label: string; desc: string }[] = [
+    { key: "emailReminders", label: t("settings.notifications.emailReminders"), desc: t("settings.notifications.emailRemindersDesc") },
+    { key: "weeklySummary", label: t("settings.notifications.weeklySummary"), desc: t("settings.notifications.weeklySummaryDesc") },
+    { key: "pushReminders", label: t("settings.notifications.pushReminders"), desc: t("settings.notifications.pushRemindersDesc") },
+  ];
+
+  return (
+    <Card className="hover-elevate transition-shadow">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Bell className="h-5 w-5 text-muted-foreground" />
+          {t("settings.notifications.title")}
+        </CardTitle>
+        <CardDescription>{t("settings.notifications.description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {toggles.map(({ key, label, desc }) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor={`notify-${key}`} className="text-base">{label}</Label>
+              <p className="text-sm text-muted-foreground">{desc}</p>
+            </div>
+            <Switch
+              id={`notify-${key}`}
+              checked={prefs?.[key] ?? true}
+              disabled={!prefs}
+              onCheckedChange={(checked) => save(() => updateNotificationPreferences({ [key]: checked }))}
+            />
+          </div>
+        ))}
+
+        {(prefs?.sharedHomes.length ?? 0) > 0 && (
+          <div className="space-y-3 pt-2 border-t">
+            <p className="text-sm font-medium pt-3">{t("settings.notifications.sharedHomes")}</p>
+            {prefs!.sharedHomes.map((home) => (
+              <div key={home.propertyId} className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <Label htmlFor={`notify-home-${home.propertyId}`} className="text-sm">{home.name}</Label>
+                  <p className="text-xs text-muted-foreground truncate">{home.address}</p>
+                </div>
+                <Switch
+                  id={`notify-home-${home.propertyId}`}
+                  checked={home.receiveReminders}
+                  onCheckedChange={(enabled) => save(() => setReminderSubscription(home.propertyId, { enabled }))}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProfileCard() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { user } = useUser();
+  const { data: profile, isFetched } = useGetUserProfile({
+    query: { queryKey: getGetUserProfileQueryKey(), retry: false },
+  });
+  const email = user?.primaryEmailAddress?.emailAddress ?? profile?.email ?? "";
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  // Fill the form once the saved profile (or, for a new account, Clerk) loads.
+  useEffect(() => {
+    // A new account has no saved profile yet (404); fall back to Clerk's name.
+    if (!user || !isFetched || loadedFor === user.id) return;
+    setFirstName(profile?.firstName ?? user.firstName ?? "");
+    setLastName(profile?.lastName ?? user.lastName ?? "");
+    setPhone(profile?.phone ?? "");
+    setLoadedFor(user.id);
+  }, [user, profile, isFetched, loadedFor]);
+
+  async function save() {
+    if (!firstName.trim()) {
+      setNameError(t("settings.profile.firstNameRequired"));
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await upsertUserProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim() || undefined,
+        email: email || undefined,
+      });
+      queryClient.setQueryData(getGetUserProfileQueryKey(), saved);
+      // Keep the sign-in account's name in step; the app reads its own profile.
+      user?.update({ firstName: firstName.trim(), lastName: lastName.trim() }).catch(() => {});
+      toast({ title: t("settings.profile.saved") });
+    } catch {
+      toast({ title: t("settings.profile.saveFailed"), variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card className="hover-elevate transition-shadow">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <User className="h-5 w-5 text-muted-foreground" />
+          {t("settings.profile.title")}
+        </CardTitle>
+        <CardDescription>{t("settings.profile.description")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label htmlFor="first-name">{t("settings.profile.firstName")} <span className="text-destructive" aria-hidden="true">*</span></Label>
+            <Input
+              id="first-name"
+              value={firstName}
+              onChange={(e) => { setFirstName(e.target.value); setNameError(null); }}
+              aria-invalid={!!nameError}
+              aria-describedby={nameError ? "first-name-error" : undefined}
+            />
+            <FieldError id="first-name-error" message={nameError} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="last-name">{t("settings.profile.lastName")}</Label>
+            <Input id="last-name" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="email">{t("settings.profile.email")}</Label>
+          <Input id="email" type="email" value={email} readOnly disabled />
+          <p className="text-xs text-muted-foreground">{t("settings.profile.emailHint")}</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="phone">{t("settings.profile.phone")}</Label>
+          <Input id="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <Button onClick={save} disabled={saving || loadedFor === null} className="gap-2">
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {t("common.saveChanges")}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Passwords, email addresses and sign-in methods live in Clerk.
+function SecurityCard() {
+  const { t } = useTranslation();
+  const clerk = useClerk();
+  return (
+    <Card className="hover-elevate transition-shadow">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Shield className="h-5 w-5 text-muted-foreground" />
+          {t("settings.security.title")}
+        </CardTitle>
+        <CardDescription>{t("settings.security.description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button variant="outline" onClick={() => clerk.openUserProfile()}>
+          {t("settings.security.manage")}
+        </Button>
       </CardContent>
     </Card>
   );
@@ -332,89 +547,16 @@ export default function Settings() {
 
       <div className="grid gap-6 md:grid-cols-2">
         <AdminCard />
-        <Card className="hover-elevate transition-shadow">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <User className="h-5 w-5 text-muted-foreground" />
-              {t("settings.profile.title")}
-            </CardTitle>
-            <CardDescription>{t("settings.profile.description")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">{t("settings.profile.fullName")}</Label>
-              <Input id="name" defaultValue="Alex Homeowner" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("settings.profile.email")}</Label>
-              <Input id="email" type="email" defaultValue="alex@example.com" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">{t("settings.profile.phone")}</Label>
-              <Input id="phone" type="tel" defaultValue="(555) 123-4567" />
-            </div>
-            <Button>{t("common.saveChanges")}</Button>
-          </CardContent>
-        </Card>
+        <ProfileCard />
 
-        <Card className="hover-elevate transition-shadow">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              {t("settings.notifications.title")}
-            </CardTitle>
-            <CardDescription>{t("settings.notifications.description")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="notify-reminders" className="text-base">{t("settings.notifications.reminders")}</Label>
-                <p className="text-sm text-muted-foreground">{t("settings.notifications.remindersDesc")}</p>
-              </div>
-              <Switch id="notify-reminders" defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="notify-service" className="text-base">{t("settings.notifications.service")}</Label>
-                <p className="text-sm text-muted-foreground">{t("settings.notifications.serviceDesc")}</p>
-              </div>
-              <Switch id="notify-service" defaultChecked />
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label htmlFor="notify-marketing" className="text-base">{t("settings.notifications.marketing")}</Label>
-                <p className="text-sm text-muted-foreground">{t("settings.notifications.marketingDesc")}</p>
-              </div>
-              <Switch id="notify-marketing" />
-            </div>
-          </CardContent>
-        </Card>
+        <NotificationsCard />
 
         {/* Deed Transfer — full width */}
         <div className="md:col-span-2">
           <DeedTransferCard />
         </div>
 
-        <Card className="hover-elevate transition-shadow">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Shield className="h-5 w-5 text-muted-foreground" />
-              {t("settings.security.title")}
-            </CardTitle>
-            <CardDescription>{t("settings.security.description")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="current-password">{t("settings.security.currentPassword")}</Label>
-              <Input id="current-password" type="password" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="new-password">{t("settings.security.newPassword")}</Label>
-              <Input id="new-password" type="password" />
-            </div>
-            <Button variant="outline">{t("settings.security.updatePassword")}</Button>
-          </CardContent>
-        </Card>
+        <SecurityCard />
 
       </div>
     </div>

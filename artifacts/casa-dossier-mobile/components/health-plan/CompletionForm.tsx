@@ -24,7 +24,7 @@ export function CompletionForm({
 }) {
   const { t } = useTranslation();
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(estimatedCost ? String(Number(estimatedCost)) : "");
+  const [cost, setCost] = useState("");
   const [isDiy, setIsDiy] = useState(isDiyDefault);
   const [busy, setBusy] = useState(false);
 
@@ -81,7 +81,7 @@ export function CompletionForm({
       <TextInput
         value={cost}
         onChangeText={setCost}
-        placeholder={t("healthPlan.actualCostOptional")}
+        placeholder={estimatedCost ? `${t("healthPlan.actualCostOptional")} (est. ${Number(estimatedCost)})` : t("healthPlan.actualCostOptional")}
         placeholderTextColor={colors.mutedForeground}
         keyboardType="decimal-pad"
         style={[cf.input, { color: colors.foreground, backgroundColor: colors.card, borderColor: colors.border, fontFamily: "Inter_400Regular" }]}

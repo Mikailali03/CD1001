@@ -26,6 +26,11 @@ const CompleteTaskBody = z.object({
   completedDate: z.string().optional(),
 });
 
+import { recordAuditInBackground } from "../lib/audit.js";
+import { isReservedCompanyName, RESERVED_COMPANY_NAME_ERROR } from "../lib/provenance.js";
+
+const RETIRED_ERROR = "This asset is retired, so its maintenance can't be changed.";
+
 const router = Router();
 
 const InboxParams = z.object({ propertyId: z.string() });
@@ -102,6 +107,10 @@ router.post("/assets/:assetId/maintenance", requireAuth(), async (req, res) => {
     res.status(404).json({ error: "Asset not found" });
     return;
   }
+  if (asset.retiredAt) {
+    res.status(409).json({ error: RETIRED_ERROR });
+    return;
+  }
 
   const [task] = await db
     .insert(maintenanceTasksTable)
@@ -131,6 +140,10 @@ router.patch("/maintenance/:taskId", requireAuth(), async (req, res) => {
   const asset = await getAccessibleAsset(existing.assetId, req.userId);
   if (!asset) {
     res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  if (asset.retiredAt) {
+    res.status(409).json({ error: RETIRED_ERROR });
     return;
   }
 
@@ -194,6 +207,14 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     res.status(403).json({ error: "Forbidden" });
     return;
   }
+  if (asset.retiredAt) {
+    res.status(409).json({ error: RETIRED_ERROR });
+    return;
+  }
+  if (isReservedCompanyName(body.companyName)) {
+    res.status(400).json({ error: RESERVED_COMPANY_NAME_ERROR });
+    return;
+  }
 
   const originalDueDate = new Date(existing.nextDueDate);
   const baseDate = originalDueDate > new Date() ? originalDueDate : new Date();
@@ -202,12 +223,10 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
   const nextDueDate = nextDate.toISOString().split("T")[0]!;
 
   const today = body.completedDate ?? new Date().toISOString().split("T")[0]!;
-  const effectiveCost =
-    body.cost != null
-      ? body.cost
-      : existing.estimatedCost != null
-      ? parseFloat(String(existing.estimatedCost))
-      : undefined;
+  // Only a cost the owner entered counts as spend. If they didn't enter one,
+  // keep the task's estimate separately so the ledger never reports it as actual.
+  const enteredCost = body.cost != null ? body.cost : undefined;
+  const estimatedCost = enteredCost == null && existing.estimatedCost != null ? String(existing.estimatedCost) : undefined;
   const techName =
     body.technicianName?.trim() ||
     (body.isDiy !== false ? "Homeowner (DIY)" : undefined);
@@ -244,8 +263,10 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
         description: body.notes?.trim() || `Completed: ${existing.title}`,
         technicianName: techName,
         companyName: body.companyName?.trim() || undefined,
-        cost: effectiveCost != null ? String(effectiveCost) : undefined,
+        cost: enteredCost != null ? String(enteredCost) : undefined,
+        estimatedCost,
         receiptUrl: body.receiptUrl || undefined,
+        createdByUserId: req.userId,
       })
       .returning();
 
@@ -257,6 +278,14 @@ router.post("/maintenance/:taskId/complete", requireAuth(), async (req, res) => 
     return;
   }
 
+  recordAuditInBackground({
+    actorUserId: req.userId,
+    action: "service_record.created",
+    entityType: "service_record",
+    entityId: result.serviceRecord!.id,
+    propertyId: asset.propertyId,
+    details: { assetId: existing.assetId, date: today, viaTask: taskId },
+  });
   res.json(result);
 });
 

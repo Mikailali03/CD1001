@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import {
   getListOpenMarketplaceJobsQueryKey,
   useListOpenMarketplaceJobs,
+  useGetServiceArea,
+  type ServiceArea,
   type TechJobSummary,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
@@ -27,11 +29,6 @@ import {
   useTabBottomPad,
 } from "@/components/tech/ui";
 
-// Service area — same as the web portal (Atlanta, 50-mile radius).
-const ATLANTA_LAT = 33.749;
-const ATLANTA_LNG = -84.388;
-const SERVICE_RADIUS_MILES = 50;
-
 function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3958.8;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -42,11 +39,12 @@ function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function inServiceArea(j: TechJobSummary) {
+// The service area comes from the API (one SERVICE_AREA setting on the server).
+function inServiceArea(j: TechJobSummary, area: ServiceArea) {
   return (
     j.latitude != null &&
     j.longitude != null &&
-    distanceMiles(ATLANTA_LAT, ATLANTA_LNG, j.latitude, j.longitude) <= SERVICE_RADIUS_MILES
+    distanceMiles(area.centerLat, area.centerLng, j.latitude, j.longitude) <= area.radiusMiles
   );
 }
 
@@ -69,6 +67,7 @@ export default function OpenJobsScreen() {
     },
   });
   useRefetchRoleOn403(query.error);
+  const { data: area } = useGetServiceArea();
 
   // Refresh whenever the tab comes back into view (e.g. after accepting a job).
   // (The first focus is the initial mount, which already fetches.)
@@ -82,12 +81,12 @@ export default function OpenJobsScreen() {
 
   const { mapJobs, listJobs } = useMemo(() => {
     const all = query.data ?? [];
-    const mapped = all.filter(inServiceArea);
+    const mapped = area ? all.filter((j) => inServiceArea(j, area)) : [];
     // Jobs whose city couldn't be geocoded have no pin; keep them in the list
     // so they aren't invisible (the web portal drops them).
     const unlocated = all.filter((j) => j.latitude == null || j.longitude == null);
     return { mapJobs: mapped, listJobs: [...mapped, ...unlocated] };
-  }, [query.data]);
+  }, [query.data, area]);
 
   const selected = mapJobs.find((j) => j.id === selectedId) ?? null;
 
@@ -151,10 +150,10 @@ export default function OpenJobsScreen() {
           onAction={() => query.refetch()}
         />
       );
-  } else if (mode === "map" && mapAvailable) {
+  } else if (mode === "map" && mapAvailable && area) {
     body = (
       <View style={{ flex: 1 }}>
-        <JobsMap jobs={mapJobs} selectedId={selectedId} onSelect={setSelectedId} />
+        <JobsMap jobs={mapJobs} selectedId={selectedId} onSelect={setSelectedId} area={area} />
         {listJobs.length === 0 && (
           <View pointerEvents="none" style={[styles.mapEmpty, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Feather name="check-circle" size={16} color={colors.mutedForeground} />

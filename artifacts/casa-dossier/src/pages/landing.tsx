@@ -4,11 +4,14 @@ import { useTranslation } from "react-i18next";
 import {
   ShieldCheck, Wrench, FileText, TrendingUp, Star, ArrowRight,
   CheckCircle2, Home, Package, ChevronLeft, ChevronRight,
-  Hash, Cpu, ClipboardList, Quote, Pause, Play,
+  Hash, Cpu, ClipboardList, Pause, Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanguageToggle } from "@/components/language-toggle";
 import { usePrefersReducedMotion } from "@/hooks/use-reduced-motion";
+
+// Matches the demo route in App.tsx: shown only when a demo token is configured.
+const DEMO_ENABLED = !!import.meta.env.VITE_DEMO_TOKEN;
 
 const FEATURE_META = [
   { icon: ShieldCheck, accent: "from-blue-500/20 to-indigo-500/10", iconBg: "bg-blue-500/15", iconColor: "text-blue-600 dark:text-blue-400" },
@@ -242,7 +245,7 @@ function BenefitsStrip() {
   );
 }
 
-function TechQuoteSection() {
+function TechPrepSection() {
   const { t } = useTranslation();
   const { ref, style } = useFadeIn();
 
@@ -271,26 +274,8 @@ function TechQuoteSection() {
 
           <div className="absolute bottom-0 left-0 right-0 p-6">
             <div className="bg-white/95 backdrop-blur rounded-xl p-5 shadow-xl border border-white/60">
-              <Quote className="h-6 w-6 text-primary/30 mb-2" />
-              <p className="text-foreground text-base font-medium leading-snug">
-                {t("landing.quoteText")}{" "}
-                <em className="text-primary font-semibold not-italic italic">{t("landing.quoteEmphasis")}</em>
-              </p>
-              <p className="text-muted-foreground text-sm mt-1.5">
-                {t("landing.quoteDetail")}
-              </p>
-              <div className="flex items-center gap-2.5 mt-3 pt-3 border-t">
-                <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">M</div>
-                <div>
-                  <p className="text-xs font-semibold leading-none">{t("landing.quoteAuthor")}</p>
-                  <p className="text-xs text-muted-foreground">{t("landing.quoteLocation")}</p>
-                </div>
-                <div className="ml-auto flex gap-0.5">
-                  {[1,2,3,4,5].map(i => (
-                    <Star key={i} className="h-3 w-3 fill-amber-400 text-amber-400" />
-                  ))}
-                </div>
-              </div>
+              <p className="text-foreground text-base font-medium leading-snug">{t("landing.techCardTitle")}</p>
+              <p className="text-muted-foreground text-sm mt-1.5">{t("landing.techCardDetail")}</p>
             </div>
           </div>
         </div>
@@ -411,19 +396,21 @@ export default function Landing() {
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
-          <Button asChild size="lg" variant="outline" className="gap-2 px-8 h-12 text-base font-medium">
-            <Link href="/demo">
-              <Star className="h-4 w-4 text-amber-500" />
-              {t("landing.seeDemo")}
-            </Link>
-          </Button>
+          {DEMO_ENABLED && (
+            <Button asChild size="lg" variant="outline" className="gap-2 px-8 h-12 text-base font-medium">
+              <Link href="/demo">
+                <Star className="h-4 w-4 text-amber-500" />
+                {t("landing.seeDemo")}
+              </Link>
+            </Button>
+          )}
         </div>
-        <p className="text-xs text-muted-foreground mt-4">{t("landing.noCreditCard")}</p>
+        <p className="text-xs text-muted-foreground mt-4">{t(DEMO_ENABLED ? "landing.noCreditCard" : "landing.noCreditCardOnly")}</p>
       </section>
 
       <BenefitsStrip />
       <FeatureCarousel />
-      <TechQuoteSection />
+      <TechPrepSection />
       <CtaSection />
 
       {/* Footer */}
@@ -436,6 +423,10 @@ export default function Landing() {
         </div>
         <p className="text-xs text-muted-foreground">
           {t("landing.footerCopy", { year: new Date().getFullYear() })}
+        </p>
+        <p className="text-xs text-muted-foreground mt-1 space-x-3">
+          <Link href="/privacy" className="hover:underline">{t("landing.privacy")}</Link>
+          <Link href="/terms" className="hover:underline">{t("landing.terms")}</Link>
         </p>
       </footer>
     </div>

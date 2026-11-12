@@ -29,8 +29,10 @@ import { FolderNameDialog } from "@/components/locker/folder-name-dialog";
 import { MoveFileDialog } from "@/components/locker/move-file-dialog";
 import { ConfirmDeleteDialog } from "@/components/locker/confirm-delete-dialog";
 import { LockerLightbox } from "@/components/locker/locker-lightbox";
+import { useProperty } from "@/contexts/property-context";
 
 export default function DigitalLocker() {
+  const { activePropertyId } = useProperty();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -99,6 +101,8 @@ export default function DigitalLocker() {
             contentType: file.type || "image/jpeg",
             size: file.size,
             folderId: activeFolderId === "all" || activeFolderId === null ? undefined : activeFolderId,
+            // Tags the document to this home so it can go with it in a transfer.
+            propertyId: activePropertyId ?? undefined,
           });
         } catch {
           throw new Error(t("locker.saveRecordFailed"));

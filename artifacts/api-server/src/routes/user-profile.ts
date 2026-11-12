@@ -5,6 +5,7 @@ import {
   propertiesTable,
   assetsTable,
   pushTokensTable,
+  serviceWaitlistTable,
   subscriptionsTable,
   lockerFoldersTable,
   lockerFilesTable,
@@ -12,6 +13,7 @@ import {
   marketplaceJobsTable,
   propertyCollaboratorsTable,
   serviceRecordsTable,
+  ownershipClaimsTable,
 } from "@workspace/db";
 import { eq, or, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -21,6 +23,8 @@ import { getUncachableStripeClient } from "../stripeClient.js";
 import { ObjectStorageService } from "../lib/objectStorage.js";
 import { logger } from "../lib/logger.js";
 
+import { propertiesWithHistory, releaseProperty } from "../lib/dossiers.js";
+import { toPublicProfile } from "../lib/profiles.js";
 const router = Router();
 
 const UpsertBody = z.object({
@@ -43,7 +47,7 @@ router.get("/user/profile", requireAuth(), async (req, res) => {
     res.status(404).json({ error: "Profile not found" });
     return;
   }
-  res.json(profile);
+  res.json(toPublicProfile(profile));
 });
 
 router.put("/user/profile", requireAuth(), async (req, res) => {
@@ -69,7 +73,7 @@ router.put("/user/profile", requireAuth(), async (req, res) => {
     })
     .returning();
 
-  res.json(profile);
+  res.json(toPublicProfile(profile));
 });
 
 router.delete("/user", requireAuth(), async (req, res): Promise<void> => {
@@ -107,6 +111,13 @@ router.delete("/user", requireAuth(), async (req, res): Promise<void> => {
     ]);
 
     const propertyIds = ownedProperties.map((p) => p.id);
+    // Homes with service history stay with the house as unclaimed dossiers;
+    // the rest are deleted.
+    const historyIds = await propertiesWithHistory(propertyIds);
+    const claims = await db
+      .select({ id: ownershipClaimsTable.id, documentPath: ownershipClaimsTable.documentPath })
+      .from(ownershipClaimsTable)
+      .where(eq(ownershipClaimsTable.claimantUserId, userId));
     let assetRows: { photoUrl: string | null }[] = [];
     let receiptRows: { receiptUrl: string | null }[] = [];
     if (propertyIds.length > 0) {
@@ -153,6 +164,7 @@ router.delete("/user", requireAuth(), async (req, res): Promise<void> => {
       ...(ownedProperties.map((p) => p.photoUrl).filter(Boolean) as string[]),
       ...(assetRows.map((a) => a.photoUrl).filter(Boolean) as string[]),
       ...(receiptRows.map((r) => r.receiptUrl).filter(Boolean) as string[]),
+      ...(claims.map((c) => c.documentPath).filter(Boolean) as string[]),
     ];
     await Promise.all(
       allStorageUrls.map(async (rawPath) => {
@@ -176,6 +188,7 @@ router.delete("/user", requireAuth(), async (req, res): Promise<void> => {
         tx.delete(lockerFilesTable).where(eq(lockerFilesTable.userId, userId)),
         tx.delete(lockerFoldersTable).where(eq(lockerFoldersTable.userId, userId)),
         tx.delete(pushTokensTable).where(eq(pushTokensTable.userId, userId)),
+        tx.delete(serviceWaitlistTable).where(eq(serviceWaitlistTable.userId, userId)),
         tx.delete(subscriptionsTable).where(eq(subscriptionsTable.userId, userId)),
       ]);
 
@@ -240,8 +253,14 @@ router.delete("/user", requireAuth(), async (req, res): Promise<void> => {
         ),
       ]);
 
-      // Delete owned properties — assets, maintenance tasks, service records,
-      // marketplace jobs (on own assets), and collaborator rows all cascade.
+      await tx.delete(ownershipClaimsTable).where(eq(ownershipClaimsTable.claimantUserId, userId));
+
+      // Homes with history are released (personal details stripped, history kept
+      // for the next owner). Deleting the rest cascades to their assets, tasks,
+      // records, service requests and collaborators.
+      for (const propertyId of historyIds) {
+        await releaseProperty(tx, propertyId, userId);
+      }
       await tx.delete(propertiesTable).where(eq(propertiesTable.userId, userId));
       await tx.delete(userProfilesTable).where(eq(userProfilesTable.userId, userId));
     });

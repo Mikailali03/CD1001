@@ -55,7 +55,7 @@ router.post("/admin/backfill-user-profiles", ...adminAuth, async (req, res) => {
 
     try {
       const existing = await db
-        .select({ userId: userProfilesTable.userId })
+        .select({ userId: userProfilesTable.userId, firstName: userProfilesTable.firstName })
         .from(userProfilesTable)
         .where(eq(userProfilesTable.userId, user.id))
         .limit(1);
@@ -64,7 +64,11 @@ router.post("/admin/backfill-user-profiles", ...adminAuth, async (req, res) => {
         await db
           .update(userProfilesTable)
           .set({
-            firstName: firstName || existing[0].userId,
+            // Keep the stored name when Clerk has none. Earlier runs wrote the
+            // Clerk user id here, so treat that as missing and repair it.
+            firstName:
+              firstName ||
+              (existing[0].firstName && existing[0].firstName !== user.id ? existing[0].firstName : "User"),
             lastName,
             email: primaryEmail,
             updatedAt: new Date(),

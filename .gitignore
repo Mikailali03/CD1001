@@ -50,3 +50,9 @@ Thumbs.db
 
 # Local tool config (EAS CLI analytics id etc.)
 .config/
+
+# Local dev secrets
+.env.local
+
+# Files stored by the local storage driver
+.local-storage/

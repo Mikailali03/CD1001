@@ -6,11 +6,18 @@ import { getExpectedLifespan } from "@workspace/maintenance-specs";
 import { normCategory } from "./utils";
 
 // ── Life-used bar ──────────────────────────────────────────────────────────────
-export function LifeBar({ installDate, category, name, colors }: { installDate?: string | null; category: string; name?: string; colors: ReturnType<typeof useColors> }) {
+export function LifeBar({ installDate, category, name, lifespanYears, colors }: {
+  installDate?: string | null;
+  category: string;
+  name?: string;
+  /** Region-adjusted lifespan from the API, when available. */
+  lifespanYears?: number | null;
+  colors: ReturnType<typeof useColors>;
+}) {
   const { t } = useTranslation();
   if (!installDate) return null;
   const cat = normCategory(category);
-  const lifespan = getExpectedLifespan(cat, name ?? "");
+  const lifespan = lifespanYears ?? getExpectedLifespan(cat, name ?? "");
   const ageYears = (Date.now() - new Date(installDate).getTime()) / (365.25 * 24 * 3600 * 1000);
   const pct = Math.min(Math.round((ageYears / lifespan) * 100), 100);
   const barColor = pct >= 80 ? "#ef4444" : pct >= 60 ? "#f59e0b" : "#22c55e";

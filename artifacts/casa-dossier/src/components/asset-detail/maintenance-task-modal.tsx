@@ -52,7 +52,7 @@ export function MaintenanceTaskModal({
 
   const [busy, setBusy] = useState(false);
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
+  const [cost, setCost] = useState("");
   const [isDiy, setIsDiy] = useState<boolean>(task.isDiy ?? true);
   const [technicianName, setTechnicianName] = useState(task.isDiy !== false ? DIY_TECHNICIAN_NAME : "");
   const [companyName, setCompanyName] = useState("");
@@ -63,7 +63,7 @@ export function MaintenanceTaskModal({
   const queryClient = useQueryClient();
 
   function resetForm() {
-    setNotes(""); setCost(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
+    setNotes(""); setCost("");
     setIsDiy(task.isDiy ?? true); setTechnicianName(task.isDiy !== false ? DIY_TECHNICIAN_NAME : "");
     setCompanyName(""); setReceiptUrl(null);
   }
@@ -188,7 +188,7 @@ export function MaintenanceTaskModal({
                   <Label htmlFor={`${uid}-cost`} className="text-xs font-semibold flex items-center gap-1">
                     <DollarSign className="h-3 w-3" /> {t("assetDetail.task.actualCost")}
                   </Label>
-                  <Input id={`${uid}-cost`} type="number" min={0} step="0.01" placeholder="0.00" value={cost}
+                  <Input id={`${uid}-cost`} type="number" min={0} step="0.01" placeholder={task.estimatedCost ? `est. ${Number(task.estimatedCost)}` : "0.00"} value={cost}
                     onChange={(e) => setCost(e.target.value)} className="text-sm h-8" />
                 </div>
                 <div className="space-y-1.5">

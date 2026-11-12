@@ -23,8 +23,16 @@ export const TRIGGER_EVENT_LABELS: Record<string, { label: string; description: 
     description: "Sent when a technician marks a job as complete",
   },
   overdue_maintenance: {
-    label: "Overdue Maintenance Item",
-    description: "Sent when a maintenance task becomes overdue",
+    label: "Overdue Maintenance",
+    description: "Daily reminder when tasks become overdue (1 and 7 days). Variables: {{firstName}}, {{propertyName}}, {{tasksHtml}}, {{actionUrl}}, {{unsubscribeUrl}}",
+  },
+  maintenance_due_soon: {
+    label: "Maintenance Due Soon",
+    description: "Daily reminder for tasks due within 3 days (may also list overdue ones). Variables: {{firstName}}, {{propertyName}}, {{tasksHtml}}, {{actionUrl}}, {{unsubscribeUrl}}",
+  },
+  weekly_summary: {
+    label: "Weekly Summary",
+    description: "Monday email: overdue, due this week, done last week. Variables: {{firstName}}, {{tasksHtml}}, {{actionUrl}}, {{unsubscribeUrl}}",
   },
   asset_end_of_life: {
     label: "Asset Reaching End of Life",

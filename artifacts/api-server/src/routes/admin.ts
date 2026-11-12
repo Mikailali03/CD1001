@@ -4,6 +4,7 @@ import { eq, ilike, or, count, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { requireAdmin } from "../middlewares/requireAdmin.js";
+import { toPublicProfile } from "../lib/profiles.js";
 
 const router = Router();
 
@@ -58,7 +59,7 @@ router.get("/admin/users", ...adminAuth, async (req, res) => {
     .where(conditions.length ? (conditions.length === 1 ? conditions[0] : sql`${conditions[0]} AND ${conditions[1]}`) : undefined)
     .orderBy(userProfilesTable.createdAt);
 
-  res.json(users);
+  res.json(users.map(toPublicProfile));
 });
 
 const UpdateUserBody = z.object({
@@ -87,7 +88,7 @@ router.patch("/admin/users/:userId", ...adminAuth, async (req, res) => {
     .returning();
 
   if (!updated) { res.status(404).json({ error: "User not found" }); return; }
-  res.json(updated);
+  res.json(toPublicProfile(updated));
 });
 
 // ─── Email Templates ──────────────────────────────────────────────────────────

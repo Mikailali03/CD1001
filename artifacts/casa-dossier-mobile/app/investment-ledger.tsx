@@ -47,7 +47,7 @@ type LedgerRecord = {
 type LedgerData = {
   records: LedgerRecord[];
   byCategory: CategorySpend[];
-  totals: { actual: number; expected: number };
+  totals: { actual: number; expected: number; estimatedCompleted?: number };
 };
 
 // ── Main screen ────────────────────────────────────────────────────────────────
@@ -245,6 +245,13 @@ export default function InvestmentLedgerScreen() {
           {/* Expected vs Actual */}
           <View style={{ marginBottom: 16 }}>
             <CompareBar actual={data.totals.actual} expected={data.totals.expected} colors={colors} />
+            {(data.totals.estimatedCompleted ?? 0) > 0 && (
+              <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 8 }}>
+                {t("ledger.estimatedNotCounted", {
+                  amount: `$${(data.totals.estimatedCompleted ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                })}
+              </Text>
+            )}
           </View>
 
           {/* Running ledger */}

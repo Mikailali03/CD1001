@@ -12,6 +12,7 @@ import { ZodError } from "zod";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { WebhookHandlers } from "./webhookHandlers";
+import { AI_UNAVAILABLE_MESSAGE } from "./middlewares/requireAi";
 
 const app: Express = express();
 
@@ -71,10 +72,14 @@ const allowedHosts = new Set(
     .filter(Boolean),
 );
 
+// Local dev servers are allowed only outside production.
+const allowLocalhost = process.env.NODE_ENV !== "production";
+
 function isAllowedOrigin(origin: string): boolean {
   try {
     const { hostname, host } = new URL(origin);
-    return hostname === "localhost" || hostname === "127.0.0.1" || allowedHosts.has(host) || allowedHosts.has(hostname);
+    if (allowLocalhost && (hostname === "localhost" || hostname === "127.0.0.1")) return true;
+    return allowedHosts.has(host) || allowedHosts.has(hostname);
   } catch {
     return false;
   }
@@ -111,6 +116,11 @@ const errorHandler: ErrorRequestHandler = (err, req, res, _next) => {
   // zod v3 and v4 both name their error class "ZodError".
   if (err instanceof ZodError || err?.name === "ZodError") {
     res.status(400).json({ error: "Invalid request", issues: err.issues });
+    return;
+  }
+  // No OpenAI key configured: AI features are off, everything else works.
+  if (err?.name === "AiUnavailableError") {
+    res.status(503).json({ error: AI_UNAVAILABLE_MESSAGE });
     return;
   }
   req.log.error({ err }, "Unhandled error");

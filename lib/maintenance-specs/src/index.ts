@@ -1,7 +1,11 @@
+import type { SourceId } from "./sources";
+
 export type MaintenanceSpec = {
   title: string;
   description: string;
   intervalDays: number;
+  /** Where the interval comes from (see SOURCES). */
+  source: SourceId;
   isDiy: boolean;
   priority: "low" | "medium" | "high";
   estimatedMinutes?: number;
@@ -16,6 +20,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Replace air filter",
       description: "Replace your HVAC air filter to keep air quality high and the system running efficiently. A clogged filter makes the motor work harder and can cut equipment life in half.",
       intervalDays: 30,
+      source: "ENERGY_STAR_HVAC",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 10,
@@ -33,6 +38,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clean condensate drain line",
       description: "Pour distilled white vinegar into the AC condensate drain pan to clear algae and prevent water backup — a common cause of ceiling leaks and high humidity.",
       intervalDays: 90,
+      source: "DOE_ENERGY_SAVER",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 15,
@@ -49,6 +55,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Annual HVAC tune-up",
       description: "A certified HVAC technician should inspect the system once per year — checking refrigerant, coils, blower, thermostat calibration, and all electrical connections.",
       intervalDays: 365,
+      source: "ENERGY_STAR_HVAC",
       isDiy: false,
       priority: "high",
       estimatedMinutes: 90,
@@ -57,6 +64,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clean evaporator & condenser coils",
       description: "Dirty coils reduce efficiency by up to 30% and can cause the compressor to fail prematurely. Use a no-rinse coil cleaner for the indoor evaporator coil.",
       intervalDays: 365,
+      source: "DOE_ENERGY_SAVER",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 45,
@@ -78,6 +86,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Flush water heater",
       description: "Sediment buildup at the bottom of the tank reduces heating efficiency and accelerates corrosion. An annual flush adds years of life to the unit.",
       intervalDays: 365,
+      source: "DOE_ENERGY_SAVER",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 30,
@@ -98,6 +107,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Test pressure relief valve",
       description: "The T&P relief valve is a critical safety device. If it fails to open, the water heater can rupture. Testing once a year ensures it's not stuck.",
       intervalDays: 365,
+      source: "DOE_ENERGY_SAVER",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 10,
@@ -114,6 +124,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Check anode rod",
       description: "The sacrificial anode rod attracts corrosion so the tank walls don't corrode. Replace it when it's less than ½ inch thick or heavily encrusted.",
       intervalDays: 1460,
+      source: "MANUFACTURER",
       isDiy: false,
       priority: "high",
       estimatedMinutes: 60,
@@ -122,6 +133,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Inspect supply lines & shut-offs",
       description: "Braided stainless supply lines and angle stop valves are the most common source of sudden water damage. Checking them takes 5 minutes.",
       intervalDays: 180,
+      source: "INTERNACHI_SOP",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 15,
@@ -141,6 +153,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Test GFCI outlets",
       description: "GFCI outlets prevent electrocution in wet areas. They can fail silently — the test button ensures they'll actually trip in an emergency.",
       intervalDays: 30,
+      source: "ESFI_GFCI",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 10,
@@ -156,6 +169,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Test smoke & CO detectors",
       description: "Smoke detectors older than 10 years and CO detectors older than 7 years should be replaced regardless of whether they pass the test.",
       intervalDays: 180,
+      source: "USFA_SMOKE_ALARMS",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 20,
@@ -172,6 +186,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Inspect electrical panel",
       description: "A quick visual inspection of your breaker panel can catch overloaded circuits, heat damage, or loose connections early — before they become fire hazards.",
       intervalDays: 365,
+      source: "INTERNACHI_SOP",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 15,
@@ -193,6 +208,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clean gutters",
       description: "Clogged gutters cause water to overflow and pool against the foundation, rot fascia boards, and create ice dams in cold climates. Clean twice a year.",
       intervalDays: 180,
+      source: "INTERNACHI_SOP",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 60,
@@ -211,6 +227,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Inspect shingles & flashing",
       description: "Catching damaged shingles and flashing early prevents expensive deck rot and interior water damage. Do this from the ground with binoculars or from the attic.",
       intervalDays: 365,
+      source: "NRCA_ROOF",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 30,
@@ -227,6 +244,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clear debris from roof valleys",
       description: "Leaves and debris trapped in roof valleys hold moisture and accelerate shingle degradation. A quick clearing prevents premature wear.",
       intervalDays: 180,
+      source: "NRCA_ROOF",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 30,
@@ -244,6 +262,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clean refrigerator condenser coils",
       description: "Dirty coils make the compressor run constantly, shortening its life and raising your electric bill. Most refrigerators have coils at the bottom behind the kick plate.",
       intervalDays: 180,
+      source: "MANUFACTURER",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 20,
@@ -260,6 +279,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clean dryer exhaust vent",
       description: "A clogged dryer vent is the #1 cause of house fires from appliances. The NFPA recommends cleaning the full exhaust duct once a year.",
       intervalDays: 365,
+      source: "CPSC_DRYER",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 45,
@@ -278,6 +298,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Clean dishwasher filter",
       description: "A dirty filter causes poor cleaning and bad odors. Most modern dishwashers have a manual-clean filter under the bottom spray arm.",
       intervalDays: 30,
+      source: "MANUFACTURER",
       isDiy: true,
       priority: "low",
       estimatedMinutes: 10,
@@ -293,6 +314,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Inspect washing machine hoses",
       description: "Rubber washing machine hoses burst without warning and can flood a home with hundreds of gallons per hour. Check and replace every 5 years.",
       intervalDays: 365,
+      source: "MANUFACTURER",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 15,
@@ -312,6 +334,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Inspect foundation & crawl space",
       description: "Small foundation cracks caught early are a minor repair. Left unchecked, water intrusion causes structural damage, mold, and expensive remediation.",
       intervalDays: 365,
+      source: "INTERNACHI_SOP",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 30,
@@ -329,6 +352,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Caulk windows & exterior doors",
       description: "Failed caulk around windows and doors is one of the most common paths for air and water infiltration. Re-caulking takes 30 minutes and saves on energy and repairs.",
       intervalDays: 365,
+      source: "ENERGY_STAR_SEALING",
       isDiy: true,
       priority: "medium",
       estimatedMinutes: 60,
@@ -349,6 +373,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Test garage door auto-reverse",
       description: "Federal law requires all garage door openers to have a safety reverse. Test it monthly — a door that fails to reverse can seriously injure a person or pet.",
       intervalDays: 30,
+      source: "CPSC_GARAGE_DOOR",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 5,
@@ -364,6 +389,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec[]> = {
       title: "Check exterior grading",
       description: "The ground around your home should slope away at 6 inches per 10 feet for the first 10 feet. Improper grading sends rainwater toward the foundation.",
       intervalDays: 365,
+      source: "IRC_GRADING",
       isDiy: true,
       priority: "high",
       estimatedMinutes: 20,
@@ -383,4 +409,8 @@ export function getSpecsForCategory(category: string): MaintenanceSpec[] {
   return MAINTENANCE_SPECS[category] ?? MAINTENANCE_SPECS["Other"] ?? [];
 }
 
+export * from "./sources";
+export * from "./regions";
 export * from "./lifespans";
+export * from "./health";
+export * from "./starterAssets";

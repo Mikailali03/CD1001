@@ -13,6 +13,13 @@ import { useTranslation } from "react-i18next";
 import { useCreateServiceRecord } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { storageUrlForObjectPath } from "@/lib/config";
+import { uploadFailureMessage, useImageUpload } from "@/hooks/useImageUpload";
+
+// Work logged this long after it happened gets a nudge to attach a receipt,
+// since the record will show it was added later.
+const LATE_ENTRY_DAYS = 30;
 
 // ── Log Service Record form ────────────────────────────────────────────────────
 export function LogServiceForm({ assetId, colors, onSuccess }: { assetId: string; colors: ReturnType<typeof useColors>; onSuccess: () => void }) {
@@ -24,12 +31,32 @@ export function LogServiceForm({ assetId, colors, onSuccess }: { assetId: string
   const [techName, setTechName] = useState("Homeowner (DIY)");
   const [company, setCompany] = useState("");
   const [cost, setCost] = useState("");
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const { upload, isUploading } = useImageUpload();
+  const dateMs = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00`).getTime() : NaN;
+  const isLateEntry = !Number.isNaN(dateMs) && Date.now() - dateMs > LATE_ENTRY_DAYS * 24 * 60 * 60 * 1000;
+
+  async function attachReceipt() {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert(t("common.permissionNeeded"), t("common.libraryPermission"));
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.85 });
+    if (result.canceled || !result.assets[0]) return;
+    try {
+      const uploaded = await upload(result.assets[0]);
+      setReceiptUrl(storageUrlForObjectPath(uploaded.objectPath));
+    } catch (err) {
+      Alert.alert(t("common.uploadFailed"), uploadFailureMessage(err));
+    }
+  }
 
   const { mutate, isPending } = useCreateServiceRecord();
 
   function reset() {
     setDescription(""); setDate(new Date().toLocaleDateString("en-CA"));
-    setIsDiy(true); setTechName("Homeowner (DIY)"); setCompany(""); setCost("");
+    setIsDiy(true); setTechName("Homeowner (DIY)"); setCompany(""); setCost(""); setReceiptUrl(null);
   }
 
   function submit() {
@@ -45,6 +72,7 @@ export function LogServiceForm({ assetId, colors, onSuccess }: { assetId: string
         technicianName: techName.trim() || undefined,
         companyName: company.trim() || undefined,
         cost: cost ? parseFloat(cost) : undefined,
+        receiptUrl: receiptUrl ?? undefined,
       },
     }, {
       onSuccess: () => {
@@ -148,6 +176,26 @@ export function LogServiceForm({ assetId, colors, onSuccess }: { assetId: string
           </View>
         )}
 
+        {/* Receipt */}
+        {isLateEntry && !receiptUrl ? (
+          <Text style={{ fontSize: 11, color: "#b45309", fontFamily: "Inter_400Regular", marginTop: 12, lineHeight: 16 }}>
+            {t("logService.lateEntryHint")}
+          </Text>
+        ) : null}
+        <TouchableOpacity
+          onPress={receiptUrl ? () => setReceiptUrl(null) : attachReceipt}
+          disabled={isUploading}
+          style={[logStyles.cancelBtn, { borderColor: colors.border, marginTop: 10, flex: 0, flexDirection: "row", gap: 6 }]}
+          accessibilityRole="button"
+        >
+          {isUploading
+            ? <ActivityIndicator size="small" color={colors.primary} />
+            : <Feather name={receiptUrl ? "x" : "paperclip"} size={13} color={colors.foreground} />}
+          <Text style={{ fontSize: 12, color: colors.foreground, fontFamily: "Inter_500Medium" }}>
+            {receiptUrl ? t("logService.receiptAttached") : t("logService.attachReceipt")}
+          </Text>
+        </TouchableOpacity>
+
         <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
           <TouchableOpacity
             style={[logStyles.cancelBtn, { borderColor: colors.border }]}
@@ -157,7 +205,7 @@ export function LogServiceForm({ assetId, colors, onSuccess }: { assetId: string
           </TouchableOpacity>
           <TouchableOpacity
             style={[logStyles.saveBtn, { backgroundColor: colors.primary, opacity: isPending ? 0.7 : 1 }]}
-            onPress={submit} disabled={isPending} activeOpacity={0.8}
+            onPress={submit} disabled={isPending || isUploading} activeOpacity={0.8}
           >
             {isPending
               ? <ActivityIndicator size="small" color={colors.primaryForeground} />

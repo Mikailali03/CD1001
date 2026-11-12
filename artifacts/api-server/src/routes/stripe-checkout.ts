@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getUncachableStripeClient } from "../stripeClient.js";
 import { logger } from "../lib/logger.js";
-import { getOrCreateSubscription } from "../lib/subscription.js";
+import { getOrCreateSubscription, PURCHASABLE_TIERS } from "../lib/subscription.js";
 import { syncStripeSubscription } from "../lib/stripeSync.js";
 import { getAppUrl } from "../lib/appUrl.js";
 
@@ -44,7 +44,7 @@ router.get("/stripe/plans", async (_req, res) => {
 
     const plans = await Promise.all(
       products.data
-        .filter((p) => p.metadata?.tier)
+        .filter((p) => (PURCHASABLE_TIERS as readonly string[]).includes(p.metadata?.tier ?? ""))
         .map(async (product) => {
           const prices = await stripe.prices.list({
             product: product.id,
@@ -77,8 +77,8 @@ router.get("/stripe/plans", async (_req, res) => {
 router.post("/stripe/checkout", requireAuth(), async (req, res) => {
   const { tier } = req.body as { tier: "basic" | "managed" | "concierge" };
 
-  if (!tier || !["basic", "managed", "concierge"].includes(tier)) {
-    res.status(400).json({ error: "Invalid tier. Must be 'basic', 'managed', or 'concierge'." });
+  if (!tier || !PURCHASABLE_TIERS.includes(tier)) {
+    res.status(400).json({ error: "That plan isn't available right now." });
     return;
   }
 

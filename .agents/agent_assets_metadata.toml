@@ -5,3 +5,17 @@ id = "tXIvtTYuc4Yt3Ysxw4UYh"
 uri = "file://artifacts/casa-dossier-mobile/assets/images/icon.png"
 type = "image"
 title = "generated_image"
+
+[[outputs]]
+id = "hEMCSeeT4csQ5gfxAjAha"
+uri = "file://attached_assets/casa-dossier-expo-go-secure-qr.png"
+type = "image"
+title = "Casa Dossier — Secure Expo Go QR"
+description = "Scan this QR with your phone to open the HTTPS-enabled exps:// development connection. Use this instead of the previous exp:// QR. Keep the Replit project running."
+logical_id = "7080efbb-2c24-44a3-a86e-9c134a08808a"
+content_hash = "sha256:49317e556fe642a99bcc171e77f6cae82037b15babc56aa2fc2ad54306addff9"
+size = 4698
+mtime_ms = 1793413636885
+storage_uri = "gcs://replit-rams-assets-kirk/rams/assets/repl:fc9b66dd-d3e8-4c52-a698-df357907e16c/7080efbb-2c24-44a3-a86e-9c134a08808a/c6d092e7-ecb8-413a-8bf9-259e304c16ad"
+storage_version_token = "1793413684603435"
+content_type = "image/png"

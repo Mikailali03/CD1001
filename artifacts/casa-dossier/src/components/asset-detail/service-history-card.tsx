@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { FileText } from "lucide-react";
 import { format } from "@/lib/date";
 import { ReceiptLink, ReceiptThumbnail } from "@/components/receipt-upload";
+import { RecordPerformer, RecordProvenance } from "@/components/record-provenance";
 import { AddServiceRecordForm } from "./add-service-record-form";
 
 // ── Service History ───────────────────────────────────────────────────────────
@@ -56,26 +57,15 @@ export function ServiceHistoryCard({ records, gradeColor, assetId, propertyId, o
                   </span>
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1">
-                  {(record.companyName || record.technicianName) && (
+                  {(record.verified || record.companyName || record.technicianName) && (
                     <p className="flex items-center gap-1.5">
-                      {record.companyName === "CasaService" && (
-                        <span className="inline-flex items-center gap-1">
-                          <span className="inline-flex items-center bg-amber-50 border border-amber-200 font-semibold px-1.5 py-0.5 rounded text-[10px] tracking-wide">
-                            <span className="casa-shimmer-gold">✦ CasaService</span>
-                          </span>
-                          {record.technicianName && (
-                            <span className="text-xs"> — {record.technicianName}</span>
-                          )}
-                        </span>
-                      )}
-                      {record.companyName !== "CasaService" && record.companyName && (
-                        <span>{record.companyName}</span>
-                      )}
-                      {record.companyName !== "CasaService" && record.technicianName && (
+                      <RecordPerformer record={record} />
+                      {!record.verified && record.companyName && record.technicianName && (
                         <span className="text-muted-foreground">({record.technicianName})</span>
                       )}
                     </p>
                   )}
+                  <p className="text-[10px]"><RecordProvenance record={record} /></p>
                   {!!record.cost && Number(record.cost) > 0 && (
                     <p className="font-semibold text-foreground">${Number(record.cost).toLocaleString()}</p>
                   )}

@@ -13,6 +13,7 @@ const router = Router();
 const InitiateParams = z.object({ propertyId: z.string() });
 const InitiateBody = z.object({
   toEmail: z.string().email(),
+  includeDocuments: z.boolean().optional(),
   // Ignored — the sender's email comes from their verified Clerk account.
   // Still accepted so older clients that send it don't get a 400.
   fromEmail: z.string().email().optional(),
@@ -92,6 +93,7 @@ router.post("/properties/:propertyId/transfer", requireAuth(), async (req, res) 
       toEmail,
       status: "pending",
       expiresAt,
+      includeDocuments: body.includeDocuments ?? false,
     })
     .returning();
 

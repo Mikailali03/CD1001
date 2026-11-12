@@ -7,6 +7,10 @@ import {
   useListAssets,
   getListAssetsQueryKey,
   getListMarketplaceJobsQueryKey,
+  useCheckServiceArea,
+  getCheckServiceAreaQueryKey,
+  useJoinServiceWaitlist,
+  useCancelMarketplaceJob,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,28 +48,19 @@ import {
   TriangleAlert,
   Phone,
   Calendar,
+  XCircle,
 } from "lucide-react";
 import { format } from "@/lib/date";
 
-// ── Service area check ────────────────────────────────────────────────────────
-// CasaService currently serves the Atlanta metro within a 50-mile radius.
-// We approximate this using state + the first 3 digits of the zip code.
-// Valid prefixes: 300, 301, 302, 303 cover essentially all of metro Atlanta
-// and its surrounding counties (Fulton, DeKalb, Cobb, Gwinnett, Clayton, etc.)
-const ATLANTA_METRO_ZIP_PREFIXES = ["300", "301", "302", "303"];
+// The service area is checked on the server (GET /service-area/check, and
+// again when the request is posted); the dialog only uses it to offer the
+// waitlist before the homeowner fills everything in.
+function errorCode(err: unknown): string | undefined {
+  return (err as { data?: { code?: string } } | null)?.data?.code;
+}
 
-function isInAtlantaServiceArea(property: {
-  state?: string | null;
-  zipCode?: string | null;
-}): boolean {
-  const state = property.state?.trim().toUpperCase();
-  // If no state info, give benefit of the doubt
-  if (!state) return true;
-  if (state !== "GA" && state !== "GEORGIA") return false;
-  const zip = property.zipCode?.trim() ?? "";
-  // In GA but no zip — allow
-  if (!zip) return true;
-  return ATLANTA_METRO_ZIP_PREFIXES.includes(zip.slice(0, 3));
+function errorMessage(err: unknown): string | undefined {
+  return (err as { data?: { error?: string } } | null)?.data?.error;
 }
 
 type PostJobDialogProps = {
@@ -121,7 +116,12 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
           setUrgency("medium");
           setContactPhone("");
         },
-        onError: () => {
+        onError: (err) => {
+          if (errorCode(err) === "outside_service_area") {
+            queryClient.invalidateQueries({ queryKey: getCheckServiceAreaQueryKey({ propertyId }) });
+            toast({ title: t("marketplace.outsideAreaTitle"), description: t("marketplace.outsideAreaBody", { area: areaCheck?.areaName ?? "" }), variant: "destructive" });
+            return;
+          }
           toast({ title: t("common.error"), description: t("marketplace.postFailed"), variant: "destructive" });
         },
       }
@@ -133,7 +133,25 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
   const selectedProperty = properties?.find((p) => p.id === propertyId);
 
   // Service area gate — checked whenever a property is selected
-  const inServiceArea = selectedProperty ? isInAtlantaServiceArea(selectedProperty) : true;
+  const { data: areaCheck } = useCheckServiceArea(
+    { propertyId },
+    { query: { enabled: !!propertyId, queryKey: getCheckServiceAreaQueryKey({ propertyId }) } },
+  );
+  const inServiceArea = !propertyId || areaCheck?.inServiceArea !== false;
+  const joinWaitlist = useJoinServiceWaitlist();
+
+  function handleJoinWaitlist() {
+    joinWaitlist.mutate(
+      { data: { propertyId } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getCheckServiceAreaQueryKey({ propertyId }) });
+          toast({ title: t("marketplace.waitlistJoined"), description: t("marketplace.waitlistJoinedDesc") });
+        },
+        onError: () => toast({ title: t("common.error"), description: t("marketplace.waitlistFailed"), variant: "destructive" }),
+      },
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -234,8 +252,21 @@ function PostJobDialog({ initialOpen = false, initialPropertyId = "", initialAss
             <div>
               <p className="font-semibold">{t("marketplace.outsideAreaTitle")}</p>
               <p className="text-xs mt-0.5 text-amber-700">
-                {t("marketplace.outsideAreaBody")}
+                {t("marketplace.outsideAreaBody", { area: areaCheck?.areaName ?? "" })}
               </p>
+              {areaCheck?.onWaitlist ? (
+                <p className="text-xs mt-2 font-medium text-amber-800">{t("marketplace.onWaitlist")}</p>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-7 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                  disabled={joinWaitlist.isPending}
+                  onClick={handleJoinWaitlist}
+                >
+                  {joinWaitlist.isPending ? t("marketplace.joiningWaitlist") : t("marketplace.joinWaitlist")}
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -263,6 +294,54 @@ const urgencyConfig: Record<string, { label: string; className: string; icon: Re
   low:       { label: "marketplace.urgencyLow",       className: "border-l-muted-foreground/30", icon: <Clock className="h-3.5 w-3.5 text-muted-foreground" /> },
 };
 
+function CancelJobButton({ jobId }: { jobId: string }) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const cancelJob = useCancelMarketplaceJob();
+  const [confirming, setConfirming] = useState(false);
+
+  function handleCancel() {
+    cancelJob.mutate(
+      { jobId, data: {} },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
+          toast({ title: t("marketplace.cancelled"), description: t("marketplace.cancelledDesc") });
+          setConfirming(false);
+        },
+        onError: (err) => {
+          queryClient.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
+          toast({ title: t("common.error"), description: errorMessage(err) ?? t("marketplace.cancelFailed"), variant: "destructive" });
+          setConfirming(false);
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => setConfirming(true)}>
+        {t("marketplace.cancelJob")}
+      </Button>
+      <Dialog open={confirming} onOpenChange={setConfirming}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("marketplace.cancelConfirmTitle")}</DialogTitle>
+            <DialogDescription>{t("marketplace.cancelConfirmBody")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirming(false)}>{t("marketplace.keepRequest")}</Button>
+            <Button variant="destructive" disabled={cancelJob.isPending} onClick={handleCancel}>
+              {cancelJob.isPending ? t("marketplace.cancelling") : t("marketplace.cancelJob")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function Marketplace() {
   const { data: jobs, isLoading } = useListMarketplaceJobs();
   const { t } = useTranslation();
@@ -273,6 +352,7 @@ export default function Marketplace() {
     en_route:  { label: t("marketplace.onTheWay"),   variant: "default",  className: "bg-blue-500 hover:bg-blue-500 text-white" },
     arrived:   { label: t("marketplace.arrived"),    variant: "default",  className: "bg-emerald-500 hover:bg-emerald-500 text-white" },
     completed: { label: t("marketplace.completed"),  variant: "outline" },
+    cancelled: { label: t("marketplace.cancelled"),  variant: "outline", className: "text-muted-foreground" },
   };
 
   // Read pre-fill params from URL (e.g. ?propertyId=X&assetId=Y)
@@ -399,6 +479,20 @@ export default function Marketplace() {
                     <div className="flex items-center gap-2 text-sm text-chart-1 font-medium">
                       <CheckCircle2 className="h-4 w-4" />
                       {t("marketplace.serviceComplete")}
+                    </div>
+                  )}
+
+                  {job.status === "cancelled" && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <XCircle className="h-4 w-4" />
+                      {t("marketplace.requestCancelled")}
+                    </div>
+                  )}
+
+                  {/* Cancellable until the technician sets off; the API enforces it too. */}
+                  {(job.status === "open" || job.status === "claimed") && (
+                    <div className="flex justify-end">
+                      <CancelJobButton jobId={job.id} />
                     </div>
                   )}
                 </CardContent>

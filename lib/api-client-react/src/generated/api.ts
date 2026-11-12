@@ -18,8 +18,10 @@ import type {
 
 import type {
   ActivityItem,
+  AddStarterAssetsBody,
   AddressAutocompleteResult,
   AdminAnalytics,
+  AdminOwnershipClaim,
   AdminProperty,
   AdminStats,
   AdminTechnician,
@@ -29,7 +31,9 @@ import type {
   AssignedJobSummary,
   AutocompletePropertyAddressParams,
   BackfillResult,
+  CancelJobBody,
   CapitalOutlook,
+  CheckServiceAreaParams,
   ClaimPropertyTransferBody,
   ClaimPropertyTransferResult,
   Collaborator,
@@ -43,21 +47,28 @@ import type {
   CreateLockerFolderBody,
   CreateMaintenanceTaskBody,
   CreateMarketplaceJobBody,
+  CreateOwnershipClaimBody,
   CreatePropertyBody,
   CreateServiceRecordBody,
   CreateStripeCheckoutBody,
   Dashboard,
+  EmailPropertyReportBody,
   EmailTemplate,
   EmailTrigger,
   ErrorEnvelope,
   GeneratedMaintenanceTasks,
   GetInvestmentLedgerParams,
+  GetStarterAssetsParams,
   Guide,
   HealthStatus,
   Inbox,
   InitiatePropertyTransferBody,
   InvestmentLedger,
   InviteCollaboratorBody,
+  JobStatusResult,
+  JoinServiceWaitlistBody,
+  JoinServiceWaitlistResult,
+  ListAdminOwnershipClaimsParams,
   ListAdminPropertiesParams,
   ListAdminUsersParams,
   ListAssetsParams,
@@ -71,7 +82,9 @@ import type {
   MarkJobArrived200,
   MarkJobEnRoute200,
   MarketplaceJob,
+  NotificationPreferences,
   OkResult,
+  OwnershipClaimSummary,
   Property,
   PropertyLookupResult,
   PropertyMaintenanceInbox,
@@ -82,10 +95,17 @@ import type {
   QrAssetAccess,
   QrLabelSheet,
   QrPublicAsset,
+  RejectOwnershipClaimBody,
+  ReminderSubscriptionBody,
+  ReportSend,
+  ReportSendResult,
   ScanAssetDataPlateBody,
   ScheduleJobBody,
   ScheduleMarketplaceJob200,
+  ServiceArea,
+  ServiceAreaCheck,
   ServiceRecord,
+  StarterAssetSuggestions,
   StewardshipPlan,
   StripePlans,
   StripeRedirect,
@@ -97,12 +117,14 @@ import type {
   TechnicianScanResult,
   TransferClaimDetails,
   TransferGoneError,
+  UnclaimedHistory,
   UpcomingMaintenance,
   UpdateAdminUserBody,
   UpdateAssetBody,
   UpdateLockerFileBody,
   UpdateLockerFolderBody,
   UpdateMaintenanceTaskBody,
+  UpdateNotificationPreferencesBody,
   UpdatePropertyBody,
   UpgradeRequiredError,
   UploadUrlRequest,
@@ -122,6 +144,99 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * @summary Authenticated CARTO basemap tile (API key stays on the server)
+ */
+export const getGetMapTileUrl = (z: number, x: number, y: number) => {
+  return `/api/maps/tiles/${z}/${x}/${y}`;
+};
+
+export const getMapTile = async (
+  z: number,
+  x: number,
+  y: number,
+  options?: RequestInit,
+): Promise<Blob> => {
+  return customFetch<Blob>(getGetMapTileUrl(z, x, y), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMapTileQueryKey = (z: number, x: number, y: number) => {
+  return [`/api/maps/tiles/${z}/${x}/${y}`] as const;
+};
+
+export const getGetMapTileQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMapTile>>,
+  TError = ErrorType<void>,
+>(
+  z: number,
+  x: number,
+  y: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMapTile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMapTileQueryKey(z, x, y);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMapTile>>> = ({
+    signal,
+  }) => getMapTile(z, x, y, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!(z && x && y),
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMapTile>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMapTileQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMapTile>>
+>;
+export type GetMapTileQueryError = ErrorType<void>;
+
+/**
+ * @summary Authenticated CARTO basemap tile (API key stays on the server)
+ */
+
+export function useGetMapTile<
+  TData = Awaited<ReturnType<typeof getMapTile>>,
+  TError = ErrorType<void>,
+>(
+  z: number,
+  x: number,
+  y: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getMapTile>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMapTileQueryOptions(z, x, y, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Health check
@@ -1089,6 +1204,213 @@ export const useCreateAsset = <
 };
 
 /**
+ * @summary Suggested starter assets for a home, based on its age and type
+ */
+export const getGetStarterAssetsUrl = (
+  propertyId: string,
+  params?: GetStarterAssetsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/properties/${propertyId}/starter-assets?${stringifiedParams}`
+    : `/api/properties/${propertyId}/starter-assets`;
+};
+
+export const getStarterAssets = async (
+  propertyId: string,
+  params?: GetStarterAssetsParams,
+  options?: RequestInit,
+): Promise<StarterAssetSuggestions> => {
+  return customFetch<StarterAssetSuggestions>(
+    getGetStarterAssetsUrl(propertyId, params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetStarterAssetsQueryKey = (
+  propertyId: string,
+  params?: GetStarterAssetsParams,
+) => {
+  return [
+    `/api/properties/${propertyId}/starter-assets`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getGetStarterAssetsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getStarterAssets>>,
+  TError = ErrorType<unknown>,
+>(
+  propertyId: string,
+  params?: GetStarterAssetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStarterAssets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetStarterAssetsQueryKey(propertyId, params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getStarterAssets>>
+  > = ({ signal }) =>
+    getStarterAssets(propertyId, params, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getStarterAssets>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetStarterAssetsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getStarterAssets>>
+>;
+export type GetStarterAssetsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Suggested starter assets for a home, based on its age and type
+ */
+
+export function useGetStarterAssets<
+  TData = Awaited<ReturnType<typeof getStarterAssets>>,
+  TError = ErrorType<unknown>,
+>(
+  propertyId: string,
+  params?: GetStarterAssetsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getStarterAssets>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetStarterAssetsQueryOptions(
+    propertyId,
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add the chosen starter assets, with install years estimated from the year built
+ */
+export const getAddStarterAssetsUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/starter-assets`;
+};
+
+export const addStarterAssets = async (
+  propertyId: string,
+  addStarterAssetsBody: AddStarterAssetsBody,
+  options?: RequestInit,
+): Promise<Asset[]> => {
+  return customFetch<Asset[]>(getAddStarterAssetsUrl(propertyId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addStarterAssetsBody),
+  });
+};
+
+export const getAddStarterAssetsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addStarterAssets>>,
+    TError,
+    { propertyId: string; data: BodyType<AddStarterAssetsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addStarterAssets>>,
+  TError,
+  { propertyId: string; data: BodyType<AddStarterAssetsBody> },
+  TContext
+> => {
+  const mutationKey = ["addStarterAssets"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addStarterAssets>>,
+    { propertyId: string; data: BodyType<AddStarterAssetsBody> }
+  > = (props) => {
+    const { propertyId, data } = props ?? {};
+
+    return addStarterAssets(propertyId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddStarterAssetsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addStarterAssets>>
+>;
+export type AddStarterAssetsMutationBody = BodyType<AddStarterAssetsBody>;
+export type AddStarterAssetsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add the chosen starter assets, with install years estimated from the year built
+ */
+export const useAddStarterAssets = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addStarterAssets>>,
+    TError,
+    { propertyId: string; data: BodyType<AddStarterAssetsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addStarterAssets>>,
+  TError,
+  { propertyId: string; data: BodyType<AddStarterAssetsBody> },
+  TContext
+> => {
+  return useMutation(getAddStarterAssetsMutationOptions(options));
+};
+
+/**
  * @summary Get full asset details
  */
 export const getGetAssetUrl = (assetId: string) => {
@@ -1261,7 +1583,9 @@ export const useUpdateAsset = <
 };
 
 /**
- * @summary Remove an asset
+ * Owners can remove an asset only if it has no service records and was added in the last 7 days; anything else must be retired (PATCH retiredAt) so its history stays on the report. Admins can remove any asset.
+
+ * @summary Remove an asset added by mistake
  */
 export const getDeleteAssetUrl = (assetId: string) => {
   return `/api/assets/${assetId}`;
@@ -1278,7 +1602,7 @@ export const deleteAsset = async (
 };
 
 export const getDeleteAssetMutationOptions = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -1319,13 +1643,13 @@ export type DeleteAssetMutationResult = NonNullable<
   Awaited<ReturnType<typeof deleteAsset>>
 >;
 
-export type DeleteAssetMutationError = ErrorType<unknown>;
+export type DeleteAssetMutationError = ErrorType<void>;
 
 /**
- * @summary Remove an asset
+ * @summary Remove an asset added by mistake
  */
 export const useDeleteAsset = <
-  TError = ErrorType<unknown>,
+  TError = ErrorType<void>,
   TContext = unknown,
 >(options?: {
   mutation?: UseMutationOptions<
@@ -2459,7 +2783,7 @@ export function useListMarketplaceJobs<
 }
 
 /**
- * @summary Post a service request to the marketplace
+ * @summary Request service from the Casa Dossier team
  */
 export const getCreateMarketplaceJobUrl = () => {
   return `/api/marketplace/jobs`;
@@ -2523,7 +2847,7 @@ export type CreateMarketplaceJobMutationBody =
 export type CreateMarketplaceJobMutationError = ErrorType<unknown>;
 
 /**
- * @summary Post a service request to the marketplace
+ * @summary Request service from the Casa Dossier team
  */
 export const useCreateMarketplaceJob = <
   TError = ErrorType<unknown>,
@@ -3215,6 +3539,435 @@ export const useCompleteMarketplaceJob = <
   TContext
 > => {
   return useMutation(getCompleteMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary Homeowner cancels a service request (only before the technician sets off)
+ */
+export const getCancelMarketplaceJobUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/cancel`;
+};
+
+export const cancelMarketplaceJob = async (
+  jobId: string,
+  cancelJobBody?: CancelJobBody,
+  options?: RequestInit,
+): Promise<JobStatusResult> => {
+  return customFetch<JobStatusResult>(getCancelMarketplaceJobUrl(jobId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(cancelJobBody),
+  });
+};
+
+export const getCancelMarketplaceJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelMarketplaceJob>>,
+    TError,
+    { jobId: string; data: BodyType<CancelJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof cancelMarketplaceJob>>,
+  TError,
+  { jobId: string; data: BodyType<CancelJobBody> },
+  TContext
+> => {
+  const mutationKey = ["cancelMarketplaceJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof cancelMarketplaceJob>>,
+    { jobId: string; data: BodyType<CancelJobBody> }
+  > = (props) => {
+    const { jobId, data } = props ?? {};
+
+    return cancelMarketplaceJob(jobId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CancelMarketplaceJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof cancelMarketplaceJob>>
+>;
+export type CancelMarketplaceJobMutationBody = BodyType<CancelJobBody>;
+export type CancelMarketplaceJobMutationError = ErrorType<void>;
+
+/**
+ * @summary Homeowner cancels a service request (only before the technician sets off)
+ */
+export const useCancelMarketplaceJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof cancelMarketplaceJob>>,
+    TError,
+    { jobId: string; data: BodyType<CancelJobBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof cancelMarketplaceJob>>,
+  TError,
+  { jobId: string; data: BodyType<CancelJobBody> },
+  TContext
+> => {
+  return useMutation(getCancelMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary Technician releases an accepted job back to the open pool
+ */
+export const getReleaseMarketplaceJobUrl = (jobId: string) => {
+  return `/api/marketplace/jobs/${jobId}/release`;
+};
+
+export const releaseMarketplaceJob = async (
+  jobId: string,
+  options?: RequestInit,
+): Promise<JobStatusResult> => {
+  return customFetch<JobStatusResult>(getReleaseMarketplaceJobUrl(jobId), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getReleaseMarketplaceJobMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof releaseMarketplaceJob>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof releaseMarketplaceJob>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  const mutationKey = ["releaseMarketplaceJob"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof releaseMarketplaceJob>>,
+    { jobId: string }
+  > = (props) => {
+    const { jobId } = props ?? {};
+
+    return releaseMarketplaceJob(jobId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ReleaseMarketplaceJobMutationResult = NonNullable<
+  Awaited<ReturnType<typeof releaseMarketplaceJob>>
+>;
+
+export type ReleaseMarketplaceJobMutationError = ErrorType<void>;
+
+/**
+ * @summary Technician releases an accepted job back to the open pool
+ */
+export const useReleaseMarketplaceJob = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof releaseMarketplaceJob>>,
+    TError,
+    { jobId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof releaseMarketplaceJob>>,
+  TError,
+  { jobId: string },
+  TContext
+> => {
+  return useMutation(getReleaseMarketplaceJobMutationOptions(options));
+};
+
+/**
+ * @summary The CasaService service area (center and radius)
+ */
+export const getGetServiceAreaUrl = () => {
+  return `/api/service-area`;
+};
+
+export const getServiceArea = async (
+  options?: RequestInit,
+): Promise<ServiceArea> => {
+  return customFetch<ServiceArea>(getGetServiceAreaUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetServiceAreaQueryKey = () => {
+  return [`/api/service-area`] as const;
+};
+
+export const getGetServiceAreaQueryOptions = <
+  TData = Awaited<ReturnType<typeof getServiceArea>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getServiceArea>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetServiceAreaQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceArea>>> = ({
+    signal,
+  }) => getServiceArea({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getServiceArea>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetServiceAreaQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getServiceArea>>
+>;
+export type GetServiceAreaQueryError = ErrorType<unknown>;
+
+/**
+ * @summary The CasaService service area (center and radius)
+ */
+
+export function useGetServiceArea<
+  TData = Awaited<ReturnType<typeof getServiceArea>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getServiceArea>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetServiceAreaQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Whether CasaService can take requests for a property
+ */
+export const getCheckServiceAreaUrl = (params: CheckServiceAreaParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/service-area/check?${stringifiedParams}`
+    : `/api/service-area/check`;
+};
+
+export const checkServiceArea = async (
+  params: CheckServiceAreaParams,
+  options?: RequestInit,
+): Promise<ServiceAreaCheck> => {
+  return customFetch<ServiceAreaCheck>(getCheckServiceAreaUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getCheckServiceAreaQueryKey = (
+  params?: CheckServiceAreaParams,
+) => {
+  return [`/api/service-area/check`, ...(params ? [params] : [])] as const;
+};
+
+export const getCheckServiceAreaQueryOptions = <
+  TData = Awaited<ReturnType<typeof checkServiceArea>>,
+  TError = ErrorType<void>,
+>(
+  params: CheckServiceAreaParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkServiceArea>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getCheckServiceAreaQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof checkServiceArea>>
+  > = ({ signal }) => checkServiceArea(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof checkServiceArea>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type CheckServiceAreaQueryResult = NonNullable<
+  Awaited<ReturnType<typeof checkServiceArea>>
+>;
+export type CheckServiceAreaQueryError = ErrorType<void>;
+
+/**
+ * @summary Whether CasaService can take requests for a property
+ */
+
+export function useCheckServiceArea<
+  TData = Awaited<ReturnType<typeof checkServiceArea>>,
+  TError = ErrorType<void>,
+>(
+  params: CheckServiceAreaParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkServiceArea>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getCheckServiceAreaQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Join the waitlist for a property outside the service area
+ */
+export const getJoinServiceWaitlistUrl = () => {
+  return `/api/service-area/waitlist`;
+};
+
+export const joinServiceWaitlist = async (
+  joinServiceWaitlistBody: JoinServiceWaitlistBody,
+  options?: RequestInit,
+): Promise<JoinServiceWaitlistResult> => {
+  return customFetch<JoinServiceWaitlistResult>(getJoinServiceWaitlistUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(joinServiceWaitlistBody),
+  });
+};
+
+export const getJoinServiceWaitlistMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof joinServiceWaitlist>>,
+    TError,
+    { data: BodyType<JoinServiceWaitlistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof joinServiceWaitlist>>,
+  TError,
+  { data: BodyType<JoinServiceWaitlistBody> },
+  TContext
+> => {
+  const mutationKey = ["joinServiceWaitlist"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof joinServiceWaitlist>>,
+    { data: BodyType<JoinServiceWaitlistBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return joinServiceWaitlist(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type JoinServiceWaitlistMutationResult = NonNullable<
+  Awaited<ReturnType<typeof joinServiceWaitlist>>
+>;
+export type JoinServiceWaitlistMutationBody = BodyType<JoinServiceWaitlistBody>;
+export type JoinServiceWaitlistMutationError = ErrorType<void>;
+
+/**
+ * @summary Join the waitlist for a property outside the service area
+ */
+export const useJoinServiceWaitlist = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof joinServiceWaitlist>>,
+    TError,
+    { data: BodyType<JoinServiceWaitlistBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof joinServiceWaitlist>>,
+  TError,
+  { data: BodyType<JoinServiceWaitlistBody> },
+  TContext
+> => {
+  return useMutation(getJoinServiceWaitlistMutationOptions(options));
 };
 
 /**
@@ -4540,6 +5293,724 @@ export const useDeleteLockerFile = <
   TContext
 > => {
   return useMutation(getDeleteLockerFileMutationOptions(options));
+};
+
+/**
+ * @summary Existing history at this property's address left by a previous owner (owner only)
+ */
+export const getGetUnclaimedHistoryUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/unclaimed-history`;
+};
+
+export const getUnclaimedHistory = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<UnclaimedHistory> => {
+  return customFetch<UnclaimedHistory>(getGetUnclaimedHistoryUrl(propertyId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetUnclaimedHistoryQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/unclaimed-history`] as const;
+};
+
+export const getGetUnclaimedHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getUnclaimedHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUnclaimedHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetUnclaimedHistoryQueryKey(propertyId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getUnclaimedHistory>>
+  > = ({ signal }) =>
+    getUnclaimedHistory(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getUnclaimedHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetUnclaimedHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getUnclaimedHistory>>
+>;
+export type GetUnclaimedHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Existing history at this property's address left by a previous owner (owner only)
+ */
+
+export function useGetUnclaimedHistory<
+  TData = Awaited<ReturnType<typeof getUnclaimedHistory>>,
+  TError = ErrorType<unknown>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getUnclaimedHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetUnclaimedHistoryQueryOptions(propertyId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Claim a previous owner's history by uploading proof of ownership (owner only)
+ */
+export const getCreateOwnershipClaimUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/ownership-claims`;
+};
+
+export const createOwnershipClaim = async (
+  propertyId: string,
+  createOwnershipClaimBody: CreateOwnershipClaimBody,
+  options?: RequestInit,
+): Promise<OwnershipClaimSummary> => {
+  return customFetch<OwnershipClaimSummary>(
+    getCreateOwnershipClaimUrl(propertyId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(createOwnershipClaimBody),
+    },
+  );
+};
+
+export const getCreateOwnershipClaimMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOwnershipClaim>>,
+    TError,
+    { propertyId: string; data: BodyType<CreateOwnershipClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createOwnershipClaim>>,
+  TError,
+  { propertyId: string; data: BodyType<CreateOwnershipClaimBody> },
+  TContext
+> => {
+  const mutationKey = ["createOwnershipClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createOwnershipClaim>>,
+    { propertyId: string; data: BodyType<CreateOwnershipClaimBody> }
+  > = (props) => {
+    const { propertyId, data } = props ?? {};
+
+    return createOwnershipClaim(propertyId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateOwnershipClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createOwnershipClaim>>
+>;
+export type CreateOwnershipClaimMutationBody =
+  BodyType<CreateOwnershipClaimBody>;
+export type CreateOwnershipClaimMutationError = ErrorType<void>;
+
+/**
+ * @summary Claim a previous owner's history by uploading proof of ownership (owner only)
+ */
+export const useCreateOwnershipClaim = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createOwnershipClaim>>,
+    TError,
+    { propertyId: string; data: BodyType<CreateOwnershipClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createOwnershipClaim>>,
+  TError,
+  { propertyId: string; data: BodyType<CreateOwnershipClaimBody> },
+  TContext
+> => {
+  return useMutation(getCreateOwnershipClaimMutationOptions(options));
+};
+
+/**
+ * @summary Ownership claims awaiting or past review
+ */
+export const getListAdminOwnershipClaimsUrl = (
+  params?: ListAdminOwnershipClaimsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/ownership-claims?${stringifiedParams}`
+    : `/api/admin/ownership-claims`;
+};
+
+export const listAdminOwnershipClaims = async (
+  params?: ListAdminOwnershipClaimsParams,
+  options?: RequestInit,
+): Promise<AdminOwnershipClaim[]> => {
+  return customFetch<AdminOwnershipClaim[]>(
+    getListAdminOwnershipClaimsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getListAdminOwnershipClaimsQueryKey = (
+  params?: ListAdminOwnershipClaimsParams,
+) => {
+  return [`/api/admin/ownership-claims`, ...(params ? [params] : [])] as const;
+};
+
+export const getListAdminOwnershipClaimsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listAdminOwnershipClaims>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminOwnershipClaimsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminOwnershipClaims>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListAdminOwnershipClaimsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof listAdminOwnershipClaims>>
+  > = ({ signal }) =>
+    listAdminOwnershipClaims(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listAdminOwnershipClaims>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListAdminOwnershipClaimsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listAdminOwnershipClaims>>
+>;
+export type ListAdminOwnershipClaimsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Ownership claims awaiting or past review
+ */
+
+export function useListAdminOwnershipClaims<
+  TData = Awaited<ReturnType<typeof listAdminOwnershipClaims>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListAdminOwnershipClaimsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listAdminOwnershipClaims>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListAdminOwnershipClaimsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Approve a claim, move the history to the claimant's home, and delete the document
+ */
+export const getApproveOwnershipClaimUrl = (claimId: string) => {
+  return `/api/admin/ownership-claims/${claimId}/approve`;
+};
+
+export const approveOwnershipClaim = async (
+  claimId: string,
+  options?: RequestInit,
+): Promise<AdminOwnershipClaim> => {
+  return customFetch<AdminOwnershipClaim>(
+    getApproveOwnershipClaimUrl(claimId),
+    {
+      ...options,
+      method: "POST",
+    },
+  );
+};
+
+export const getApproveOwnershipClaimMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveOwnershipClaim>>,
+    TError,
+    { claimId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof approveOwnershipClaim>>,
+  TError,
+  { claimId: string },
+  TContext
+> => {
+  const mutationKey = ["approveOwnershipClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof approveOwnershipClaim>>,
+    { claimId: string }
+  > = (props) => {
+    const { claimId } = props ?? {};
+
+    return approveOwnershipClaim(claimId, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ApproveOwnershipClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof approveOwnershipClaim>>
+>;
+
+export type ApproveOwnershipClaimMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Approve a claim, move the history to the claimant's home, and delete the document
+ */
+export const useApproveOwnershipClaim = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof approveOwnershipClaim>>,
+    TError,
+    { claimId: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof approveOwnershipClaim>>,
+  TError,
+  { claimId: string },
+  TContext
+> => {
+  return useMutation(getApproveOwnershipClaimMutationOptions(options));
+};
+
+/**
+ * @summary Reject a claim with a reason and delete the document
+ */
+export const getRejectOwnershipClaimUrl = (claimId: string) => {
+  return `/api/admin/ownership-claims/${claimId}/reject`;
+};
+
+export const rejectOwnershipClaim = async (
+  claimId: string,
+  rejectOwnershipClaimBody: RejectOwnershipClaimBody,
+  options?: RequestInit,
+): Promise<AdminOwnershipClaim> => {
+  return customFetch<AdminOwnershipClaim>(getRejectOwnershipClaimUrl(claimId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(rejectOwnershipClaimBody),
+  });
+};
+
+export const getRejectOwnershipClaimMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectOwnershipClaim>>,
+    TError,
+    { claimId: string; data: BodyType<RejectOwnershipClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof rejectOwnershipClaim>>,
+  TError,
+  { claimId: string; data: BodyType<RejectOwnershipClaimBody> },
+  TContext
+> => {
+  const mutationKey = ["rejectOwnershipClaim"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof rejectOwnershipClaim>>,
+    { claimId: string; data: BodyType<RejectOwnershipClaimBody> }
+  > = (props) => {
+    const { claimId, data } = props ?? {};
+
+    return rejectOwnershipClaim(claimId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RejectOwnershipClaimMutationResult = NonNullable<
+  Awaited<ReturnType<typeof rejectOwnershipClaim>>
+>;
+export type RejectOwnershipClaimMutationBody =
+  BodyType<RejectOwnershipClaimBody>;
+export type RejectOwnershipClaimMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Reject a claim with a reason and delete the document
+ */
+export const useRejectOwnershipClaim = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof rejectOwnershipClaim>>,
+    TError,
+    { claimId: string; data: BodyType<RejectOwnershipClaimBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof rejectOwnershipClaim>>,
+  TError,
+  { claimId: string; data: BodyType<RejectOwnershipClaimBody> },
+  TContext
+> => {
+  return useMutation(getRejectOwnershipClaimMutationOptions(options));
+};
+
+/**
+ * @summary Reminder settings, plus homes shared with the user and whether they get reminders for each
+ */
+export const getGetNotificationPreferencesUrl = () => {
+  return `/api/user/notification-preferences`;
+};
+
+export const getNotificationPreferences = async (
+  options?: RequestInit,
+): Promise<NotificationPreferences> => {
+  return customFetch<NotificationPreferences>(
+    getGetNotificationPreferencesUrl(),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetNotificationPreferencesQueryKey = () => {
+  return [`/api/user/notification-preferences`] as const;
+};
+
+export const getGetNotificationPreferencesQueryOptions = <
+  TData = Awaited<ReturnType<typeof getNotificationPreferences>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetNotificationPreferencesQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getNotificationPreferences>>
+  > = ({ signal }) => getNotificationPreferences({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationPreferences>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetNotificationPreferencesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getNotificationPreferences>>
+>;
+export type GetNotificationPreferencesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Reminder settings, plus homes shared with the user and whether they get reminders for each
+ */
+
+export function useGetNotificationPreferences<
+  TData = Awaited<ReturnType<typeof getNotificationPreferences>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getNotificationPreferences>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetNotificationPreferencesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Turn reminder emails, push reminders or the weekly summary on or off
+ */
+export const getUpdateNotificationPreferencesUrl = () => {
+  return `/api/user/notification-preferences`;
+};
+
+export const updateNotificationPreferences = async (
+  updateNotificationPreferencesBody: UpdateNotificationPreferencesBody,
+  options?: RequestInit,
+): Promise<NotificationPreferences> => {
+  return customFetch<NotificationPreferences>(
+    getUpdateNotificationPreferencesUrl(),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(updateNotificationPreferencesBody),
+    },
+  );
+};
+
+export const getUpdateNotificationPreferencesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationPreferences>>,
+    TError,
+    { data: BodyType<UpdateNotificationPreferencesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateNotificationPreferences>>,
+  TError,
+  { data: BodyType<UpdateNotificationPreferencesBody> },
+  TContext
+> => {
+  const mutationKey = ["updateNotificationPreferences"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateNotificationPreferences>>,
+    { data: BodyType<UpdateNotificationPreferencesBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateNotificationPreferences(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateNotificationPreferencesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateNotificationPreferences>>
+>;
+export type UpdateNotificationPreferencesMutationBody =
+  BodyType<UpdateNotificationPreferencesBody>;
+export type UpdateNotificationPreferencesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Turn reminder emails, push reminders or the weekly summary on or off
+ */
+export const useUpdateNotificationPreferences = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateNotificationPreferences>>,
+    TError,
+    { data: BodyType<UpdateNotificationPreferencesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateNotificationPreferences>>,
+  TError,
+  { data: BodyType<UpdateNotificationPreferencesBody> },
+  TContext
+> => {
+  return useMutation(getUpdateNotificationPreferencesMutationOptions(options));
+};
+
+/**
+ * @summary Collaborator opts in or out of maintenance reminders for a shared home
+ */
+export const getSetReminderSubscriptionUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/reminder-subscription`;
+};
+
+export const setReminderSubscription = async (
+  propertyId: string,
+  reminderSubscriptionBody: ReminderSubscriptionBody,
+  options?: RequestInit,
+): Promise<NotificationPreferences> => {
+  return customFetch<NotificationPreferences>(
+    getSetReminderSubscriptionUrl(propertyId),
+    {
+      ...options,
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(reminderSubscriptionBody),
+    },
+  );
+};
+
+export const getSetReminderSubscriptionMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setReminderSubscription>>,
+    TError,
+    { propertyId: string; data: BodyType<ReminderSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setReminderSubscription>>,
+  TError,
+  { propertyId: string; data: BodyType<ReminderSubscriptionBody> },
+  TContext
+> => {
+  const mutationKey = ["setReminderSubscription"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setReminderSubscription>>,
+    { propertyId: string; data: BodyType<ReminderSubscriptionBody> }
+  > = (props) => {
+    const { propertyId, data } = props ?? {};
+
+    return setReminderSubscription(propertyId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetReminderSubscriptionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setReminderSubscription>>
+>;
+export type SetReminderSubscriptionMutationBody =
+  BodyType<ReminderSubscriptionBody>;
+export type SetReminderSubscriptionMutationError = ErrorType<void>;
+
+/**
+ * @summary Collaborator opts in or out of maintenance reminders for a shared home
+ */
+export const useSetReminderSubscription = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setReminderSubscription>>,
+    TError,
+    { propertyId: string; data: BodyType<ReminderSubscriptionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setReminderSubscription>>,
+  TError,
+  { propertyId: string; data: BodyType<ReminderSubscriptionBody> },
+  TContext
+> => {
+  return useMutation(getSetReminderSubscriptionMutationOptions(options));
 };
 
 /**
@@ -6451,6 +7922,181 @@ export function useGetInvestmentLedger<
     params,
     options,
   );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Email the property report as a PDF from Casa Dossier to up to 5 addresses
+ */
+export const getEmailPropertyReportUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/report/email`;
+};
+
+export const emailPropertyReport = async (
+  propertyId: string,
+  emailPropertyReportBody: EmailPropertyReportBody,
+  options?: RequestInit,
+): Promise<ReportSendResult> => {
+  return customFetch<ReportSendResult>(getEmailPropertyReportUrl(propertyId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(emailPropertyReportBody),
+  });
+};
+
+export const getEmailPropertyReportMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof emailPropertyReport>>,
+    TError,
+    { propertyId: string; data: BodyType<EmailPropertyReportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof emailPropertyReport>>,
+  TError,
+  { propertyId: string; data: BodyType<EmailPropertyReportBody> },
+  TContext
+> => {
+  const mutationKey = ["emailPropertyReport"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof emailPropertyReport>>,
+    { propertyId: string; data: BodyType<EmailPropertyReportBody> }
+  > = (props) => {
+    const { propertyId, data } = props ?? {};
+
+    return emailPropertyReport(propertyId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EmailPropertyReportMutationResult = NonNullable<
+  Awaited<ReturnType<typeof emailPropertyReport>>
+>;
+export type EmailPropertyReportMutationBody = BodyType<EmailPropertyReportBody>;
+export type EmailPropertyReportMutationError = ErrorType<void>;
+
+/**
+ * @summary Email the property report as a PDF from Casa Dossier to up to 5 addresses
+ */
+export const useEmailPropertyReport = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof emailPropertyReport>>,
+    TError,
+    { propertyId: string; data: BodyType<EmailPropertyReportBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof emailPropertyReport>>,
+  TError,
+  { propertyId: string; data: BodyType<EmailPropertyReportBody> },
+  TContext
+> => {
+  return useMutation(getEmailPropertyReportMutationOptions(options));
+};
+
+/**
+ * @summary Who the report was emailed to, newest first
+ */
+export const getListReportSendsUrl = (propertyId: string) => {
+  return `/api/properties/${propertyId}/report/sends`;
+};
+
+export const listReportSends = async (
+  propertyId: string,
+  options?: RequestInit,
+): Promise<ReportSend[]> => {
+  return customFetch<ReportSend[]>(getListReportSendsUrl(propertyId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListReportSendsQueryKey = (propertyId: string) => {
+  return [`/api/properties/${propertyId}/report/sends`] as const;
+};
+
+export const getListReportSendsQueryOptions = <
+  TData = Awaited<ReturnType<typeof listReportSends>>,
+  TError = ErrorType<unknown>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReportSends>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getListReportSendsQueryKey(propertyId);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listReportSends>>> = ({
+    signal,
+  }) => listReportSends(propertyId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!propertyId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof listReportSends>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListReportSendsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listReportSends>>
+>;
+export type ListReportSendsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Who the report was emailed to, newest first
+ */
+
+export function useListReportSends<
+  TData = Awaited<ReturnType<typeof listReportSends>>,
+  TError = ErrorType<unknown>,
+>(
+  propertyId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listReportSends>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListReportSendsQueryOptions(propertyId, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

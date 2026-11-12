@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   updateAsset,
+  deleteAsset,
   getGetAssetQueryKey,
   getListAssetsQueryKey,
   getGetPropertySummaryQueryKey,
@@ -23,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/field-error";
 import { AssetPhotoField } from "@/components/edit-asset/asset-photo-field";
-import { RetireAssetDialog } from "@/components/edit-asset/retire-asset-dialog";
+import { RetireAssetDialog, type RetireDetails } from "@/components/edit-asset/retire-asset-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -44,7 +45,12 @@ import {
   ShieldCheck,
   Archive,
   ArchiveRestore,
+  Trash2,
 } from "lucide-react";
+
+// Matches the server: owners can remove an asset added by mistake within 7 days
+// (and only if it has no history); everything else is retired.
+const MISTAKE_REMOVAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const CATEGORIES = [
   "HVAC",
@@ -81,6 +87,7 @@ type Asset = {
   warrantyExpiry?: string | null;
   notes?: string | null;
   status?: string | null;
+  createdAt?: string | Date | null;
   retiredAt?: string | Date | null;
   photoUrl?: string | null;
 };
@@ -90,9 +97,13 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved?: (updated: ApiAsset) => void;
+  // Called after retiring with reason "replaced", to add the replacement.
+  onReplace?: (retired: ApiAsset) => void;
+  // Called after the asset is removed as added-by-mistake.
+  onRemoved?: () => void;
 };
 
-export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
+export function EditAssetSheet({ asset, open, onOpenChange, onSaved, onReplace, onRemoved }: Props) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -117,6 +128,9 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
   const [uploading, setUploading] = useState(false);
 
   const isRetired = !!asset?.retiredAt;
+  const canRemoveAsMistake =
+    !isRetired && !!asset?.createdAt &&
+    Date.now() - new Date(asset.createdAt).getTime() < MISTAKE_REMOVAL_WINDOW_MS;
 
   useEffect(() => {
     if (!asset) return;
@@ -206,15 +220,19 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     }
   }
 
-  async function handleRetire() {
-    if (!asset) return;
+  async function handleRetire(details?: RetireDetails) {
+    if (!asset || !details) return;
     setBusy(true);
     try {
-      const updated = await updateAsset(asset.id, { retiredAt: new Date().toISOString() });
+      const updated = await updateAsset(asset.id, {
+        retiredAt: new Date(`${details.date}T12:00:00`).toISOString(),
+        retiredReason: details.reason,
+      });
       toast({ title: t("editAsset.toast.retired"), description: t("editAsset.toast.retiredDesc", { name: asset.name }) });
       invalidateAssetQueries();
       onSaved?.(updated);
       onOpenChange(false);
+      if (details.reason === "replaced") onReplace?.(updated);
     } catch {
       toast({ title: t("editAsset.toast.retireFailed"), variant: "destructive" });
     } finally {
@@ -240,6 +258,24 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
     }
   }
 
+  async function handleRemoveAsMistake() {
+    if (!asset || !window.confirm(t("editAsset.removeMistake.confirm", { name: asset.name }))) return;
+    setBusy(true);
+    try {
+      await deleteAsset(asset.id);
+      toast({ title: t("editAsset.removeMistake.done", { name: asset.name }) });
+      invalidateAssetQueries();
+      onOpenChange(false);
+      onRemoved?.();
+    } catch (err) {
+      // 409: it has history or is older than 7 days — the server explains.
+      const message = (err as { data?: { error?: string } })?.data?.error;
+      toast({ title: t("editAsset.removeMistake.failed"), description: message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -262,6 +298,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
           )}
 
           <div className="space-y-4">
+            <fieldset disabled={isRetired} className="space-y-4 disabled:opacity-60">
             {/* Photo */}
             <AssetPhotoField
               photoPreview={photoPreview}
@@ -409,7 +446,10 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
               />
             </div>
 
-            {/* Save */}
+            </fieldset>
+
+            {/* Save (retired assets are read-only until reactivated) */}
+            {!isRetired && (
             <div className="pt-2">
               <Button
                 className="w-full gap-2"
@@ -427,6 +467,7 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
                 )}
               </Button>
             </div>
+            )}
 
             {/* Retire / Unretire */}
             <div className="pt-1 border-t">
@@ -449,6 +490,18 @@ export function EditAssetSheet({ asset, open, onOpenChange, onSaved }: Props) {
                 >
                   <Archive className="h-4 w-4" />
                   {t("editAsset.retireCta")}
+                </Button>
+              )}
+              {canRemoveAsMistake && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full gap-2 mt-1 text-xs text-muted-foreground hover:text-destructive"
+                  onClick={handleRemoveAsMistake}
+                  disabled={busy}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {t("editAsset.removeMistake.cta")}
                 </Button>
               )}
             </div>

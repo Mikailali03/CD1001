@@ -25,10 +25,15 @@ import lockerRouter from "./locker";
 import pushTokensRouter from "./push-tokens";
 import internalRouter from "./internal";
 import qrRouter from "./qr";
+import ownershipClaimsRouter from "./ownership-claims";
+import notificationsRouter from "./notifications";
+import starterAssetsRouter from "./starter-assets";
+import mapTilesRouter from "./map-tiles";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(mapTilesRouter);
 router.use(storageRouter);
 router.use(subscriptionRouter);
 router.use(stripeCheckoutRouter);
@@ -42,6 +47,7 @@ router.use(inboxRouter);
 router.use(collaboratorsRouter);
 router.use(propertiesRouter);
 router.use(assetsRouter);
+router.use(starterAssetsRouter);
 router.use(serviceRecordsRouter);
 router.use(maintenanceRouter);
 router.use(guidesRouter);
@@ -54,5 +60,7 @@ router.use(lockerRouter);
 router.use(pushTokensRouter);
 router.use(internalRouter);
 router.use(qrRouter);
+router.use(ownershipClaimsRouter);
+router.use(notificationsRouter);
 
 export default router;

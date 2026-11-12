@@ -10,11 +10,11 @@ import { ClerkProvider, ClerkLoaded, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRootNavigationState, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import * as Notifications from "expo-notifications";
 import React, { useEffect, useLayoutEffect, useRef } from "react";
-import { Alert, AppState } from "react-native";
+import { Alert, AppState, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
@@ -31,6 +31,7 @@ import {
 } from "@/lib/notifications";
 import { RoleRoutingGate } from "@/components/tech/RoleGuard";
 import { useNotificationNavigator } from "@/hooks/useNotificationNavigator";
+import { useNotificationResponse } from "@/hooks/useNotificationResponse";
 
 if (API_BASE_URL) {
   setBaseUrl(API_BASE_URL);
@@ -39,7 +40,7 @@ if (API_BASE_URL) {
 SplashScreen.preventAutoHideAsync();
 
 // Show notifications when app is in foreground
-Notifications.setNotificationHandler({
+if (Platform.OS !== "web") Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldPlaySound: true,
@@ -54,8 +55,9 @@ function AuthGate() {
   const { isSignedIn, isLoaded, getToken, userId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const navigationState = useRootNavigationState();
   const notifSynced = useRef(false);
-  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  const lastNotificationResponse = useNotificationResponse();
   const handledResponseId = useRef<string | null>(null);
   // Role-aware: technicians only open their own jobs, in the technician app
   const openNotification = useNotificationNavigator();
@@ -72,14 +74,14 @@ function AuthGate() {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !navigationState?.key) return;
     const inSignIn = segments[0] === "sign-in";
     if (!isSignedIn && !inSignIn) {
       router.replace("/sign-in");
     } else if (isSignedIn && inSignIn) {
       router.replace("/(tabs)");
     }
-  }, [isSignedIn, isLoaded, segments]);
+  }, [isSignedIn, isLoaded, segments, navigationState?.key, router]);
 
   // On sign-in: sync if already allowed; otherwise explain once, then ask
   useEffect(() => {
@@ -136,7 +138,7 @@ function AuthGate() {
 
   // Notification taps (including the one that cold-started the app) open the related screen
   useEffect(() => {
-    if (!isLoaded || !isSignedIn || !lastNotificationResponse) return;
+    if (!navigationState?.key || !isLoaded || !isSignedIn || !lastNotificationResponse) return;
     if (lastNotificationResponse.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
     const id = lastNotificationResponse.notification.request.identifier;
     if (handledResponseId.current === id) return;
@@ -144,7 +146,7 @@ function AuthGate() {
     void openNotification(
       lastNotificationResponse.notification.request.content.data as Record<string, unknown> | undefined,
     );
-  }, [lastNotificationResponse, isLoaded, isSignedIn]);
+  }, [lastNotificationResponse, isLoaded, isSignedIn, navigationState?.key, openNotification]);
 
   return (
     <RoleRoutingGate>

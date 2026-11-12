@@ -47,7 +47,7 @@ const PLANS: Plan[] = [
     color: "text-muted-foreground",
     borderColor: "border-border",
     paid: false,
-    features: ["oneProperty", "oneFreeScan", "manualTasks", "assetTracking", "serviceLog", "diyGuides"],
+    features: ["oneProperty", "fiveFreeScans", "fiveFreePlans", "manualTasks", "assetTracking", "serviceLog", "diyGuides"],
   },
   {
     id: "basic",
@@ -58,7 +58,7 @@ const PLANS: Plan[] = [
     borderColor: "border-emerald-200 dark:border-emerald-800",
     badge: "mostPopular",
     paid: true,
-    features: ["oneProperty", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "healthScoring", "fullHistory"],
+    features: ["oneProperty", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "healthScoring", "collaborators", "fullHistory"],
   },
   {
     id: "managed",
@@ -69,7 +69,7 @@ const PLANS: Plan[] = [
     borderColor: "border-blue-200 dark:border-blue-800",
     badge: "forLandlords",
     paid: true,
-    features: ["upToFive", "proOnboarding", "filterDelivery", "fifteenOff", "oneCredit", "inspection"],
+    features: ["upToFive", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "collaborators"],
   },
   {
     id: "concierge",
@@ -80,9 +80,13 @@ const PLANS: Plan[] = [
     borderColor: "border-amber-200 dark:border-amber-800",
     badge: "bestValue",
     paid: true,
-    features: ["unlimitedProperties", "prioritySupport", "twentyFiveOff", "fourCredits", "advisor"],
+    features: ["unlimitedProperties", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "collaborators"],
   },
 ];
+
+// Managed and Concierge are hidden until their offerings are finalised. They stay
+// visible only to someone already on them, so they can see and manage their plan.
+const HIDDEN_PLANS: SubscriptionTier[] = ["managed", "concierge"];
 
 export function UpgradeModal() {
   const { subscription, upgradeModalOpen, closeUpgradeModal, downgradeToFree, startCheckout, openBillingPortal } = useSubscription();
@@ -92,6 +96,7 @@ export function UpgradeModal() {
   const [portalLoading, setPortalLoading] = useState(false);
 
   const currentTier = subscription?.tier ?? "essential";
+  const visiblePlans = PLANS.filter((p) => !HIDDEN_PLANS.includes(p.id) || p.id === currentTier);
   const hasStripeSubscription = Boolean(subscription?.stripeSubscriptionId);
 
   async function handleAction(plan: Plan) {
@@ -147,8 +152,8 @@ export function UpgradeModal() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-2">
-          {PLANS.map((plan) => {
+        <div className={`grid gap-4 sm:grid-cols-2 mt-2 ${visiblePlans.length > 2 ? "lg:grid-cols-3" : "max-w-2xl mx-auto w-full"}`}>
+          {visiblePlans.map((plan) => {
             const isCurrent = plan.id === currentTier;
             const isDowngrade = TIER_RANK[plan.id] < TIER_RANK[currentTier];
             const isUpgrade = TIER_RANK[plan.id] > TIER_RANK[currentTier];

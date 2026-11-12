@@ -31,6 +31,7 @@ import Settings from "@/pages/settings";
 import ClaimTransfer from "@/pages/claim";
 import PropertyReport from "@/pages/report";
 import AdminDashboard from "@/pages/admin-dashboard";
+import { PrivacyPolicy, TermsOfService } from "@/pages/legal";
 import NotFound from "@/pages/not-found";
 import AssetLabels from "@/pages/asset-labels";
 import AssetRedirect from "@/pages/asset-redirect";
@@ -44,8 +45,8 @@ const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string;
 // Only set in production (auto-injected when published), empty in dev
 const clerkProxyUrl = import.meta.env.VITE_CLERK_PROXY_URL || undefined;
 
-const DEMO_TOKEN =
-  (import.meta.env.VITE_DEMO_TOKEN as string | undefined) || "casa-demo-preview-2025";
+// Demo mode is off unless VITE_DEMO_TOKEN is set (it must match the API's DEMO_TOKEN).
+const DEMO_TOKEN = (import.meta.env.VITE_DEMO_TOKEN as string | undefined) || "";
 
 function stripBase(path: string): string {
   return basePath && path.startsWith(basePath)
@@ -479,8 +480,10 @@ function ClerkProviderWithRoutes() {
             <Route path="/" component={HomeRedirect} />
             <Route path="/sign-in/*?" component={SignInPage} />
             <Route path="/sign-up/*?" component={SignUpPage} />
+            <Route path="/privacy" component={PrivacyPolicy} />
+            <Route path="/terms" component={TermsOfService} />
             {/* Demo route — public, no Clerk auth required */}
-            <Route path="/demo/*?" component={DemoApp} />
+            {DEMO_TOKEN && <Route path="/demo/*?" component={DemoApp} />}
             {/* QR Identity Protocol: public scan landing + full-page printable labels (outside AppLayout so print isn't clipped) */}
             <Route path="/a/:assetId" component={AssetRedirect} />
             <Route path="/properties/:id/labels">

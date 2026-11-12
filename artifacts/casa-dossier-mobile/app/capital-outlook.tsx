@@ -33,6 +33,8 @@ type AssetOutlook = {
   model: string | null;
   installYear: number | null;
   replacementCost: number | null;
+  /** True when replacementCost is Casa Dossier's regional estimate. */
+  replacementCostIsEstimate: boolean;
   expectedLifespanYears: number;
   replacementYear: number | null;
   yearsRemaining: number | null;
@@ -48,10 +50,11 @@ type TimelineEntry = {
 
 type CapitalOutlookData = {
   totalTrackedValue: number;
+  estimatedTrackedValue: number;
   assets: AssetOutlook[];
   timeline: TimelineEntry[];
   summary: {
-    nextReplacement: { name: string; year: number; cost: number } | null;
+    nextReplacement: { name: string; year: number; cost: number; costIsEstimate: boolean } | null;
     next5YearCost: number;
     next10YearCost: number;
   };
@@ -249,6 +252,11 @@ export default function CapitalOutlookScreen() {
               </Text>
             </View>
           </View>
+          {data.estimatedTrackedValue > 0 && (
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: -4, marginBottom: 12 }}>
+              {t("capitalOutlook.estimatesNote", { amount: fmt(data.estimatedTrackedValue) })}
+            </Text>
+          )}
 
           {/* Next replacement alert */}
           {data.summary.nextReplacement && (
@@ -274,13 +282,13 @@ export default function CapitalOutlookScreen() {
                   />
                 </Text>
                 <Text style={[styles.alertSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {data.summary.nextReplacement.year - currentYear <= 0
-                    ? t("capitalOutlook.nextOverdue", { year: data.summary.nextReplacement.year, cost: fmt(data.summary.nextReplacement.cost) })
-                    : t("capitalOutlook.nextIn", {
-                        year: data.summary.nextReplacement.year,
-                        count: data.summary.nextReplacement.year - currentYear,
-                        cost: fmt(data.summary.nextReplacement.cost),
-                      })}
+                  {(() => {
+                    const next = data.summary.nextReplacement;
+                    const cost = next.costIsEstimate ? t("common.estimatedAmount", { amount: fmt(next.cost) }) : fmt(next.cost);
+                    return next.year - currentYear <= 0
+                      ? t("capitalOutlook.nextOverdue", { year: next.year, cost })
+                      : t("capitalOutlook.nextIn", { year: next.year, count: next.year - currentYear, cost });
+                  })()}
                 </Text>
               </View>
               <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
@@ -396,7 +404,11 @@ export default function CapitalOutlookScreen() {
                     <View style={[styles.statCell, { borderLeftWidth: 1, borderLeftColor: colors.border }]}>
                       <Text style={[styles.statLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>{t("capitalOutlook.estCost")}</Text>
                       <Text style={[styles.statValue, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
-                        {asset.replacementCost != null ? fmt(asset.replacementCost) : "—"}
+                        {asset.replacementCost != null
+                          ? asset.replacementCostIsEstimate
+                            ? t("common.estimatedAmount", { amount: fmt(asset.replacementCost) })
+                            : fmt(asset.replacementCost)
+                          : "—"}
                       </Text>
                     </View>
                   </View>

@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOwnedProperty, getVerifiedEmail } from "../lib/access.js";
 import { sendCollaboratorInviteEmail } from "../lib/email.js";
+import { tierAtLeast } from "../lib/subscription.js";
 import { z } from "zod/v4";
 
 const router = Router();
@@ -12,15 +13,14 @@ const router = Router();
 const PropertyParams = z.object({ propertyId: z.string() });
 const CollaboratorParams = z.object({ propertyId: z.string(), collaboratorId: z.string() });
 
-const MANAGED_TIERS = ["managed", "concierge"];
-
-async function requireManagedTier(userId: string): Promise<boolean> {
+// Collaborators are a Basic feature (moved from Managed while the higher plans are hidden).
+async function hasCollaboratorAccess(userId: string): Promise<boolean> {
   const [sub] = await db
-    .select()
+    .select({ tier: subscriptionsTable.tier })
     .from(subscriptionsTable)
     .where(eq(subscriptionsTable.userId, userId))
     .limit(1);
-  return sub ? MANAGED_TIERS.includes(sub.tier) : false;
+  return tierAtLeast(sub?.tier, "basic");
 }
 
 router.get("/properties/:propertyId/collaborators", requireAuth(), async (req, res) => {
@@ -54,9 +54,8 @@ router.post("/properties/:propertyId/collaborators", requireAuth(), async (req, 
     return;
   }
 
-  const isManagedPlus = await requireManagedTier(userId);
-  if (!isManagedPlus) {
-    res.status(403).json({ error: "Collaborators require a Managed or Concierge plan." });
+  if (!(await hasCollaboratorAccess(userId))) {
+    res.status(403).json({ error: "Collaborators require the Basic plan." });
     return;
   }
 

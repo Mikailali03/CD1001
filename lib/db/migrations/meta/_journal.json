@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794447151376,
+      "tag": "0000_baseline",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794447256314,
+      "tag": "0001_record_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794448279013,
+      "tag": "0002_unclaimed_dossiers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794448673067,
+      "tag": "0003_locker_documents_follow_home",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794449664621,
+      "tag": "0004_notifications_and_report_sends",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794451764758,
+      "tag": "0005_phase2_3_4",
+      "breakpoints": true
+    }
+  ]
+}

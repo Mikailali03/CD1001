@@ -7,6 +7,8 @@ import {
   useAcceptMarketplaceJob,
   useGetUserProfile,
   getGetUserProfileQueryKey,
+  useGetServiceArea,
+  type ServiceArea,
   getGetMarketplaceJobDetailsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -38,13 +40,22 @@ import {
   DollarSign,
 } from "lucide-react";
 
-// ── Service area ──────────────────────────────────────────────────────────────
-const ATLANTA_LAT = 33.749;
-const ATLANTA_LNG = -84.388;
-const SERVICE_RADIUS_MILES = 50;
+// Consecutive tile failures before the "map couldn't load" warning shows.
+const TILE_ERRORS_BEFORE_WARNING = 5;
 
-// Georgia map bounds (sw, ne corners)
-const GEORGIA_BOUNDS: L.LatLngBoundsExpression = [[30.3, -87.0], [35.2, -80.8]];
+// ── Service area ──────────────────────────────────────────────────────────────
+// The center and radius come from GET /service-area (the server's SERVICE_AREA
+// setting), so moving or growing the area doesn't need a portal release.
+
+// Keep panning to a box around the service area: the radius plus half again.
+function boundsForArea(area: ServiceArea): L.LatLngBoundsExpression {
+  const latPad = (area.radiusMiles * 1.5) / 69;
+  const lngPad = latPad / Math.max(0.2, Math.cos((area.centerLat * Math.PI) / 180));
+  return [
+    [area.centerLat - latPad, area.centerLng - lngPad],
+    [area.centerLat + latPad, area.centerLng + lngPad],
+  ];
+}
 
 function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 3958.8;
@@ -99,17 +110,21 @@ function createUrgencyIcon(urgency: string) {
 }
 
 export default function MapPage() {
+  const [mapError, setMapError] = useState(false);
   const { signOut } = useAuth();
   const { user } = useUser();
   const { data: rawJobs = [], isLoading: jobsLoading } = useListOpenMarketplaceJobs();
+  const { data: area, isLoading: areaLoading } = useGetServiceArea();
 
-  // Only show jobs within 50 miles of Atlanta
-  const jobs = rawJobs.filter(
-    (j) =>
-      j.latitude != null &&
-      j.longitude != null &&
-      distanceMiles(ATLANTA_LAT, ATLANTA_LNG, j.latitude!, j.longitude!) <= SERVICE_RADIUS_MILES,
-  );
+  // Only show jobs inside the service area
+  const jobs = area
+    ? rawJobs.filter(
+        (j) =>
+          j.latitude != null &&
+          j.longitude != null &&
+          distanceMiles(area.centerLat, area.centerLng, j.latitude!, j.longitude!) <= area.radiusMiles,
+      )
+    : [];
   const { data: profile } = useGetUserProfile({ query: { queryKey: getGetUserProfileQueryKey(), retry: false } });
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -140,25 +155,38 @@ export default function MapPage() {
   });
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current || mapInstanceRef.current || !area) return;
     const map = L.map(mapRef.current, {
-      center: [ATLANTA_LAT, ATLANTA_LNG],
+      center: [area.centerLat, area.centerLng],
       zoom: 10,
-      maxBounds: GEORGIA_BOUNDS,
+      maxBounds: boundsForArea(area),
       maxBoundsViscosity: 0.85,
       minZoom: 8,
     });
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    // One slow or failed tile at the edge isn't "the map failed": only warn
+    // after several failures in a row, and clear the warning once tiles load.
+    let consecutiveTileErrors = 0;
+    L.tileLayer("/api/maps/tiles/{z}/{x}/{y}", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd",
+      minZoom: 8,
+      maxNativeZoom: 18,
       maxZoom: 20,
-    }).addTo(map);
+    })
+      .on("tileerror", () => {
+        consecutiveTileErrors += 1;
+        if (consecutiveTileErrors >= TILE_ERRORS_BEFORE_WARNING) setMapError(true);
+      })
+      .on("tileload", () => {
+        consecutiveTileErrors = 0;
+        setMapError(false);
+      })
+      .addTo(map);
     mapInstanceRef.current = map;
     return () => {
       map.remove();
       mapInstanceRef.current = null;
     };
-  }, []);
+  }, [area]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -167,7 +195,7 @@ export default function MapPage() {
     markersRef.current.forEach((m) => m.remove());
     markersRef.current.clear();
 
-    // jobs are already filtered to within 50 miles of Atlanta
+    // jobs are already filtered to the service area
     jobs.forEach((job) => {
       const marker = L.marker([job.latitude!, job.longitude!], {
         icon: createUrgencyIcon(job.urgency),
@@ -257,7 +285,7 @@ export default function MapPage() {
             </h2>
           </div>
           <ScrollArea className="flex-1">
-            {jobsLoading ? (
+            {jobsLoading || areaLoading ? (
               <div className="p-3 space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Skeleton key={i} className="h-24 rounded-lg" />
@@ -266,7 +294,7 @@ export default function MapPage() {
             ) : jobs.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-center px-6">
                 <CheckCircle2 className="h-8 w-8 text-muted-foreground/40 mb-2" />
-                <p className="text-sm text-muted-foreground">No open jobs in the Atlanta area.</p>
+                <p className="text-sm text-muted-foreground">No open jobs in the {area?.name ?? "service area"}.</p>
                 <p className="text-xs text-muted-foreground/70 mt-1">Check back soon!</p>
               </div>
             ) : (
@@ -303,8 +331,16 @@ export default function MapPage() {
         {/* Map */}
         <div className="flex-1 relative">
           <div ref={mapRef} className="absolute inset-0" />
+          {mapError && (
+            <div role="alert" className="absolute top-4 left-16 right-4 z-10 rounded-lg border border-destructive/30 bg-card p-3 text-sm shadow-sm">
+              <p>Map tiles could not load. Job listings are still available.</p>
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => window.location.reload()}>
+                Reload map
+              </Button>
+            </div>
+          )}
           <div className="absolute bottom-4 right-4 bg-card/90 border border-border rounded-lg px-3 py-1.5 text-[11px] text-muted-foreground shadow-sm z-10 pointer-events-none">
-            Atlanta metro · 50-mile radius
+            {area ? `${area.name} · ${area.radiusMiles}-mile radius` : "Loading service area…"}
           </div>
         </div>
       </div>
@@ -446,9 +482,9 @@ export default function MapPage() {
 
               {/* Accept / Already accepted footer */}
               <div className="px-6 pb-6 pt-2 border-t border-border mt-2">
-                {!profile?.role || profile.role !== "technician" ? (
+                {profile?.role !== "technician" && profile?.role !== "admin" ? (
                   <div className="text-center text-sm text-muted-foreground">
-                    <p>Complete your <Link href="/profile" className="text-primary underline">technician profile</Link> to accept jobs.</p>
+                    <p>Only CasaService technicians can accept jobs. Access is granted by the Casa Dossier team.</p>
                   </div>
                 ) : isMine ? (
                   <div className="flex items-center gap-2 text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">

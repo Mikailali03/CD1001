@@ -9,7 +9,7 @@ import {
   useListMaintenanceTasks,
   getListMaintenanceTasksQueryKey,
 } from "@workspace/api-client-react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Archive, QrCode, Wrench } from "lucide-react";
@@ -22,6 +22,7 @@ import { ServiceHistoryCard } from "@/components/asset-detail/service-history-ca
 
 export default function AssetDetail() {
   const { propertyId: routePropertyId, assetId } = useParams<{ propertyId: string; assetId: string }>();
+  const [, setLocation] = useLocation();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -164,6 +165,8 @@ export default function AssetDetail() {
         open={editOpen}
         onOpenChange={setEditOpen}
         onSaved={() => queryClient.invalidateQueries({ queryKey: getGetAssetQueryKey(assetId!) })}
+        onReplace={() => setLocation(`/properties/${propertyId}?addAsset=1`)}
+        onRemoved={() => setLocation(`/properties/${propertyId}`)}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import { db, jobRunsTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
 import { logger } from "./logger.js";
-import { sendMaintenanceReminders } from "./maintenanceReminders.js";
+import { sendMaintenanceNotifications } from "./maintenanceNotifications.js";
 import { sendMonthlyTips } from "./monthlyTips.js";
 
 // Schedules are expressed in this timezone rather than the server's (UTC on
@@ -53,9 +53,9 @@ async function runOnce(job: string, runKey: string, fn: () => Promise<void>): Pr
  */
 export async function runScheduledJobs(): Promise<void> {
   const now = localNow();
-  if (now.hour >= 8) {
-    await runOnce("maintenance-reminders", now.date, sendMaintenanceReminders);
-  }
+  // Reminders follow each home's own 8am and dedupe per send in
+  // notification_log, so they run on every tick.
+  await sendMaintenanceNotifications();
   // First few days of the month, so a sleeping server doesn't skip a month.
   if (now.day <= 3 && now.hour >= 9) {
     await runOnce("monthly-tips", now.month, sendMonthlyTips);

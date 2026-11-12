@@ -26,6 +26,9 @@ import { useColors } from "@/hooks/useColors";
 import { MaintenanceInbox } from "@/components/MaintenanceInbox";
 import { HealthScoreModal } from "@/components/HealthScoreModal";
 import { PendingInvitesSheet, type Inbox } from "@/components/PendingInvitesSheet";
+import { UnclaimedHistoryBanner } from "@/components/home/UnclaimedHistoryBanner";
+import { StarterAssetsBanner } from "@/components/home/StarterAssetsBanner";
+import { useAuth } from "@clerk/expo";
 import { EmptyState } from "@/components/EmptyState";
 import { ActiveServiceRequests } from "@/components/home/ActiveServiceRequests";
 import { ActivityRow } from "@/components/home/ActivityRow";
@@ -49,6 +52,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const { userId } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [healthModalOpen, setHealthModalOpen] = useState(false);
   const [invitesSheetOpen, setInvitesSheetOpen] = useState(false);
@@ -248,6 +252,18 @@ export default function HomeScreen() {
           />
         )}
 
+        {/* History left by a previous owner at this address */}
+        {selectedProperty && <UnclaimedHistoryBanner propertyId={selectedProperty.id} colors={colors} />}
+
+        {/* Starter checklist for a home with nothing tracked yet */}
+        {selectedProperty && (
+          <StarterAssetsBanner
+            propertyId={selectedProperty.id}
+            isOwner={!!userId && (selectedProperty as { userId?: string | null }).userId === userId}
+            colors={colors}
+          />
+        )}
+
         {/* Active service requests */}
         <ActiveServiceRequests
           colors={colors}
@@ -337,6 +353,7 @@ export default function HomeScreen() {
                 description={record.description}
                 assetName={record.assetName}
                 companyName={record.companyName ?? record.technicianName}
+                verified={record.verified}
                 date={record.date}
                 colors={colors}
               />

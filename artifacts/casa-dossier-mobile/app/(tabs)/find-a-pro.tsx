@@ -18,6 +18,9 @@ import {
   getListAssetsQueryKey,
   useCreateMarketplaceJob,
   getListMarketplaceJobsQueryKey,
+  useCheckServiceArea,
+  getCheckServiceAreaQueryKey,
+  useJoinServiceWaitlist,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
@@ -32,15 +35,6 @@ const URGENCY_OPTIONS = [
   { value: "high",      color: "#ea580c" },
   { value: "emergency", color: "#dc2626" },
 ] as const;
-
-const ATLANTA_PREFIXES = ["300", "301", "302", "303"];
-function inAtlantaArea(state?: string | null, zip?: string | null): boolean {
-  const s = state?.trim().toUpperCase();
-  if (!s) return true;
-  if (s !== "GA" && s !== "GEORGIA") return false;
-  if (!zip?.trim()) return true;
-  return ATLANTA_PREFIXES.includes(zip.trim().slice(0, 3));
-}
 
 export default function FindAProTab() {
   const colors = useColors();
@@ -72,7 +66,27 @@ export default function FindAProTab() {
 
   const selectedProp = properties.find((p) => p.id === propertyId);
   const selectedAsset = assets.find((a) => a.id === assetId);
-  const inArea = selectedProp ? inAtlantaArea(selectedProp.state, selectedProp.zipCode) : true;
+  // The server decides who's in the service area; it rejects requests from
+  // outside it too, so this is only to show the waitlist early.
+  const { data: areaCheck } = useCheckServiceArea(
+    { propertyId },
+    { query: { enabled: !!propertyId, queryKey: getCheckServiceAreaQueryKey({ propertyId }) } },
+  );
+  const inArea = !propertyId || areaCheck?.inServiceArea !== false;
+  const joinWaitlist = useJoinServiceWaitlist();
+
+  function handleJoinWaitlist() {
+    joinWaitlist.mutate(
+      { data: { propertyId } },
+      {
+        onSuccess: () => {
+          qc.invalidateQueries({ queryKey: getCheckServiceAreaQueryKey({ propertyId }) });
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+        onError: () => Alert.alert(t("common.error"), t("findPro.waitlistFailed")),
+      },
+    );
+  }
 
   function resetForm() {
     setPropertyId("");
@@ -99,8 +113,10 @@ export default function FindAProTab() {
             { text: t("common.ok"), onPress: resetForm },
           ]);
         },
-        onError: () => {
-          Alert.alert(t("common.error"), t("findPro.postFailed"));
+        onError: (err: unknown) => {
+          const outside = (err as { data?: { code?: string } } | null)?.data?.code === "outside_service_area";
+          if (outside) qc.invalidateQueries({ queryKey: getCheckServiceAreaQueryKey({ propertyId }) });
+          Alert.alert(t("common.error"), outside ? t("findPro.outsideAreaTitle") : t("findPro.postFailed"));
         },
       }
     );
@@ -207,8 +223,25 @@ export default function FindAProTab() {
             <View style={{ flex: 1 }}>
               <Text style={[s.warningTitle, { fontFamily: "Inter_600SemiBold" }]}>{t("findPro.outsideAreaTitle")}</Text>
               <Text style={[s.warningText, { fontFamily: "Inter_400Regular" }]}>
-                {t("findPro.outsideAreaBody")}
+                {t("findPro.outsideAreaBody", { area: areaCheck?.areaName ?? "" })}
               </Text>
+              {areaCheck?.onWaitlist ? (
+                <Text style={[s.warningText, { fontFamily: "Inter_600SemiBold", marginTop: 8 }]}>
+                  {t("findPro.onWaitlist")}
+                </Text>
+              ) : (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={handleJoinWaitlist}
+                  disabled={joinWaitlist.isPending}
+                  style={[s.waitlistBtn, { opacity: joinWaitlist.isPending ? 0.6 : 1 }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.waitlistText, { fontFamily: "Inter_600SemiBold" }]}>
+                    {joinWaitlist.isPending ? t("findPro.joiningWaitlist") : t("findPro.joinWaitlist")}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -306,6 +339,8 @@ const s = StyleSheet.create({
   warningBox: { flexDirection: "row", gap: 10, borderRadius: 12, borderWidth: 1, padding: 12 },
   warningTitle: { fontSize: 13, color: "#92400e" },
   warningText: { fontSize: 12, color: "#92400e", marginTop: 2, lineHeight: 17 },
+  waitlistBtn: { alignSelf: "flex-start", marginTop: 10, backgroundColor: "#d97706", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8 },
+  waitlistText: { fontSize: 13, color: "#ffffff" },
   urgencyRow: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: 12 },
   urgencyDot: { width: 8, height: 8, borderRadius: 99 },
   urgencyLabel: { fontSize: 13 },

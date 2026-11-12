@@ -6,6 +6,7 @@ import type { Property } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import { resolveStorageUrl } from "@/lib/config";
 import { PropertyScoreRing } from "./PropertyScoreRing";
+import { useStorageAuthHeaders } from "@/hooks/useStorageAuthHeaders";
 
 // ── One property: photo, name, address, health ring, specs, edit ──────────────
 export function PropertyCard({
@@ -14,6 +15,7 @@ export function PropertyCard({
   property: Property; onOpenHealth: () => void; onEdit: () => void; colors: ReturnType<typeof useColors>;
 }) {
   const { t } = useTranslation();
+  const storageHeaders = useStorageAuthHeaders();
   const name = property.name || property.address || t("common.myHome");
   const addressLine = [property.address, property.city, property.state].filter(Boolean).join(", ");
   const specs: string[] = [];
@@ -31,7 +33,7 @@ export function PropertyCard({
         {/* Photo or icon */}
         {photoUrl ? (
           <Image
-            source={{ uri: photoUrl }}
+            source={{ uri: photoUrl, headers: storageHeaders }}
             style={styles.cardPhoto}
             resizeMode="cover"
           />

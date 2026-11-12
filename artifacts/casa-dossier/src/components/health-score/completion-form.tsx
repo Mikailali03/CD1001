@@ -24,7 +24,7 @@ export function CompletionForm({
 }) {
   const { t } = useTranslation();
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(estimatedCost ? String(Number(estimatedCost)) : "");
+  const [cost, setCost] = useState("");
   const [isDiy, setIsDiy] = useState<boolean>(isDiyDefault);
   const [technicianName, setTechnicianName] = useState(isDiyDefault ? DIY_TECHNICIAN_NAME : "");
   const [companyName, setCompanyName] = useState("");
@@ -81,7 +81,7 @@ export function CompletionForm({
             type="number"
             min={0}
             step="0.01"
-            placeholder="0.00"
+            placeholder={estimatedCost ? `est. ${Number(estimatedCost)}` : "0.00"}
             value={cost}
             onChange={(e) => setCost(e.target.value)}
             className="text-sm h-8 bg-background"

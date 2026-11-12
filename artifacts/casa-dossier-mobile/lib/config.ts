@@ -5,6 +5,9 @@ import Constants from "expo-constants";
 const rawDomain: string | undefined =
   process.env.EXPO_PUBLIC_DOMAIN || Constants.expoConfig?.extra?.apiDomain || undefined;
 
+// An explicit "http://" is kept so local runs can reach a plain-HTTP API on the LAN
+// (scripts/dev-mobile-local.sh); everything else is served over HTTPS.
+const protocol = rawDomain?.startsWith("http://") ? "http" : "https";
 const domain = rawDomain?.replace(/^https?:\/\//, "").replace(/\/+$/, "");
 
 if (!domain && __DEV__) {
@@ -16,7 +19,7 @@ if (!domain && __DEV__) {
 }
 
 // Base URL for every API call, e.g. `${API_BASE_URL}/api/inbox`. Empty when unconfigured.
-export const API_BASE_URL = domain ? `https://${domain}` : "";
+export const API_BASE_URL = domain ? `${protocol}://${domain}` : "";
 
 /**
  * The value to save for an uploaded object (photo, receipt). Relative, matching

@@ -15,13 +15,15 @@ import {
   type ListAssetsParams,
   type Property,
 } from "@workspace/api-client-react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AddAssetDialog } from "@/components/add-asset-dialog";
 import { CollaboratorsPanel } from "@/components/collaborators-panel";
+import { UnclaimedHistoryBanner } from "@/components/property-detail/unclaimed-history-banner";
+import { StarterAssetsCard } from "@/components/property-detail/starter-assets-card";
 import { EditAssetSheet } from "@/components/edit-asset-sheet";
 import { EditPropertySheet } from "@/components/edit-property-sheet";
 import { PropertySummaryCard } from "@/components/property-detail/property-summary-card";
@@ -67,7 +69,9 @@ export default function PropertyDetail() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [addAssetOpen, setAddAssetOpen] = useState(false);
+  // ?addAsset=1 opens the add dialog, e.g. after retiring an asset as "replaced".
+  const search = useSearch();
+  const [addAssetOpen, setAddAssetOpen] = useState(() => new URLSearchParams(search).get("addAsset") === "1");
   const [editAsset, setEditAsset] = useState<Asset | null>(null);
   const [editPropertyOpen, setEditPropertyOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -280,6 +284,10 @@ export default function PropertyDetail() {
 
         {/* Right — Asset Inventory */}
         <div className="lg:col-span-2 space-y-4">
+          {id && isOwner && <UnclaimedHistoryBanner propertyId={id} />}
+          {id && isOwner && !(assets ?? []).some((a) => a.category !== "Structural") && (
+            <StarterAssetsCard propertyId={id} />
+          )}
           {Object.keys(grouped).length > 0 ? (
             Object.entries(grouped).map(([category, categoryAssets]) => (
               <Card key={category}>
@@ -385,6 +393,8 @@ export default function PropertyDetail() {
         open={!!editAsset}
         onOpenChange={(open) => { if (!open) setEditAsset(null); }}
         onSaved={() => { refetchAssets(); refetchRetired(); refetchSummary(); }}
+        onReplace={() => setAddAssetOpen(true)}
+        onRemoved={() => { refetchAssets(); refetchSummary(); }}
       />
 
       <EditPropertySheet

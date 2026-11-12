@@ -8,6 +8,7 @@ import {
 } from "@workspace/db";
 import { desc, eq, inArray } from "drizzle-orm";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
+import { loadAssetServiceContext } from "../lib/assetHealth.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperties } from "../lib/access.js";
 
@@ -67,16 +68,21 @@ router.get("/dashboard", requireAuth(), async (req, res) => {
           .limit(5)
       : [];
 
-  const totalAssets = assets.length;
-  const verifiedAssets = assets.filter((a) => a.status === "verified").length;
-  const unverifiedAssets = assets.filter((a) => a.status === "unverified").length;
+  // Retired assets keep their history (tasks and records above) but don't count
+  // toward totals or the health score.
+  const activeAssets = assets.filter((a) => !a.retiredAt);
+  const totalAssets = activeAssets.length;
+  const verifiedAssets = activeAssets.filter((a) => a.status === "verified").length;
+  const unverifiedAssets = activeAssets.filter((a) => a.status === "unverified").length;
   const overdueTaskCount = tasks.filter((t) => t.nextDueDate < today && !t.completedAt).length;
   const dueSoonTaskCount = tasks.filter(
     (t) => t.nextDueDate >= today && t.nextDueDate <= thirtyDaysOut && !t.completedAt
   ).length;
   const upcomingTasks = tasks.filter((t) => t.nextDueDate >= today && !t.completedAt).slice(0, 8);
 
-  const assetScores = assets.map((a) => calcAssetScore(a));
+  const serviceCtx = await loadAssetServiceContext(activeAssets.map((a) => a.id));
+  const stateByProperty = new Map(properties.map((p) => [p.id, p.state ?? null]));
+  const assetScores = activeAssets.map((a) => calcAssetScore(a, serviceCtx, stateByProperty.get(a.propertyId)));
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
   const recentCompletedCount = tasks.filter((t) => {
     const ca = t.completedAt;
@@ -87,7 +93,7 @@ router.get("/dashboard", requireAuth(), async (req, res) => {
   const criticalAssets = assetScores.filter((s) => s.score < 40);
 
   const categoryMap: Record<string, { total: number; verified: number }> = {};
-  for (const a of assets) {
+  for (const a of activeAssets) {
     if (!categoryMap[a.category]) categoryMap[a.category] = { total: 0, verified: 0 };
     categoryMap[a.category]!.total++;
     if (a.status === "verified") categoryMap[a.category]!.verified++;

@@ -4,6 +4,9 @@
     "description": "Elige el idioma de la app"
   },
   "common": {
+    "estimatedAmount": "{{amount}} (est.)",
+    "estimateShort": "est.",
+    "estimateNote": "Las estimaciones son promedios regionales de Casa Dossier, no cotizaciones. Ingresa tu propio costo para mayor precisión.",
     "cancel": "Cancelar",
     "save": "Guardar",
     "saving": "Guardando…",
@@ -60,7 +63,7 @@
   "tabs": {
     "home": "Inicio",
     "assets": "Activos",
-    "findPro": "Buscar un Profesional",
+    "findPro": "Solicitar Servicio",
     "more": "Más"
   },
   "notFound": {
@@ -127,8 +130,8 @@
     },
     "activeRequests": "Solicitudes de servicio activas",
     "jobStatus": {
-      "open": "Esperando profesional",
-      "claimed": "Profesional asignado",
+      "open": "Esperando Técnico",
+      "claimed": "Técnico Asignado",
       "en_route": "En camino",
       "arrived": "Llegó"
     },
@@ -211,18 +214,18 @@
   "findPro": {
     "missingInfo": "Falta información",
     "missingInfoDesc": "Selecciona un activo y describe el problema.",
-    "posted": "¡Solicitud publicada!",
-    "postedDesc": "Avisaremos a los profesionales calificados de tu zona.",
+    "posted": "¡Solicitud enviada!",
+    "postedDesc": "El equipo de Casa Dossier recibió tu solicitud y se comunicará pronto.",
     "postFailed": "No se pudo publicar tu solicitud. Inténtalo de nuevo.",
-    "title": "Buscar un Profesional",
-    "subtitle": "Publica una solicitud de servicio para técnicos locales",
+    "title": "Solicitar Servicio",
+    "subtitle": "Del equipo de Casa Dossier (área de Atlanta)",
     "propertyLabel": "Propiedad",
     "chooseProperty": "Elige una propiedad…",
     "assetLabel": "¿Qué necesita servicio?",
     "chooseAsset": "Elige un activo…",
     "selectPropertyFirst": "Primero selecciona una propiedad",
-    "outsideAreaTitle": "Fuera de nuestra zona de servicio",
-    "outsideAreaBody": "Por ahora CasaService atiende el área metropolitana de Atlanta (hasta 50 millas). ¡Te avisaremos cuando ampliemos la cobertura a tu zona!",
+    "outsideAreaTitle": "Aún no llegamos a tu zona",
+    "outsideAreaBody": "Por ahora el equipo de servicio de Casa Dossier trabaja en {{area}}. Únete a la lista de espera y te avisaremos cuando lleguemos a tu zona.",
     "urgencyLabel": "¿Qué tan urgente es?",
     "urgency": {
       "low": "Baja",
@@ -237,12 +240,16 @@
       "emergency": "Necesita atención inmediata"
     },
     "phoneLabel": "Teléfono de contacto",
-    "phoneHint": "(el profesional lo verá cuando acepte)",
+    "phoneHint": "(tu técnico lo verá cuando se le asigne)",
     "phonePlaceholder": "p. ej., (555) 123-4567",
     "descriptionLabel": "Describe qué está pasando",
     "descriptionPlaceholder": "p. ej., Mi aire acondicionado dejó de enfriar. Funciona, pero solo sale aire caliente.",
-    "posting": "Publicando…",
-    "postRequest": "Publicar solicitud"
+    "posting": "Enviando…",
+    "postRequest": "Solicitar servicio",
+    "joinWaitlist": "Unirme a la lista de espera",
+    "joiningWaitlist": "Uniéndote…",
+    "onWaitlist": "Estás en la lista de espera. Te enviaremos un correo cuando lleguemos a tu zona.",
+    "waitlistFailed": "No pudimos agregarte a la lista de espera. Inténtalo de nuevo."
   },
   "maintenanceInbox": {
     "completeFailed": "No se pudo marcar la tarea como completada. Inténtalo de nuevo.",
@@ -405,7 +412,7 @@
       "needsAttention": "Necesita atención",
       "underWarranty": "En garantía"
     },
-    "requestPro": "Solicitar un profesional",
+    "requestPro": "Solicitar servicio a Casa Dossier",
     "specifications": "Especificaciones",
     "spec": {
       "brand": "Marca",
@@ -458,7 +465,10 @@
     "hirePro": "Contratar a un profesional",
     "technician": "Técnico",
     "company": "Empresa",
-    "save": "Guardar registro"
+    "save": "Guardar registro",
+    "attachReceipt": "Adjuntar un recibo (opcional)",
+    "receiptAttached": "Recibo adjunto · quitar",
+    "lateEntryHint": "Este trabajo se hizo hace más de 30 días, así que el registro mostrará que se añadió después. Un recibo ayuda a que un futuro comprador confíe en él."
   },
   "markComplete": {
     "failed": "No se pudo completar la tarea. Inténtalo de nuevo.",
@@ -491,8 +501,14 @@
     "restoreCta": "Restaurar a activos en uso",
     "retireCta": "Retirar este activo",
     "retireConfirmTitle": "¿Retirar \"{{name}}\"?",
-    "retireConfirmBody": "Saldrá de tu inventario activo. Todo su historial se conserva y puedes restaurarlo cuando quieras.",
-    "retireConfirm": "Sí, retirar"
+    "retireConfirmBody": "Su historial de servicio se mantiene en tu informe, sus tareas de mantenimiento abiertas se cierran y no se pueden añadir nuevos registros. Puedes reactivarlo más adelante.",
+    "retireConfirm": "Sí, retirar",
+    "removeMistake": {
+      "title": "¿Eliminar activo?",
+      "cta": "Eliminar — añadido por error",
+      "confirm": "¿Eliminar {{name}}? Hazlo solo si se añadió por error. Para conservar su historial, retíralo.",
+      "failed": "No se pudo eliminar el activo"
+    }
   },
   "properties": {
     "score": {
@@ -591,56 +607,54 @@
       "low": "Baja"
     },
     "status": {
-      "open": "Esperando un profesional",
-      "claimed": "Profesional asignado",
-      "en_route": "Profesional en camino",
-      "arrived": "Profesional en el lugar",
-      "completed": "Completado"
+      "open": "Esperando un técnico",
+      "claimed": "Técnico asignado",
+      "en_route": "Técnico en camino",
+      "arrived": "Técnico en el lugar",
+      "completed": "Completado",
+      "cancelled": "Cancelada"
     },
     "title": "Solicitud de servicio",
     "posted": "Publicado el {{date}}",
     "loadError": "No se pudieron cargar los detalles del trabajo.",
     "scheduledFor": "Programado para el {{date}} a las {{time}}",
-    "proWillConfirm": "Tu profesional se comunicará para confirmar la fecha",
-    "waitingForPro": "Esperando que un profesional acepte tu trabajo",
+    "proWillConfirm": "Tu técnico se comunicará para confirmar la fecha",
+    "waitingForPro": "El equipo de Casa Dossier asignará un técnico pronto",
     "completedSub": "Este trabajo ya se completó",
     "description": "DESCRIPCIÓN DEL TRABAJO",
     "assetOnFile": "ACTIVO EN ARCHIVO",
     "serial": "N/S {{serial}}",
     "installed": "Instalado en {{date}}",
-    "assignedPro": "PROFESIONAL ASIGNADO",
-    "casaServicePro": "✦ Profesional de CasaService",
+    "assignedPro": "TU TÉCNICO",
+    "casaServicePro": "✦ Técnico de CasaService",
     "accepted": "Aceptado el {{date}}",
-    "callPro": "Llamar a tu profesional",
+    "callPro": "Llamar a tu técnico",
     "call": "Llamar",
     "dateAtTime": "{{date}} a las {{time}}",
-    "datePending": "Fecha de servicio pendiente: tu profesional se comunicará para confirmar",
+    "datePending": "Fecha de servicio pendiente: tu técnico se comunicará para confirmar",
     "assetNotes": "NOTAS DEL ACTIVO",
     "serviceHistory": "HISTORIAL DE SERVICIO",
     "recordCount_one": "{{count}} registro",
     "recordCount_other": "{{count}} registros",
-    "viewAsset": "Ver la página completa del activo"
+    "viewAsset": "Ver la página completa del activo",
+    "cancelledSub": "Esta solicitud fue cancelada",
+    "cancelRequest": "Cancelar solicitud",
+    "cancelConfirmTitle": "¿Cancelar esta solicitud?",
+    "cancelConfirmBody": "Si ya hay un técnico asignado, le avisaremos.",
+    "keepRequest": "Mantener solicitud",
+    "cancelFailed": "No se pudo cancelar esta solicitud. Inténtalo de nuevo."
   },
   "report": {
     "casaService": "✦ CasaService",
     "casaServiceWithTech": "✦ CasaService — {{name}}",
     "homeownerDiy": "Propietario (hazlo tú mismo)",
-    "decommissioned": "Dado de baja el {{date}}",
+    "decommissioned": "Retirado el {{date}}",
     "eventCount_one": "{{count}} evento",
     "eventCount_other": "{{count}} eventos",
     "serial": "N.º de serie",
     "installed": "Instalado",
     "noRecords": "Sin registros de servicio",
-    "share": {
-      "title": "📋 Expediente de la propiedad — {{name}}",
-      "built": "Construida en: {{year}}",
-      "sqft": "{{sqft}} pies²",
-      "assets": "Activos: {{active}} en uso, {{retired}} dados de baja",
-      "events": "Eventos auditados: {{count}}",
-      "generated": "Generado el {{date}} con Casa Dossier"
-    },
     "title": "Informe de la propiedad",
-    "shareLabel": "Compartir informe",
     "noPropertyDesc": "Agrega tu casa para generar un informe de la propiedad que puedas compartir.",
     "generating": "Generando informe…",
     "loadFailed": "No se pudo cargar el informe",
@@ -649,11 +663,11 @@
     "beds": "Hab.",
     "baths": "Baños",
     "totalAssets": "Activos totales",
-    "auditedEvents": "Eventos auditados",
     "generated": "Generado",
     "activeAssets": "ACTIVOS EN USO ({{count}})",
     "retiredAssets": "ACTIVOS DADOS DE BAJA ({{count}})",
-    "noAssets": "Aún no hay activos registrados"
+    "noAssets": "Aún no hay activos registrados",
+    "serviceRecords": "Registros de servicio"
   },
   "transfer": {
     "failedTitle": "No se pudo hacer la transferencia",
@@ -681,7 +695,10 @@
     "thisProperty": "esta propiedad",
     "confirm": "Confirmar transferencia",
     "generateLink": "Generar enlace de reclamo",
-    "footer": "El nuevo propietario necesita una cuenta de Casa Dossier para aceptar la transferencia. El enlace vence en 30 días."
+    "footer": "El nuevo propietario necesita una cuenta de Casa Dossier para aceptar la transferencia. El enlace vence en 30 días.",
+    "includeDocuments_one": "Incluir {{count}} documento del Archivo digital de esta casa",
+    "includeDocuments_other": "Incluir {{count}} documentos del Archivo digital de esta casa",
+    "includeDocumentsHint": "Las garantías, manuales y permisos que guardaste para esta casa pasan al archivo del nuevo propietario."
   },
   "upgrade": {
     "checkoutError": "No se pudo iniciar el pago. Inténtalo de nuevo o mejora tu plan desde la web.",
@@ -710,7 +727,6 @@
     },
     "features": {
       "oneProperty": "1 propiedad",
-      "oneFreeScan": "1 escaneo de activo con IA gratis",
       "manualTasks": "Tareas de mantenimiento manuales",
       "assetTracking": "Seguimiento de activos",
       "serviceLog": "Historial de servicios",
@@ -722,16 +738,10 @@
       "healthScoring": "Puntuación de salud de los activos",
       "fullHistory": "Historial de mantenimiento completo",
       "upToFive": "Hasta 5 propiedades",
-      "proOnboarding": "Configuración inicial por un profesional",
-      "filterDelivery": "Envío trimestral de filtros de climatización",
-      "fifteenOff": "15% de descuento en servicios de CasaService",
-      "oneCredit": "1 crédito de servicio gratis al año",
-      "inspection": "Inspección visual anual",
       "unlimitedProperties": "Propiedades ilimitadas",
-      "prioritySupport": "Soporte prioritario el mismo día",
-      "twentyFiveOff": "25% de descuento en servicios de CasaService",
-      "fourCredits": "4 créditos de servicio gratis al año",
-      "advisor": "Asesor personal para tu hogar"
+      "fiveFreeScans": "5 escaneos de activos con IA gratis",
+      "fiveFreePlans": "5 planes de mantenimiento con IA gratis",
+      "collaborators": "Invitar colaboradores"
     }
   },
   "locker": {
@@ -756,6 +766,7 @@
     "closePhoto": "Cerrar foto"
   },
   "ledger": {
+    "estimatedNotCounted": "No se incluye arriba: {{amount}} en estimaciones de tareas completadas sin un costo ingresado. Agrega el monto real a esos registros de servicio para incluirlo.",
     "totalSpent": "gasto total",
     "expectedVsActual": "ESTIMADO VS. REAL",
     "expected": "Estimado",
@@ -788,6 +799,7 @@
     "periodTotal": "TOTAL DEL PERIODO"
   },
   "capitalOutlook": {
+    "estimatesNote": "Incluye {{amount}} en estimaciones (marcadas est.): promedios regionales de Casa Dossier, no cotizaciones. Ingresa tus propios costos de reemplazo para mayor precisión.",
     "legend": {
       "pastDue": "Vencido",
       "within3": "≤3 años",
@@ -1092,7 +1104,15 @@
       "accepting": "Aceptando…",
       "acceptThis": "Aceptar este trabajo",
       "accessToAccept": "Se requiere acceso de técnico para aceptar trabajos.",
-      "youCompleted": "Completaste este trabajo. El registro de servicio está en el historial del activo del propietario."
+      "youCompleted": "Completaste este trabajo. El registro de servicio está en el historial del activo del propietario.",
+      "release": "Liberar trabajo",
+      "releasing": "Liberando…",
+      "releaseHint": "Devuelve el trabajo a la lista abierta para otro técnico",
+      "releaseConfirmTitle": "¿Liberar este trabajo?",
+      "releaseConfirmBody": "Vuelve a la lista de trabajos abiertos para otro técnico y se le avisa al propietario.",
+      "releasedTitle": "Trabajo liberado",
+      "releasedBody": "Volvió a la lista de trabajos abiertos y se le avisó al propietario.",
+      "releaseError": "No se pudo liberar el trabajo."
     }
   },
   "roleGuard": {
@@ -1127,7 +1147,7 @@
     "deleteFailed": "No se pudo eliminar tu cuenta. Inténtalo de nuevo.",
     "deleteAccount": "Eliminar cuenta",
     "deleteAccountDesc": "Borra todos tus datos de forma permanente",
-    "deleteConfirmBody": "Esto eliminará de forma permanente tu cuenta y TODOS los datos de tus propiedades: activos, documentos, registros de servicio y suscripciones. No se puede deshacer.",
+    "deleteConfirmBody": "Esto elimina permanentemente tu cuenta, documentos, fotos, recibos y suscripción. No se puede deshacer.\n\nEl historial de servicio de tu casa se queda con la casa: los sistemas, fechas y trabajos realizados se conservan para que un futuro propietario pueda reclamarlos tras demostrar que es el dueño. Los recibos, fotos y notas se eliminan.",
     "deleteMyAccount": "Eliminar mi cuenta",
     "deleteSureTitle": "¿Estás completamente seguro?",
     "deleteSureBody": "Tu cuenta y todos sus datos se borrarán de forma permanente. No podrás recuperarlos.",
@@ -1140,7 +1160,8 @@
       "notifications": "NOTIFICACIONES",
       "language": "IDIOMA",
       "about": "ACERCA DE",
-      "danger": "ZONA DE PELIGRO"
+      "danger": "ZONA DE PELIGRO",
+      "reminders": "Recordatorios de mantenimiento"
     },
     "firstName": "Nombre",
     "lastName": "Apellido",
@@ -1151,11 +1172,23 @@
     "deviceSettingsDesc": "Administra todos los permisos de notificación",
     "privacy": "Política de privacidad",
     "terms": "Términos del servicio",
-    "version": "Versión de la app"
+    "version": "Versión de la app",
+    "reminders": {
+      "push": "Notificaciones push",
+      "pushDesc": "Cuando hay tareas por vencer o atrasadas",
+      "email": "Correos de recordatorio",
+      "emailDesc": "Los mismos recordatorios por correo",
+      "weekly": "Resumen semanal",
+      "weeklyDesc": "Correo del lunes: esta semana, atrasado, completado",
+      "sharedHome": "Recordatorios de {{name}}",
+      "saveFailed": "No se pudo guardar la configuración de recordatorios."
+    },
+    "phone": "Teléfono",
+    "firstNameRequired": "El nombre es obligatorio."
   },
   "notifications": {
     "promptTitle": "Adelántate al mantenimiento",
-    "promptBody": "Casa Dossier puede recordarte antes de que venzan filtros, inspecciones y otras tareas, y avisarte cuando un profesional responda a tu trabajo. Puedes cambiarlo cuando quieras en Configuración.",
+    "promptBody": "Casa Dossier puede recordarte antes de que venzan filtros, inspecciones y otras tareas, y avisarte cuando un técnico responda a tu solicitud de servicio. Puedes cambiarlo cuando quieras en Configuración.",
     "turnOn": "Activar recordatorios",
     "channelName": "Recordatorios de mantenimiento",
     "reminderTitle": "Recordatorio de mantenimiento",
@@ -1224,5 +1257,106 @@
     "noAccount": "¿No tienes una cuenta?",
     "haveAccount": "¿Ya tienes una cuenta?",
     "signUp": "Regístrate"
+  },
+  "provenance": {
+    "verified": "Verificado por CasaService",
+    "selfReported": "Autodeclarado · añadido el {{date}}"
+  },
+  "retire": {
+    "reason": {
+      "replaced": "Reemplazado",
+      "removed": "Retirado",
+      "failed": "Averiado",
+      "other": "Otro"
+    },
+    "reasonLabel": "Motivo",
+    "dateLabel": "Fecha de retiro"
+  },
+  "starterAssets": {
+    "title": "¿Qué hay en tu casa?",
+    "subtitle": "Marca lo que tienes y lo añadiremos a tu expediente. Puedes completar marcas, modelos y fechas más tarde.",
+    "cardTitle": "Empieza por lo básico",
+    "cardSubtitle": "Sistemas y electrodomésticos comunes en una casa como la tuya. Añádelos con un toque.",
+    "homeType": "Tipo de vivienda",
+    "homeTypes": {
+      "single_family": "Casa",
+      "townhouse": "Casa adosada",
+      "condo": "Condominio / apartamento"
+    },
+    "estimatedYear": "Año de instalación estimado: {{year}} (año de construcción). Por favor, confírmalo.",
+    "unknownYear": "Probablemente se reemplazó desde que se construyó la casa. Añade la fecha de instalación cuando puedas.",
+    "confirmNote": "Los elementos sugeridos quedan sin verificar hasta que confirmes sus datos.",
+    "addSelected_one": "Añadir {{count}} elemento",
+    "addSelected_other": "Añadir {{count}} elementos",
+    "added_one": "Se añadió {{count}} elemento a tu expediente",
+    "added_other": "Se añadieron {{count}} elementos a tu expediente",
+    "addFailed": "No se pudieron añadir esos elementos",
+    "skip": "Omitir por ahora",
+    "dismiss": "Descartar",
+    "cta": "Añadir lo básico",
+    "continue": "Continuar",
+    "nothingToSuggest": "Ya registras todo lo que sugeriríamos para esta casa.",
+    "items": {
+      "hvac": "Sistema HVAC",
+      "water_heater": "Calentador de agua",
+      "roof": "Techo (tejas asfálticas)",
+      "electrical_panel": "Panel eléctrico",
+      "refrigerator": "Refrigerador",
+      "dishwasher": "Lavavajillas",
+      "range": "Estufa / horno",
+      "washer": "Lavadora",
+      "dryer": "Secadora",
+      "garage_door": "Abridor de puerta de garaje",
+      "supply_plumbing": "Tubería de suministro",
+      "wiring": "Cableado eléctrico"
+    },
+    "reasons": {
+      "galvanized_pipes": "Las casas construidas antes de 1960 suelen tener tuberías de acero galvanizado, que se corroen por dentro. Conviene identificar qué tienes.",
+      "polybutylene_pipes": "Las casas construidas entre 1978 y 1995 pueden tener tuberías de polibutileno, propensas a fallar de repente. Conviene identificar qué tienes.",
+      "knob_and_tube": "Las casas construidas antes de 1950 aún pueden tener cableado de perilla y tubo, que muchas aseguradoras no cubren.",
+      "aluminum_wiring": "Las casas construidas entre 1965 y 1973 a veces usaban cableado de aluminio, un riesgo de incendio conocido en las conexiones."
+    }
+  },
+  "ownershipClaim": {
+    "foundTitle": "Esta casa tiene historial de un propietario anterior",
+    "foundBody": "{{assets}} sistemas y {{records}} registros de servicio ({{verified}} verificados por CasaService). Verifica que eres el propietario para añadirlos a tu expediente.",
+    "claimCta": "Reclamar este historial",
+    "rejected": "Tu última solicitud no fue aprobada: {{reason}}",
+    "dialogTitle": "Verifica que eres el propietario",
+    "dialogBody": "Sube un documento. Lo revisaremos, normalmente en 2 días hábiles, y te enviaremos un correo cuando se añada el historial.",
+    "closingDocument": "Documento de cierre",
+    "closingDocumentHint": "Declaración de liquidación o escritura con tu nombre y esta dirección.",
+    "photoId": "Identificación con foto",
+    "photoIdHint": "Licencia de conducir o pasaporte. Compararemos el nombre con los registros públicos de propiedad.",
+    "privacyNote": "Solo el personal de Casa Dossier puede ver este documento. Se usa únicamente para verificar la propiedad y se elimina en cuanto tomamos una decisión. Nunca se comparten recibos, fotos ni notas del propietario anterior.",
+    "submit": "Enviar para revisión",
+    "submitted": "Enviado. Te escribiremos cuando se revise.",
+    "submitFailed": "No se pudo enviar",
+    "pendingTitle": "Revisión de propiedad en curso",
+    "pendingBody": "Estamos revisando tu documento. Te escribiremos cuando se añada el historial del propietario anterior.",
+    "takePhoto": "Tomar una foto",
+    "choosePhoto": "Elegir de las fotos"
+  },
+  "reportShare": {
+    "emailCta": "Enviar informe",
+    "download": "Descargar PDF",
+    "personalCopyHint": "Una copia personal para tus registros. Para compartirlo oficialmente, envíalo desde Casa Dossier.",
+    "title": "Enviar este informe",
+    "description": "Enviaremos el PDF directamente desde Casa Dossier, en tu nombre, para que los destinatarios sepan que no fue modificado. Las respuestas te llegan a ti.",
+    "recipients": "Enviar a (hasta 5 correos)",
+    "recipientsPlaceholder": "comprador@ejemplo.com, agente@ejemplo.com",
+    "message": "Mensaje (opcional)",
+    "messagePlaceholder": "Aquí está el historial de mantenimiento de la casa.",
+    "includeCosts": "Incluir costos",
+    "receiptsNote": "Nunca se incluyen recibos ni fotos.",
+    "history": "Enviado antes",
+    "send": "Enviar informe",
+    "recipientsRequired": "Escribe al menos un correo",
+    "tooMany": "Puedes enviarlo a un máximo de {{max}} personas a la vez",
+    "invalidEmail": "{{email}} no es un correo válido",
+    "sent": "Informe enviado",
+    "partlyFailed": "Estas direcciones no se enviaron: {{emails}}",
+    "sendFailed": "No se pudo enviar el informe",
+    "downloadFailed": "No se pudo descargar el informe"
   }
 }

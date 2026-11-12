@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import { format } from "@/lib/date";
 import { Button } from "@/components/ui/button";
+import { RecordPerformer } from "@/components/record-provenance";
 import {
   TrendingUp, TrendingDown, Minus, Receipt, DollarSign,
   Wrench, Calendar, Lock, Sparkles,
@@ -313,6 +314,13 @@ export function InvestmentLedgerModal({
 
               {/* Expected vs Actual */}
               <CompareBar actual={data.totals.actual} expected={data.totals.expected} />
+              {data.totals.estimatedCompleted > 0 && (
+                <p className="text-xs text-muted-foreground -mt-2">
+                  {t("ledger.estimatedNotCounted", {
+                    amount: `$${data.totals.estimatedCompleted.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                  })}
+                </p>
+              )}
 
               {/* Running ledger */}
               <div className="space-y-2">
@@ -348,19 +356,10 @@ export function InvestmentLedgerModal({
                             >
                               {t(`assets.category.${r.assetCategory}`, { defaultValue: r.assetCategory })}
                             </Badge>
-                            {(r.companyName || r.technicianName) && (
+                            {(r.verified || r.companyName || r.technicianName) && (
                               <>
                                 <span>·</span>
-                                {r.companyName === "CasaService" ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <span className="inline-flex items-center bg-amber-50 border border-amber-200 font-semibold px-1 py-px rounded text-[9px] tracking-wide">
-                                      <span className="casa-shimmer-gold">✦ CasaService</span>
-                                    </span>
-                                    {r.technicianName && <span> — {r.technicianName}</span>}
-                                  </span>
-                                ) : (
-                                  <span>{r.companyName || r.technicianName}</span>
-                                )}
+                                <RecordPerformer record={r} size="xs" />
                               </>
                             )}
                           </div>

@@ -15,7 +15,7 @@ async function seedProducts() {
   } else {
     const basic = await stripe.products.create({
       name: 'Casa Dossier Basic',
-      description: 'Unlimited AI asset scans and maintenance plans, Investment Ledger, Capital Outlook, Digital Locker.',
+      description: 'Unlimited AI asset scans and maintenance plans, Investment Ledger, Capital Outlook, Digital Locker, collaborators.',
       metadata: { tier: 'basic' },
     });
 
@@ -40,7 +40,7 @@ async function seedProducts() {
   } else {
     const managed = await stripe.products.create({
       name: 'Casa Dossier Managed',
-      description: 'Up to 5 properties, professional onboarding, quarterly HVAC filter delivery, 15% off service calls.',
+      description: 'Everything in Basic, for up to 5 properties.',
       metadata: { tier: 'managed' },
     });
 
@@ -65,7 +65,7 @@ async function seedProducts() {
   } else {
     const concierge = await stripe.products.create({
       name: 'Casa Dossier Concierge',
-      description: 'Unlimited properties, same-day support, 25% off service calls, 4 free service credits/year, dedicated advisor.',
+      description: 'Everything in Basic, for unlimited properties.',
       metadata: { tier: 'concierge' },
     });
 

@@ -17,12 +17,18 @@ export const propertiesTable = pgTable("properties", {
   latitude: real("latitude"),
   longitude: real("longitude"),
   photoUrl: text("photo_url"),
-  userId: text("user_id").notNull(),
+  // Null once the owner deletes their account and the home's history is kept as
+  // an unclaimed dossier (see releasedAt) for the next owner to claim.
+  userId: text("user_id"),
   ownerEmail: text("owner_email"),
+  releasedAt: timestamp("released_at"),
+  // Set on release, for matching a new owner's address to the unclaimed dossier.
+  normalizedAddress: text("normalized_address"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 }, (t) => [
   index("properties_user_id_idx").on(t.userId),
+  index("properties_normalized_address_idx").on(t.normalizedAddress),
 ]);
 
 export const insertPropertySchema = createInsertSchema(propertiesTable).omit({ id: true, createdAt: true, updatedAt: true });

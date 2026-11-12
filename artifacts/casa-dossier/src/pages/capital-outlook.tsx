@@ -154,6 +154,11 @@ export default function CapitalOutlook() {
           sub={`${currentYear}–${currentYear + 9}`}
         />
       </div>
+      {data.estimatedTrackedValue > 0 && (
+        <p className="text-xs text-muted-foreground -mt-2">
+          {t("capitalOutlook.estimatesNote", { amount: fmt(data.estimatedTrackedValue) })}
+        </p>
+      )}
 
       {/* Next replacement alert */}
       {data.summary.nextReplacement && (
@@ -177,7 +182,9 @@ export default function CapitalOutlook() {
                 values={{
                   year: data.summary.nextReplacement.year,
                   count: data.summary.nextReplacement.year - currentYear,
-                  cost: fmt(data.summary.nextReplacement.cost),
+                  cost: data.summary.nextReplacement.costIsEstimate
+                    ? t("common.estimatedAmount", { amount: fmt(data.summary.nextReplacement.cost) })
+                    : fmt(data.summary.nextReplacement.cost),
                 }}
                 components={{ strong: <strong /> }}
               />

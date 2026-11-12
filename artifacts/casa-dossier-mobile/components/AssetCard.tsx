@@ -1,12 +1,12 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { getExpectedLifespan } from "@workspace/maintenance-specs";
+import { calcAssetHealthScore, healthGrade } from "@workspace/maintenance-specs";
 import { useColors } from "@/hooks/useColors";
 import { useTranslation } from "react-i18next";
 
 // ── Category display config (colors and icons only) ──────────────────────────
-// Lifespans come from @workspace/maintenance-specs so the app agrees with the server.
+// Scores and lifespans come from @workspace/maintenance-specs so the app agrees with the server.
 export const CATEGORY_CONFIG: Record<string, { emoji: string; color: string; bg: string }> = {
   HVAC:       { emoji: "❄️",  color: "#3b82f6", bg: "#3b82f615" },
   Plumbing:   { emoji: "🔧",  color: "#06b6d4", bg: "#06b6d415" },
@@ -27,7 +27,7 @@ function normCategory(cat: string): string {
   return map[cat?.toLowerCase()] ?? cat;
 }
 
-// ── Score calculation (matches web exactly) ───────────────────────────────────
+// ── Score calculation (shared formula, same as web and the API) ─────────────
 export function calcAssetScore(asset: {
   /** Refines the lifespan for well-known equipment (e.g. "Water Heater") */
   name?: string;
@@ -35,27 +35,19 @@ export function calcAssetScore(asset: {
   warrantyExpiry?: string | null;
   status?: string;
   category: string;
+  /** Server-computed score; preferred when present. */
+  healthScore?: number | null;
+  lastServiceDate?: string | null;
+  overdueTaskCount?: number | null;
 }): number {
-  const cat = normCategory(asset.category);
-  const lifespan = getExpectedLifespan(cat, asset.name ?? "");
-  let score = 100;
-  if (asset.installDate) {
-    const ageYears = (Date.now() - new Date(asset.installDate).getTime()) / (365.25 * 24 * 3600 * 1000);
-    score -= Math.round(Math.min(ageYears / lifespan, 1) * 40);
-  }
-  if (asset.status === "needs_attention") score -= 25;
-  else if (asset.status === "unverified") score -= 5;
-  if (asset.status === "verified") score = Math.min(score + 5, 100);
-  if (asset.warrantyExpiry && new Date(asset.warrantyExpiry) > new Date()) score = Math.min(score + 5, 100);
-  return Math.max(0, Math.round(score));
+  if (typeof asset.healthScore === "number") return asset.healthScore;
+  return calcAssetHealthScore({ ...asset, category: normCategory(asset.category) });
 }
 
 export function gradeFromScore(score: number): { grade: string; color: string } {
-  if (score >= 90) return { grade: "A", color: "#3d7a5f" };
-  if (score >= 75) return { grade: "B", color: "#4b7fb5" };
-  if (score >= 55) return { grade: "C", color: "#c8853a" };
-  if (score >= 35) return { grade: "D", color: "#b85a2a" };
-  return { grade: "F", color: "#c0392b" };
+  const grade = healthGrade(score);
+  const colors: Record<string, string> = { A: "#3d7a5f", B: "#4b7fb5", C: "#c8853a", D: "#b85a2a", F: "#c0392b" };
+  return { grade, color: colors[grade]! };
 }
 
 // ── Radial gauge (matches web's RadialGauge) ──────────────────────────────────
@@ -105,15 +97,17 @@ export interface AssetCardProps {
   status?: string;
   condition?: string;
   lastServiceDate?: string | null;
+  /** Server-computed score from the shared formula. */
+  healthScore?: number | null;
   onPress?: () => void;
 }
 
-export function AssetCard({ name, category, brand, model, serialNumber, installDate, warrantyExpiry, status, onPress }: AssetCardProps) {
+export function AssetCard({ name, category, brand, model, serialNumber, installDate, warrantyExpiry, status, healthScore, onPress }: AssetCardProps) {
   const colors = useColors();
   const { t } = useTranslation();
   const cat = normCategory(category);
   const cfg = CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.Other!;
-  const score = calcAssetScore({ name, installDate, warrantyExpiry, status, category: cat });
+  const score = calcAssetScore({ name, installDate, warrantyExpiry, status, category: cat, healthScore });
   const underWarranty = warrantyExpiry ? new Date(warrantyExpiry) > new Date() : false;
   const needsAttention = status === "needs_attention";
 

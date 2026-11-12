@@ -6,6 +6,7 @@ import {
   useCompleteMarketplaceJob,
   useMarkJobEnRoute,
   useMarkJobArrived,
+  useReleaseMarketplaceJob,
   getGetMarketplaceJobDetailsQueryKey,
   useGetUserProfile,
   getGetUserProfileQueryKey,
@@ -148,6 +149,27 @@ export default function MyJobsPage() {
       },
     },
   });
+
+  const releaseMutation = useReleaseMarketplaceJob({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["listAssignedJobs"] });
+        queryClient.invalidateQueries({ queryKey: ["listOpenMarketplaceJobs"] });
+        toast({ title: "Job released", description: "It's back in the open jobs list and the homeowner has been told." });
+        setSheetOpen(false);
+      },
+      onError: (err: any) => {
+        const msg = err?.data?.error ?? "Could not release the job.";
+        toast({ title: "Error", description: msg, variant: "destructive" });
+      },
+    },
+  });
+
+  function handleRelease() {
+    if (!selectedJobId) return;
+    if (!window.confirm("Release this job? It goes back to the open jobs list for another technician, and the homeowner is notified.")) return;
+    releaseMutation.mutate({ jobId: selectedJobId });
+  }
 
   function openJob(jobId: string) {
     setSelectedJobId(jobId);
@@ -453,7 +475,8 @@ export default function MyJobsPage() {
                 )}
               </div>
 
-              {/* ── Schedule section ── */}
+              {/* ── Schedule section (until the technician sets off; the API enforces this) ── */}
+              {jobStatus === "claimed" && (
               <div className="px-6 pb-4 pt-2 border-t border-border space-y-3">
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-0.5">Service Date &amp; Time</p>
@@ -479,6 +502,7 @@ export default function MyJobsPage() {
                   {scheduleMutation.isPending ? "Saving…" : jobHasSchedule ? "Update Date" : "Set Service Date"}
                 </Button>
               </div>
+              )}
 
               {/* ── Step-by-step: On the Way → Arrived → Complete ── */}
               {jobHasSchedule && (
@@ -605,6 +629,20 @@ export default function MyJobsPage() {
                       </p>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* ── Release: can't do the job after all ── */}
+              {jobStatus === "claimed" && (
+                <div className="px-6 pb-6 pt-2 border-t border-border">
+                  <Button
+                    variant="ghost"
+                    className="w-full text-muted-foreground"
+                    disabled={releaseMutation.isPending}
+                    onClick={handleRelease}
+                  >
+                    {releaseMutation.isPending ? "Releasing…" : "Can't make it? Release this job"}
+                  </Button>
                 </div>
               )}
             </>

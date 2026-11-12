@@ -10,6 +10,8 @@ import {
   type ServiceRecord,
 } from "@workspace/api-client-react";
 import { format } from "@/lib/date";
+import { RecordPerformer, RecordProvenance } from "@/components/record-provenance";
+import { ReportShareActions } from "@/components/report/report-share-actions";
 
 function fmtDate(d: string | null | undefined) {
   if (!d) return "—";
@@ -28,17 +30,14 @@ function TechSpec({ label, value }: { label: string; value: string | number | nu
 
 function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: boolean }) {
   const { t } = useTranslation();
-  const renderPerformer = (r: ServiceRecord) => {
-    if (r.companyName === "CasaService") {
-      return (
-        <>
-          <span className="casa-shimmer-gold font-semibold">✦ CasaService</span>
-          {r.technicianName && ` — ${r.technicianName}`}
-        </>
-      );
-    }
-    return r.companyName ?? r.technicianName ?? t("report.homeownerDiy");
-  };
+  const renderPerformer = (r: ServiceRecord) => (
+    <>
+      <RecordPerformer record={r} fallback={t("report.homeownerDiy")} />
+      <span className="block text-[9px]">
+        <RecordProvenance record={r} className={r.verified ? "" : "text-gray-400"} />
+      </span>
+    </>
+  );
 
   return (
     <div
@@ -58,6 +57,7 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
           {retired && asset.retiredAt && (
             <span className="inline-flex items-center gap-1 bg-gray-800 text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded">
               {t("report.decommissioned", { date: fmtDate(asset.retiredAt) })}
+              {asset.retiredReason && ` · ${t(`retire.reason.${asset.retiredReason}`)}`}
             </span>
           )}
           {(asset.installDate || asset.serialNumber) && (
@@ -85,7 +85,7 @@ function AssetBlock({ asset, retired = false }: { asset: ReportAsset; retired?: 
               <tr key={r.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 <td className="px-4 py-2 text-gray-500 whitespace-nowrap font-mono text-[10px]">{fmtDate(r.date)}</td>
                 <td className="px-4 py-2 text-gray-800">{r.description}</td>
-                <td className="px-4 py-2 text-gray-500 whitespace-nowrap">{renderPerformer(r)}</td>
+                <td className="px-4 py-2 text-gray-500">{renderPerformer(r)}</td>
               </tr>
             ))}
           </tbody>
@@ -135,6 +135,8 @@ export default function PropertyReport() {
   }
 
   const { property, activeAssets, retiredAssets, totalEvents, generatedAt } = data;
+  const verifiedCount = [...activeAssets, ...retiredAssets]
+    .reduce((n, a) => n + a.records.filter((r) => r.verified).length, 0);
   const fullAddress = [property.address, property.city, property.state, property.zipCode].filter(Boolean).join(", ");
   const config = [
     property.bedrooms ? t("report.bedrooms", { count: Number(property.bedrooms) }) : null,
@@ -149,13 +151,7 @@ export default function PropertyReport() {
           <p className="font-bold text-sm">{t("report.officialTitle")}</p>
           <p className="text-xs text-gray-400">{fullAddress}</p>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="flex items-center gap-2 bg-white text-gray-900 text-sm font-bold px-4 py-2 rounded hover:bg-gray-100 transition-colors"
-        >
-          <FileText className="h-4 w-4" />
-          {t("report.print")}
-        </button>
+        <ReportShareActions propertyId={property.id} />
       </div>
 
       {/* Report document */}
@@ -171,13 +167,10 @@ export default function PropertyReport() {
                 <p className="text-sm text-gray-500 mt-1">{[property.city, property.state, property.zipCode].filter(Boolean).join(", ")}</p>
               )}
             </div>
-            <div
-              className="flex flex-col items-center border-4 border-gray-900 px-4 py-2 rounded shrink-0"
-              style={{ boxShadow: "3px 3px 0 #111" }}
-            >
-              <ShieldCheck className="h-7 w-7 text-gray-900 mb-1" />
-              <p className="font-black text-xs uppercase tracking-widest text-gray-900">{t("report.verified")}</p>
-              <p className="font-mono text-[8px] text-gray-500 mt-0.5">Casa Dossier</p>
+            <div className="flex flex-col items-end border-2 border-gray-900 px-4 py-2 rounded shrink-0 text-right">
+              <p className="text-xs font-bold text-amber-700">{t("report.verifiedCount", { count: verifiedCount })}</p>
+              <p className="text-xs font-bold text-gray-600 mt-0.5">{t("report.selfReportedCount", { count: totalEvents - verifiedCount })}</p>
+              <p className="font-mono text-[8px] text-gray-500 mt-1">Casa Dossier</p>
             </div>
           </div>
 
@@ -187,7 +180,7 @@ export default function PropertyReport() {
               { label: t("report.specBuilt"), value: property.yearBuilt },
               { label: t("report.specStructure"), value: property.sqft ? t("report.sqft", { sqft: property.sqft.toLocaleString() }) : null },
               { label: t("report.specConfiguration"), value: config },
-              { label: t("report.specRegistry"), value: t("report.auditedEvents", { count: totalEvents }) },
+              { label: t("report.specRegistry"), value: t("report.serviceRecords", { count: totalEvents }) },
             ].map((spec, i) => (
               spec.value != null ? (
                 <div key={i} className="flex-1 px-5 py-3 border-l border-gray-300 first:border-l-0 bg-gray-50">
@@ -242,8 +235,6 @@ export default function PropertyReport() {
               <div className="flex items-center gap-4 shrink-0">
                 {[
                   { icon: Wrench, label: t("report.badgeSpec") },
-                  { icon: ShieldCheck, label: t("report.badgeVerified") },
-                  { icon: FileText, label: t("report.badgeCustody") },
                 ].map(({ icon: Icon, label }) => (
                   <div key={label} className="flex flex-col items-center gap-1">
                     <Icon className="h-4 w-4 text-gray-400" />

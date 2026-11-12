@@ -16,12 +16,13 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { updateAsset, type UpdateAssetBody } from "@workspace/api-client-react";
+import { updateAsset, deleteAsset, type UpdateAssetBody } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
 import * as Haptics from "expo-haptics";
 import { resolveStorageUrl, storageUrlForObjectPath } from "@/lib/config";
 import { uploadFailureMessage, useImageUpload } from "@/hooks/useImageUpload";
 import type { Asset } from "./types";
+import { useStorageAuthHeaders } from "@/hooks/useStorageAuthHeaders";
 
 // ── Edit Asset Modal ────────────────────────────────────────────────────────────
 const EDIT_CATEGORIES = ["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"] as const;
@@ -31,16 +32,28 @@ const EDIT_CATEGORY_EMOJIS: Record<EditCategory, string> = {
   Roof: "🏠", Appliance: "🫙", Structural: "🏗️", Other: "📦",
 };
 
+const RETIRE_REASONS = ["replaced", "removed", "failed", "other"] as const;
+type RetireReason = typeof RETIRE_REASONS[number];
+// Matches the server: owners can remove an asset added by mistake within 7 days
+// (and only if it has no history); everything else is retired.
+const MISTAKE_REMOVAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
 export function EditAssetModal({
-  asset, visible, onClose, onSaved, colors,
+  asset, visible, onClose, onSaved, onReplace, onRemoved, colors,
 }: {
   asset: Asset | null;
   visible: boolean;
   onClose: () => void;
   onSaved: () => void;
+  // Called after retiring with reason "replaced", to add the replacement.
+  onReplace?: () => void;
+  // Called after the asset is removed as added-by-mistake.
+  onRemoved?: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
   const { t } = useTranslation();
+  const storageHeaders = useStorageAuthHeaders();
   const { upload, isUploading: photoUploading } = useImageUpload();
   const [name, setName] = useState("");
   const [category, setCategory] = useState<EditCategory>("HVAC");
@@ -54,12 +67,18 @@ export function EditAssetModal({
   const [busy, setBusy] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [retireConfirm, setRetireConfirm] = useState(false);
+  const [retireReason, setRetireReason] = useState<RetireReason | null>(null);
+  const [retireDate, setRetireDate] = useState(todayIso());
 
   // Photo upload state
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   const isRetired = !!asset?.retiredAt;
+  const canRemoveAsMistake =
+    !isRetired && !!asset?.createdAt &&
+    Date.now() - new Date(asset.createdAt).getTime() < MISTAKE_REMOVAL_WINDOW_MS;
+  const retireDateValid = /^\d{4}-\d{2}-\d{2}$/.test(retireDate) && retireDate <= todayIso();
 
   // Populate form whenever asset changes
   React.useEffect(() => {
@@ -156,12 +175,49 @@ export function EditAssetModal({
   }
 
   async function handleRetire() {
-    const ok = await patch({ retiredAt: new Date().toISOString() });
+    if (!retireReason || !retireDateValid) return;
+    const ok = await patch({
+      retiredAt: new Date(`${retireDate}T12:00:00`).toISOString(),
+      retiredReason: retireReason,
+    });
     if (ok) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setRetireConfirm(false);
+      setRetireReason(null);
       onSaved();
       onClose();
+      if (retireReason === "replaced") onReplace?.();
     }
+  }
+
+  function handleRemoveAsMistake() {
+    if (!asset) return;
+    Alert.alert(
+      t("editAsset.removeMistake.title"),
+      t("editAsset.removeMistake.confirm", { name: asset.name }),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("editAsset.removeMistake.cta"),
+          style: "destructive",
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await deleteAsset(asset.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              onClose();
+              onRemoved?.();
+            } catch (err) {
+              // 409: it has history or is older than 7 days — the server explains.
+              const message = (err as { data?: { error?: string } })?.data?.error;
+              Alert.alert(t("editAsset.removeMistake.failed"), message ?? t("editAsset.saveFailed"));
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
   }
 
   async function handleRestore() {
@@ -208,6 +264,8 @@ export function EditAssetModal({
 
           {/* Form */}
           <ScrollView
+            pointerEvents={isRetired ? "none" : "auto"}
+            style={isRetired ? { opacity: 0.6 } : undefined}
             contentContainerStyle={[editStyles.body, { paddingBottom: 120 }]}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
@@ -352,7 +410,7 @@ export function EditAssetModal({
               <Text style={[editStyles.label, { color: colors.foreground, fontFamily: "Inter_600SemiBold" }]}>{t("addAsset.photoOptional")}</Text>
               {photoUri ? (
                 <View style={[editStyles.photoPreview, { borderColor: colors.border }]}>
-                  <Image source={{ uri: photoUri }} style={{ width: "100%", height: 160 }} contentFit="cover" />
+                  <Image source={{ uri: photoUri, headers: storageHeaders }} style={{ width: "100%", height: 160 }} contentFit="cover" />
                   {photoUploading && (
                     <View style={editStyles.photoOverlay}>
                       <ActivityIndicator color="#fff" size="small" />
@@ -401,7 +459,8 @@ export function EditAssetModal({
 
           {/* Footer actions */}
           <View style={[editStyles.footer, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
-            {/* Save button */}
+            {/* Save button (retired assets are read-only until reactivated) */}
+            {!isRetired && (
             <TouchableOpacity
               onPress={handleSave}
               disabled={!name.trim() || busy}
@@ -413,6 +472,7 @@ export function EditAssetModal({
                 : <><Feather name="save" size={16} color={colors.primaryForeground} /><Text style={[editStyles.saveBtnText, { color: colors.primaryForeground, fontFamily: "Inter_700Bold" }]}>{t("common.saveChanges")}</Text></>
               }
             </TouchableOpacity>
+            )}
 
             {/* Retire / Restore */}
             {!retireConfirm ? (
@@ -445,6 +505,39 @@ export function EditAssetModal({
                 <Text style={[{ fontSize: 12, color: "#92400e", fontFamily: "Inter_400Regular", lineHeight: 17, marginBottom: 10 }]}>
                   {t("editAsset.retireConfirmBody")}
                 </Text>
+                <Text style={[{ fontSize: 12, color: "#92400e", fontFamily: "Inter_600SemiBold", marginBottom: 6 }]}>
+                  {t("retire.reasonLabel")}
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                  {RETIRE_REASONS.map((r) => {
+                    const selected = retireReason === r;
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        onPress={() => setRetireReason(r)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected }}
+                        style={[editStyles.reasonChip, selected && editStyles.reasonChipSelected]}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 12, color: selected ? "#fff" : "#92400e", fontFamily: "Inter_500Medium" }}>
+                          {t(`retire.reason.${r}`)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={[{ fontSize: 12, color: "#92400e", fontFamily: "Inter_600SemiBold", marginBottom: 6 }]}>
+                  {t("retire.dateLabel")}
+                </Text>
+                <TextInput
+                  value={retireDate}
+                  onChangeText={setRetireDate}
+                  placeholder="YYYY-MM-DD"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                  style={[editStyles.input, { borderColor: retireDateValid ? "#fde68a" : "#dc2626", color: "#92400e", marginBottom: 10, backgroundColor: "#fff" }]}
+                />
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <TouchableOpacity
                     onPress={() => setRetireConfirm(false)}
@@ -455,8 +548,8 @@ export function EditAssetModal({
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleRetire}
-                    disabled={busy}
-                    style={editStyles.confirmRetire}
+                    disabled={busy || !retireReason || !retireDateValid}
+                    style={[editStyles.confirmRetire, (!retireReason || !retireDateValid) && { opacity: 0.5 }]}
                     activeOpacity={0.85}
                   >
                     <Feather name="archive" size={13} color="#fff" />
@@ -464,6 +557,14 @@ export function EditAssetModal({
                   </TouchableOpacity>
                 </View>
               </View>
+            )}
+
+            {canRemoveAsMistake && !retireConfirm && (
+              <TouchableOpacity onPress={handleRemoveAsMistake} disabled={busy} style={{ alignItems: "center", paddingVertical: 6 }}>
+                <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>
+                  {t("editAsset.removeMistake.cta")}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -474,6 +575,8 @@ export function EditAssetModal({
 
 const editStyles = StyleSheet.create({
   root: { flex: 1 },
+  reasonChip: { borderWidth: 1, borderColor: "#fde68a", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: "#fff" },
+  reasonChipSelected: { backgroundColor: "#d97706", borderColor: "#d97706" },
   header: { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1 },
   title: { fontSize: 17 },
   sub: { fontSize: 12, marginTop: 2 },

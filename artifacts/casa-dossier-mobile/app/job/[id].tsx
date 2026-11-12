@@ -8,6 +8,7 @@ import {
   Platform,
   ActivityIndicator,
   Linking,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -15,8 +16,11 @@ import { Feather } from "@expo/vector-icons";
 import {
   getGetMarketplaceJobDetailsQueryKey,
   useGetMarketplaceJobDetails,
+  useCancelMarketplaceJob,
+  getListMarketplaceJobsQueryKey,
   type TechJobDetail,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useColors } from "@/hooks/useColors";
 import { CATEGORY_CONFIG } from "@/components/AssetCard";
 import { useTranslation } from "react-i18next";
@@ -46,7 +50,13 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; borderColor: st
   en_route:  { color: "#059669", bg: "#ecfdf5", borderColor: "#6ee7b7", icon: "truck" },
   arrived:   { color: "#059669", bg: "#ecfdf5", borderColor: "#6ee7b7", icon: "map-pin" },
   completed: { color: "#7c3aed", bg: "#f5f3ff", borderColor: "#c4b5fd", icon: "check-circle" },
+  cancelled: { color: "#6b7280", bg: "#f3f4f6", borderColor: "#d1d5db", icon: "x-circle" },
 };
+
+/** Homeowners can cancel until the technician sets off (the server enforces this too). */
+function canCancel(status: JobDetail["status"]) {
+  return status === "open" || status === "claimed";
+}
 
 const CATEGORY_EMOJI: Record<string, string> = {
   HVAC: "❄️", Plumbing: "🔧", Electrical: "⚡", Roof: "🏠", Appliance: "🫙", Structural: "🏗️", Other: "📦",
@@ -76,6 +86,34 @@ export default function JobDetailScreen() {
   const loading = detail.isPending;
   const error = detail.isError;
   const serviceHistory = job?.serviceHistory ?? [];
+  const qc = useQueryClient();
+  const cancelJob = useCancelMarketplaceJob();
+
+  function confirmCancel() {
+    if (!id) return;
+    Alert.alert(t("jobDetail.cancelConfirmTitle"), t("jobDetail.cancelConfirmBody"), [
+      { text: t("jobDetail.keepRequest"), style: "cancel" },
+      {
+        text: t("jobDetail.cancelRequest"),
+        style: "destructive",
+        onPress: () =>
+          cancelJob.mutate(
+            { jobId: id, data: {} },
+            {
+              onSuccess: () => {
+                qc.invalidateQueries({ queryKey: getGetMarketplaceJobDetailsQueryKey(id) });
+                qc.invalidateQueries({ queryKey: getListMarketplaceJobsQueryKey() });
+              },
+              onError: (err: unknown) => {
+                const message = (err as { data?: { error?: string } } | null)?.data?.error;
+                Alert.alert(t("common.error"), message ?? t("jobDetail.cancelFailed"));
+                qc.invalidateQueries({ queryKey: getGetMarketplaceJobDetailsQueryKey(id) });
+              },
+            },
+          ),
+      },
+    ]);
+  }
 
   const urgencyKey = job?.urgency && URGENCY_CONFIG[job.urgency] ? job.urgency : "medium";
   const statusKey = job?.status && STATUS_CONFIG[job.status] ? job.status : "open";
@@ -155,6 +193,11 @@ export default function JobDetailScreen() {
               {job.status === "completed" && (
                 <Text style={[styles.statusSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
                   {t("jobDetail.completedSub")}
+                </Text>
+              )}
+              {job.status === "cancelled" && (
+                <Text style={[styles.statusSub, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+                  {t("jobDetail.cancelledSub")}
                 </Text>
               )}
             </View>
@@ -344,6 +387,24 @@ export default function JobDetailScreen() {
             </Text>
             <Feather name="chevron-right" size={15} color={colors.primary} />
           </TouchableOpacity>
+
+          {canCancel(job.status) && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              onPress={confirmCancel}
+              disabled={cancelJob.isPending}
+              style={[styles.retryBtn, { borderColor: "#fecaca", alignItems: "center", opacity: cancelJob.isPending ? 0.6 : 1 }]}
+              activeOpacity={0.7}
+            >
+              {cancelJob.isPending ? (
+                <ActivityIndicator color="#dc2626" size="small" />
+              ) : (
+                <Text style={{ fontSize: 14, color: "#dc2626", fontFamily: "Inter_600SemiBold" }}>
+                  {t("jobDetail.cancelRequest")}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
     </View>

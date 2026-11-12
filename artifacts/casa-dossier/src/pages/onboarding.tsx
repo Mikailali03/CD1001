@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { WelcomeStep } from "@/components/onboarding/welcome-step";
 import { OnboardingVerifyStep } from "@/components/onboarding/verify-step";
 import { OnboardingDoneStep } from "@/components/onboarding/done-step";
+import { StarterAssetsChecklist } from "@/components/starter-assets-checklist";
 import {
   EMPTY_PROPERTY_FORM,
   type PropertyForm,
@@ -39,7 +40,7 @@ import {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-type Step = "welcome" | "address" | "verify" | "scouting" | "done";
+type Step = "welcome" | "address" | "verify" | "starter" | "scouting" | "done";
 
 /** HTTP status carried by generated-client errors; undefined for network failures. */
 function errorStatus(err: unknown): number | undefined {
@@ -180,21 +181,31 @@ export function Onboarding({
         return;
       }
 
-      try {
-        const scoutData = await generateStewardshipPlan(propertyId);
-        setScoutResult({ taskCount: scoutData.taskCount });
-      } catch (err) {
-        // A non-2xx reply leaves the result unset; only a network failure records 0.
-        if (errorStatus(err) === undefined) setScoutResult({ taskCount: 0 });
-      }
-
-      setStep("done");
+      // Offer starter assets before the AI plan, so the plan knows what's tracked.
+      setStep("starter");
     } catch {
       toast({ title: t("onboarding.somethingWentWrong"), variant: "destructive" });
       setStep("verify");
     } finally {
       setSaveBusy(false);
     }
+  }
+
+  async function runScout() {
+    const propertyId = createdPropertyIdRef.current;
+    if (!propertyId) {
+      setStep("done");
+      return;
+    }
+    setStep("scouting");
+    try {
+      const scoutData = await generateStewardshipPlan(propertyId);
+      setScoutResult({ taskCount: scoutData.taskCount });
+    } catch (err) {
+      // A non-2xx reply leaves the result unset; only a network failure records 0.
+      if (errorStatus(err) === undefined) setScoutResult({ taskCount: 0 });
+    }
+    setStep("done");
   }
 
   function handleFinish() {
@@ -342,7 +353,27 @@ export function Onboarding({
             />
           )}
 
-          {/* ── Step 4: AI Scouting ── */}
+          {/* ── Step 4: Starter assets ── */}
+          {step === "starter" && createdPropertyIdRef.current && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary/10 p-2.5 rounded-xl">
+                  <Building2 className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">{t("starterAssets.title")}</h2>
+                  <p className="text-muted-foreground text-sm mt-0.5">{t("starterAssets.subtitle")}</p>
+                </div>
+              </div>
+              <StarterAssetsChecklist
+                propertyId={createdPropertyIdRef.current}
+                onDone={() => void runScout()}
+                onSkip={() => void runScout()}
+              />
+            </div>
+          )}
+
+          {/* ── Step 5: AI Scouting ── */}
           {step === "scouting" && (
             <div className="flex flex-col items-center text-center gap-6 py-8">
               <div className="relative">
@@ -370,7 +401,7 @@ export function Onboarding({
             </div>
           )}
 
-          {/* ── Step 5: Done ── */}
+          {/* ── Step 6: Done ── */}
           {step === "done" && (
             <OnboardingDoneStep scoutResult={scoutResult} onFinish={handleFinish} />
           )}

@@ -1,7 +1,7 @@
 // Shared per-asset scoring + category config used by the assets list and the
-// asset detail page. Expected lifespans come from @workspace/maintenance-specs
+// asset detail page. The formula itself lives in @workspace/maintenance-specs
 // so web scores agree with the server's health score and Capital Outlook.
-import { getExpectedLifespan } from "@workspace/maintenance-specs";
+import { calcAssetHealthScore, healthGrade } from "@workspace/maintenance-specs";
 
 /** Display-only styling per category. */
 export type CategoryConfig = { emoji: string; color: string; bg: string };
@@ -26,32 +26,36 @@ export type ScorableAsset = {
   installDate?: string | null;
   warrantyExpiry?: string | null;
   status: string;
+  /** Server-computed score from the shared formula; preferred when present. */
+  healthScore?: number | null;
+  lastServiceDate?: string | null;
+  overdueTaskCount?: number | null;
 };
 
-/** 0–100 health score from age vs expected lifespan, status and warranty. */
+/**
+ * 0–100 asset health score. Uses the score the API computed (which knows the
+ * property's region and full service history); otherwise falls back to the
+ * same shared formula with whatever the client has.
+ */
 export function calcScore(asset: ScorableAsset): number {
-  let score = 100;
-  if (asset.installDate) {
-    const lifespan = getExpectedLifespan(asset.category, asset.name ?? "");
-    const ageYears = (Date.now() - new Date(asset.installDate).getTime()) / (365.25 * 24 * 3600 * 1000);
-    score -= Math.round(Math.min(ageYears / lifespan, 1) * 40);
-  }
-  if (asset.status === "needs_attention") score -= 25;
-  else if (asset.status === "unverified") score -= 5;
-  if (asset.status === "verified") score = Math.min(score + 5, 100);
-  if (asset.warrantyExpiry && new Date(asset.warrantyExpiry) > new Date()) score = Math.min(score + 5, 100);
-  return Math.max(0, Math.round(score));
+  if (typeof asset.healthScore === "number") return asset.healthScore;
+  return calcAssetHealthScore(asset);
 }
 
 export type GradeLabel = "excellent" | "good" | "fair" | "poor" | "critical";
 
 /** Letter grade + color; translate `labelKey` with `t(\`assets.grade.${labelKey}\`)`. */
 export function gradeFromScore(score: number): { grade: string; color: string; labelKey: GradeLabel } {
-  if (score >= 90) return { grade: "A", color: "#3d7a5f", labelKey: "excellent" };
-  if (score >= 75) return { grade: "B", color: "#4b7fb5", labelKey: "good" };
-  if (score >= 55) return { grade: "C", color: "#c8853a", labelKey: "fair" };
-  if (score >= 35) return { grade: "D", color: "#b85a2a", labelKey: "poor" };
-  return { grade: "F", color: "#c0392b", labelKey: "critical" };
+  // Letter thresholds come from the shared formula so badges match the property grade.
+  const grade = healthGrade(score);
+  const style: Record<string, { color: string; labelKey: GradeLabel }> = {
+    A: { color: "#3d7a5f", labelKey: "excellent" },
+    B: { color: "#4b7fb5", labelKey: "good" },
+    C: { color: "#c8853a", labelKey: "fair" },
+    D: { color: "#b85a2a", labelKey: "poor" },
+    F: { color: "#c0392b", labelKey: "critical" },
+  };
+  return { grade, ...style[grade]! };
 }
 
 /** Recurrence choices for maintenance tasks; translate with `t(labelKey)`. */

@@ -7,9 +7,21 @@ import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty } from "../lib/access.js";
 import { aiRateLimit } from "../lib/subscription.js";
+import { hitRateLimit, rateLimit, RATE_LIMITS } from "../lib/rateLimit.js";
 import { parseAiTasks } from "../lib/aiTasks.js";
 
 const router = Router();
+
+/**
+ * Counts one RentCast call against the user's per-route limit and the app-wide
+ * daily cap (RentCast bills per request). False when either is exhausted.
+ */
+async function allowRentcastCall(userId: string, perUser: typeof RATE_LIMITS.rentcastLookup): Promise<boolean> {
+  const mine = await hitRateLimit(perUser, userId);
+  if (!mine.allowed) return false;
+  const global = await hitRateLimit(RATE_LIMITS.rentcastGlobal, "all");
+  return global.allowed;
+}
 
 // ---------------------------------------------------------------------------
 // Address autocomplete  (debounced as-you-type suggestions)
@@ -36,6 +48,12 @@ router.get("/properties/autocomplete", requireAuth(), async (req, res) => {
   }
 
   try {
+    // Over the limit: no suggestions, same as RentCast being unavailable.
+    if (!(await allowRentcastCall(req.userId, RATE_LIMITS.rentcastAutocomplete))) {
+      req.log.warn({ userId: req.userId }, "RentCast autocomplete rate limited");
+      res.json({ suggestions: [] });
+      return;
+    }
     const url = `https://api.rentcast.io/v1/autocomplete?address=${encodeURIComponent(query)}&limit=${limit}`;
     const response = await fetch(url, {
       headers: { "X-Api-Key": apiKey, Accept: "application/json" },
@@ -81,6 +99,11 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
     return;
   }
 
+  if (!(await allowRentcastCall(req.userId, RATE_LIMITS.rentcastLookup))) {
+    res.status(429).json({ error: "Too many property lookups. Please try again later." });
+    return;
+  }
+
   const url = `https://api.rentcast.io/v1/properties?address=${encodeURIComponent(address)}&limit=1`;
   const response = await fetch(url, {
     headers: { "X-Api-Key": apiKey, Accept: "application/json" },
@@ -89,7 +112,8 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
   if (!response.ok) {
     const text = await response.text();
     req.log.warn({ status: response.status, body: text }, "RentCast lookup failed");
-    res.status(response.status).json({ error: "Property lookup failed", detail: text });
+    // RentCast's error text can include account details; keep it in the logs.
+    res.status(response.status === 404 ? 404 : 502).json({ error: "Property lookup failed" });
     return;
   }
 
@@ -117,7 +141,12 @@ router.get("/properties/lookup", requireAuth(), async (req, res) => {
 
 const ScoutParams = z.object({ propertyId: z.string() });
 
-router.post("/properties/:propertyId/scout", requireAuth(), aiRateLimit(), async (req, res) => {
+router.post(
+  "/properties/:propertyId/scout",
+  requireAuth(),
+  aiRateLimit(),
+  rateLimit({ ...RATE_LIMITS.scout, message: "Too many home plans requested. Please try again later." }),
+  async (req, res) => {
   const { propertyId } = ScoutParams.parse(req.params);
 
   const property = await getAccessibleProperty(propertyId, req.userId);
@@ -226,7 +255,6 @@ Respond ONLY with a JSON array. No markdown, no explanation, just the array. Eac
         propertyId,
         name: "Home Stewardship",
         category: "Structural",
-        status: "verified",
         notes: "General home-wide maintenance tasks not tied to a specific appliance or system.",
       })
       .returning();

@@ -11,7 +11,7 @@ Main features:
 - **Ledger.** An investment ledger of money spent on the home.
 - **Digital locker.** Uploaded documents such as warranties, manuals, receipts and permits, stored in object storage.
 - **Deed transfer.** Hand the full dossier to a new owner through a claim link.
-- **CasaService.** A technician marketplace. Homeowners post jobs, and technicians pick them up in a separate portal.
+- **CasaService.** Casa Dossier's own Atlanta-area service team. Homeowners in the service area request service, the team is notified, and technicians (access granted by an admin) take jobs in a separate portal. Homeowners outside the area can join a waitlist.
 
 ## Packages
 
@@ -28,7 +28,7 @@ This is a pnpm workspace monorepo.
 | `@workspace/api-zod` | `lib/api-zod` | Generated Zod schemas, used by the server for validation. |
 | `@workspace/api-client-react` | `lib/api-client-react` | Generated React Query hooks, used by the web, mobile and tech portal apps. |
 | `@workspace/maintenance-specs` | `lib/maintenance-specs` | The built-in maintenance task specs per asset category, shared by the web and mobile apps. |
-| `@workspace/integrations-openai-ai-server` | `lib/integrations-openai-ai-server` | Server-side OpenAI client (chat, image, audio, batch) through Replit AI Integrations. |
+| `@workspace/integrations-openai-ai-server` | `lib/integrations-openai-ai-server` | Server-side OpenAI client (chat, image, audio, batch). Reads `OPENAI_API_KEY`, or the Replit AI Integrations variables, and is created on first use so the server boots without a key. |
 | `@workspace/object-storage-web` | `lib/object-storage-web` | Uppy-based upload helpers for object storage. No app imports it at the moment. |
 | `@workspace/scripts` | `scripts` | One-off scripts: Stripe product seeding and an owner-email backfill. |
 
@@ -42,10 +42,12 @@ This is a pnpm workspace monorepo.
 
 ```sh
 pnpm install
-pnpm --filter @workspace/db run push      # create or update tables
+pnpm --filter @workspace/db run migrate   # create or update tables
 pnpm --filter @workspace/api-server run dev
 pnpm --filter @workspace/casa-dossier run dev
 ```
+
+To run everything outside Replit, copy `.env.local.example` to `.env.local`, fill it in, and run `./scripts/dev-local.sh` (API, web app and tech portal) and `./scripts/dev-mobile-local.sh` (Expo, for the iOS Simulator or a device on the same Wi-Fi).
 
 Each app reads `PORT` (and `BASE_PATH` for the Vite apps) from the environment. Replit sets both through each artifact's `.replit-artifact/artifact.toml`. When running locally, set them yourself, for example `PORT=5173 BASE_PATH=/ pnpm --filter @workspace/casa-dossier run dev`.
 
@@ -57,7 +59,8 @@ Each app reads `PORT` (and `BASE_PATH` for the Vite apps) from the environment. 
 | `pnpm run typecheck` | `tsc --build` over the composite libs, then each artifact's and `scripts`' own `typecheck` |
 | `pnpm run build` | Typecheck, then build every package that has a `build` script |
 | `pnpm --filter @workspace/api-server test` | API server tests (Vitest) |
-| `pnpm --filter @workspace/db run push` | Push the Drizzle schema to the database (`push-force` skips the confirmation prompts) |
+| `pnpm --filter @workspace/db run migrate` | Apply pending migrations from `lib/db/migrations`. On a database created with `push` before migrations existed, it first records the baseline as applied. |
+| `pnpm --filter @workspace/db run generate --name <change>` | After editing `lib/db/src/schema`, write a new migration for the change. Commit it with the schema change. |
 | `pnpm --filter @workspace/api-spec run codegen` | Regenerate `api-zod` and `api-client-react` from `openapi.yaml` |
 | `pnpm --filter @workspace/scripts run seed-products` | Create the Stripe subscription products and prices (idempotent, needs `STRIPE_SECRET_KEY`) |
 | `pnpm --filter @workspace/scripts run backfill-owner-email` | Backfill property owner emails from Clerk |
@@ -74,22 +77,31 @@ Each app reads `PORT` (and `BASE_PATH` for the Vite apps) from the environment. 
 | `LOG_LEVEL` | Pino log level (default `info`) |
 | `CLERK_SECRET_KEY` | Clerk server key |
 | `CLERK_PUBLISHABLE_KEY` | Clerk publishable key, used by the server middleware and the Clerk proxy |
-| `ADMIN_EMAIL` | The user with this email gets the admin role when their profile is bootstrapped |
-| `DEMO_TOKEN` | Token that grants the read-only demo session (default `casa-demo-preview-2025`). It must match the web app's `VITE_DEMO_TOKEN`. |
+| `ADMIN_EMAIL` | The user with this email gets the admin role when their profile is bootstrapped. New ownership claims and new CasaService requests are also emailed here. |
+| `DEMO_TOKEN` | Token that grants the read-only demo session. Demo mode is off unless it's set. It must match the web app's `VITE_DEMO_TOKEN`. The first demo request seeds a sample home (`lib/demo.ts`), and the demo sees Basic features such as Capital Outlook. |
 | `STRIPE_SECRET_KEY` | Stripe API key, used for checkout, the billing portal and subscription sync |
 | `STRIPE_WEBHOOK_SECRET` | Signing secret used to verify `POST /api/stripe/webhook` |
-| `RESEND_API_KEY` | Resend API key for transactional email (reminders, transfers) |
-| `EMAIL_FROM` | Sender address for outgoing email |
+| `RESEND_API_KEY` | Resend API key for transactional email (reminders, reports, transfers). Optional on Replit: without it, email goes through the Replit Resend integration. Off Replit, email is skipped (logged) unless it is set. |
+| `CARTO_API_KEY` | CARTO basemap key for the tech portal map. Tiles are proxied through `GET /api/maps/tiles/:z/:x/:y` so the key stays on the server; without it the endpoint returns 503. |
+| `EMAIL_FROM` | Sender address for outgoing email (default `Casa Dossier <no-reply@notifications.casadossier.com>`, verified in Resend) |
 | `CRON_SECRET` | Shared secret for `POST /api/internal/run-scheduled-jobs`, sent in the `x-cron-secret` header. If it is unset, the endpoint returns 404. |
 | `SCHEDULE_TIMEZONE` | IANA timezone the scheduler uses for reminders and tips (default `America/New_York`) |
+| `SERVICE_AREA` | CasaService service area as `<lat>,<lng>,<radiusMiles>[,<name>]` (default `33.749,-84.388,50,Atlanta area`). The API rejects service requests from homes outside it, and the technician map and apps read it from `GET /api/service-area`. |
 | `CORS_ALLOWED_HOSTS` | Extra comma-separated hostnames allowed by CORS, added to the Replit domains |
 | `REPLIT_DOMAINS` | Set by Replit. Used for the CORS allow-list and as the host in Stripe redirect URLs. |
 | `REPLIT_DEV_DOMAIN` | Set by Replit. Dev domain, allowed by CORS. |
-| `AI_INTEGRATIONS_OPENAI_BASE_URL` | OpenAI base URL, set by Replit AI Integrations |
-| `AI_INTEGRATIONS_OPENAI_API_KEY` | OpenAI API key, set by Replit AI Integrations |
+| `OPENAI_API_KEY` | OpenAI API key. Optional: without a key (here or in the Replit variable below) the server still boots, and AI scans, plans and scout answer 503. |
+| `OPENAI_BASE_URL` | OpenAI-compatible base URL. Optional (defaults to OpenAI). |
+| `AI_INTEGRATIONS_OPENAI_API_KEY`, `AI_INTEGRATIONS_OPENAI_BASE_URL` | Set by Replit AI Integrations. Used when the `OPENAI_*` variables aren't set. |
 | `RENTCAST_API_KEY` | RentCast API key for property lookups ("scout") and the admin property-data refresh |
-| `PUBLIC_OBJECT_SEARCH_PATHS` | Comma-separated object-storage paths for public assets |
-| `PRIVATE_OBJECT_DIR` | Object-storage directory for private uploads (locker documents, photos) |
+| `RENTCAST_DAILY_LIMIT` | App-wide daily cap on user-triggered RentCast calls (default `1000`). Per-user limits also apply. |
+| `STORAGE_DRIVER` | Where files are stored: `replit` (the Replit sidecar, default on Replit), `gcs` (Google Cloud Storage directly, default when Google credentials are set) or `local` (disk, default in development). Production with none of these configured fails on the first file request. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | `gcs` driver: path to a service-account key file. Alternatively `GCS_CREDENTIALS_JSON` holds the key JSON inline, or the host's default credentials are used. The account needs object read/write and must be able to sign URLs. |
+| `GCS_PROJECT_ID` | `gcs` driver: Google Cloud project, if it can't be inferred from the credentials |
+| `LOCAL_STORAGE_DIR` | `local` driver: directory for files (default `.local-storage` in the API's working directory) |
+| `LOCAL_STORAGE_SECRET` | `local` driver: key that signs upload URLs. Optional; without it, unused upload URLs stop working when the server restarts. |
+| `PUBLIC_OBJECT_SEARCH_PATHS` | Comma-separated `/<bucket>/<dir>` paths for public assets (default `/local/public` with the `local` driver) |
+| `PRIVATE_OBJECT_DIR` | `/<bucket>/<dir>` path for private uploads such as locker documents and photos (default `/local/private` with the `local` driver) |
 
 ### Web app and tech portal (`artifacts/casa-dossier`, `artifacts/tech-portal`)
 
@@ -100,7 +112,7 @@ Each app reads `PORT` (and `BASE_PATH` for the Vite apps) from the environment. 
 | `REPL_ID` | Set by Replit. Turns on the Replit-only Vite plugins (cartographer, dev banner). |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key |
 | `VITE_CLERK_PROXY_URL` | Clerk proxy URL. Replit injects it in production; leave it empty in dev. |
-| `VITE_DEMO_TOKEN` | Web only. The demo-session token (must match the server's `DEMO_TOKEN`). |
+| `VITE_DEMO_TOKEN` | Web only. The demo-session token (must match the server's `DEMO_TOKEN`). When unset, the demo and the landing page's "See Demo" button are hidden. |
 
 ### Mobile app (`artifacts/casa-dossier-mobile`)
 
@@ -135,7 +147,7 @@ Each app reads `PORT` (and `BASE_PATH` for the Vite apps) from the environment. 
   curl -fsS -X POST "https://<your-domain>/api/internal/run-scheduled-jobs" -H "x-cron-secret: $CRON_SECRET"
   ```
 
-- **Schema changes.** After changing `lib/db/src/schema`, run `pnpm --filter @workspace/db run push` against the production database. `scripts/post-merge.sh` does this for the dev database after a merge.
+- **Schema changes.** After changing `lib/db/src/schema`, generate a migration (`run generate`) and commit it. Run `pnpm --filter @workspace/db run migrate` against the production database when deploying. `scripts/post-merge.sh` runs it for the dev database after a merge.
 - Run `seed-products` once per Stripe account (test and live).
 
 ## Note on native binaries

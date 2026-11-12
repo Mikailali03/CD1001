@@ -63,6 +63,11 @@ export function AssetOutlookCard({ asset, propertyId }: { asset: CapitalOutlookA
               <p className="text-muted-foreground">{t("maintenance.estCost")}</p>
               <p className="font-semibold">
                 {asset.replacementCost != null ? fmt(asset.replacementCost) : <span className="text-muted-foreground font-normal">—</span>}
+                {asset.replacementCost != null && asset.replacementCostIsEstimate && (
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground" title={t("common.estimateNote")}>
+                    {t("common.estimateShort")}
+                  </span>
+                )}
               </p>
             </div>
           </div>

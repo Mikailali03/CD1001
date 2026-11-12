@@ -4,10 +4,23 @@ import { subscriptionsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOrCreateSubscription } from "../lib/subscription.js";
+import { isDemoUser } from "../lib/demo.js";
 
 const router = Router();
 
 router.get("/subscription", requireAuth(), async (req, res) => {
+  // The demo is shown on Basic so its paid features (e.g. Capital Outlook) are unlocked.
+  if (isDemoUser(req.userId)) {
+    res.json({
+      tier: "basic",
+      propertyLimit: TIER_PROPERTY_LIMITS.basic ?? 1,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+      aiScansUsed: 0,
+      aiPlansUsed: 0,
+    });
+    return;
+  }
   const sub = await getOrCreateSubscription(req.userId);
   res.json({
     tier: sub.tier,

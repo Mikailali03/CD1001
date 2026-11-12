@@ -1,5 +1,7 @@
 import { db } from "@workspace/db";
 import {
+  lockerFilesTable,
+  lockerFoldersTable,
   propertiesTable,
   propertyCollaboratorsTable,
   propertyTransfersTable,
@@ -75,6 +77,23 @@ export async function claimTransfer(transfer: PropertyTransfer, userId: string):
       .where(eq(propertiesTable.id, transfer.propertyId));
     // The previous owner's household shouldn't keep access to the new owner's home.
     await tx.delete(propertyCollaboratorsTable).where(eq(propertyCollaboratorsTable.propertyId, transfer.propertyId));
+
+    if (transfer.includeDocuments) {
+      // Warranties, permits and manuals the sender tagged to this home move into
+      // a folder of their own in the new owner's locker.
+      const docs = and(
+        eq(lockerFilesTable.propertyId, transfer.propertyId),
+        eq(lockerFilesTable.userId, transfer.fromUserId),
+      );
+      const [{ docCount }] = await tx.select({ docCount: count() }).from(lockerFilesTable).where(docs);
+      if (docCount > 0) {
+        const [folder] = await tx
+          .insert(lockerFoldersTable)
+          .values({ userId, name: "From previous owner" })
+          .returning();
+        await tx.update(lockerFilesTable).set({ userId, folderId: folder!.id }).where(docs);
+      }
+    }
     return row;
   });
 

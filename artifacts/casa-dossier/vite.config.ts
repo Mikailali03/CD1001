@@ -26,6 +26,16 @@ if (!basePath) {
   );
 }
 
+// Outside Replit there is no path router in front of the apps, so in local dev
+// Vite proxies /api (and /tech/) to the other services. See scripts/dev-local.sh.
+const proxy: Record<string, { target: string; ws?: boolean }> = {};
+if (process.env.API_PROXY_TARGET) {
+  proxy["/api"] = { target: process.env.API_PROXY_TARGET };
+}
+if (process.env.TECH_PROXY_TARGET) {
+  proxy["/tech"] = { target: process.env.TECH_PROXY_TARGET, ws: true };
+}
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -68,6 +78,7 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy,
     fs: {
       strict: true,
     },

@@ -2,11 +2,14 @@ import React from "react";
 import { CasaServiceBadge } from "@/components/CasaServiceBadge";
 import { View, Text, StyleSheet } from "react-native";
 import { useColors } from "@/hooks/useColors";
+import { useTranslation } from "react-i18next";
 import { formatDate } from "@/lib/dates";
+import { provenanceLabel } from "@/lib/provenance";
 import type { ServiceRecord } from "./types";
 
 // ── Service record row ─────────────────────────────────────────────────────────
 export function RecordRow({ record, colors }: { record: ServiceRecord; colors: ReturnType<typeof useColors> }) {
+  const { t } = useTranslation();
   return (
     <View style={[recordStyles.wrap, { borderLeftColor: colors.primary + "33" }]}>
       <View style={recordStyles.dot} />
@@ -23,21 +26,25 @@ export function RecordRow({ record, colors }: { record: ServiceRecord; colors: R
               · {record.technicianName}
             </Text>
           )}
-          {record.companyName && (
-            record.companyName === "CasaService" ? (
-              <CasaServiceBadge />
-            ) : (
-              <Text style={[recordStyles.tech, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                {record.technicianName ? ` (${record.companyName})` : `· ${record.companyName}`}
-              </Text>
-            )
-          )}
+          {record.verified ? (
+            <CasaServiceBadge />
+          ) : record.companyName ? (
+            <Text style={[recordStyles.tech, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
+              {record.technicianName ? ` (${record.companyName})` : `· ${record.companyName}`}
+            </Text>
+          ) : null}
           {record.cost != null && Number(record.cost) > 0 && (
             <Text style={[recordStyles.cost, { color: colors.mutedForeground, fontFamily: "Inter_600SemiBold" }]}>
               · ${Number(record.cost).toLocaleString()}
             </Text>
           )}
         </View>
+        <Text style={[recordStyles.provenance, {
+          color: record.verified ? "#92400e" : colors.mutedForeground,
+          fontFamily: "Inter_400Regular",
+        }]}>
+          {provenanceLabel(record, t)}
+        </Text>
       </View>
     </View>
   );
@@ -52,4 +59,5 @@ const recordStyles = StyleSheet.create({
   date: { fontSize: 11 },
   tech: { fontSize: 11 },
   cost: { fontSize: 11 },
+  provenance: { fontSize: 10 },
 });

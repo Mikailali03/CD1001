@@ -21,6 +21,8 @@ import {
   getGetPendingPropertyTransferQueryKey,
   initiatePropertyTransfer,
   useGetPendingPropertyTransfer,
+  useListLockerFiles,
+  getListLockerFilesQueryKey,
   type PropertyTransfer,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
@@ -55,6 +57,10 @@ export default function TransferScreen() {
   const loadingTransfer = transferQuery.isPending;
   const setTransfer = (t: PropertyTransfer | null) => queryClient.setQueryData(transferKey, t);
   const [recipientEmail, setRecipientEmail] = useState("");
+  const [includeDocuments, setIncludeDocuments] = useState(true);
+  // Locker documents tagged to this home can go with it.
+  const { data: lockerFiles = [] } = useListLockerFiles(undefined, { query: { queryKey: getListLockerFilesQueryKey() } });
+  const homeDocumentCount = lockerFiles.filter((f) => f.propertyId && f.propertyId === propertyId).length;
   const [confirmStep, setConfirmStep] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -65,7 +71,10 @@ export default function TransferScreen() {
     if (!recipientEmail.trim() || !propertyId) return;
     setBusy(true);
     try {
-      const newTransfer = await initiatePropertyTransfer(propertyId, { toEmail: recipientEmail.trim() });
+      const newTransfer = await initiatePropertyTransfer(propertyId, {
+        toEmail: recipientEmail.trim(),
+        includeDocuments: homeDocumentCount > 0 && includeDocuments,
+      });
       setTransfer(newTransfer);
       setRecipientEmail("");
       setConfirmStep(false);
@@ -278,6 +287,26 @@ export default function TransferScreen() {
               autoCapitalize="none"
               autoCorrect={false}
             />
+
+            {homeDocumentCount > 0 && (
+              <TouchableOpacity
+                onPress={() => setIncludeDocuments((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: includeDocuments }}
+                style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", marginTop: 12 }}
+                activeOpacity={0.7}
+              >
+                <Feather name={includeDocuments ? "check-square" : "square"} size={18} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, color: colors.foreground, fontFamily: "Inter_500Medium" }}>
+                    {t("transfer.includeDocuments", { count: homeDocumentCount })}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.mutedForeground, fontFamily: "Inter_400Regular", marginTop: 2 }}>
+                    {t("transfer.includeDocumentsHint")}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            )}
 
             {confirmStep ? (
               <View>

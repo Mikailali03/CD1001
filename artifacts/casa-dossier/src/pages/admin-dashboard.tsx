@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Building2, Wrench, BarChart3, Mail } from "lucide-react";
+import { LayoutDashboard, Users, Building2, Wrench, BarChart3, Mail, FileCheck2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { OverviewTab } from "@/components/admin/overview-tab";
@@ -7,11 +7,14 @@ import { CommunicationHubTab } from "@/components/admin/communication-hub-tab";
 import { PropertiesTab } from "@/components/admin/properties-tab";
 import { TechniciansTab } from "@/components/admin/technicians-tab";
 import { AnalyticsTab } from "@/components/admin/analytics-tab";
+import { ClaimsTab } from "@/components/admin/claims-tab";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 
 export default function AdminDashboard() {
+  // ?tab=claims deep-links from the "new ownership claim" email.
+  const initialTab = new URLSearchParams(useSearch()).get("tab") ?? "overview";
   return (
     <div className="p-6 space-y-6 max-w-6xl mx-auto animate-in fade-in duration-500">
       {/* Header */}
@@ -39,7 +42,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="overview">
+      <Tabs defaultValue={initialTab}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="overview" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />
@@ -60,6 +63,10 @@ export default function AdminDashboard() {
           <TabsTrigger value="technicians" className="gap-2">
             <Wrench className="h-4 w-4" />
             Technicians
+          </TabsTrigger>
+          <TabsTrigger value="claims" className="gap-2">
+            <FileCheck2 className="h-4 w-4" />
+            Ownership Claims
           </TabsTrigger>
           <TabsTrigger value="analytics" className="gap-2">
             <BarChart3 className="h-4 w-4" />
@@ -86,6 +93,10 @@ export default function AdminDashboard() {
 
           <TabsContent value="technicians" className="mt-0">
             <TechniciansTab />
+          </TabsContent>
+
+          <TabsContent value="claims" className="mt-0">
+            <ClaimsTab />
           </TabsContent>
 
           <TabsContent value="analytics" className="mt-0">

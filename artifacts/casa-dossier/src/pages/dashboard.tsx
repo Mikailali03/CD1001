@@ -40,6 +40,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { format } from "@/lib/date";
+import { RecordPerformer } from "@/components/record-provenance";
 import { Link } from "wouter";
 import homeHeroBadge from "@assets/home_hero_badge_1779979811101.png";
 
@@ -481,14 +482,7 @@ export default function Dashboard() {
                       <p className="text-sm font-medium leading-snug line-clamp-2">{record.description}</p>
                       <p className="text-xs text-muted-foreground break-words">
                         {record.assetName && <span className="font-medium">{record.assetName} · </span>}
-                        {record.companyName === "CasaService" ? (
-                          <>
-                            <span className="inline-flex items-center bg-amber-50 border border-amber-200 font-semibold px-1 py-px rounded text-[10px] tracking-wide mr-0.5">
-                              <span className="casa-shimmer-gold">✦ CasaService</span>
-                            </span>
-                            {record.technicianName && ` — ${record.technicianName}`}
-                          </>
-                        ) : (record.technicianName || record.companyName || t("dashboard.serviceFallback"))}
+                        <RecordPerformer record={record} fallback={t("dashboard.serviceFallback")} />
                         {" · "}{format(new Date(record.date), "MMM d, yyyy")}
                       </p>
                     </div>

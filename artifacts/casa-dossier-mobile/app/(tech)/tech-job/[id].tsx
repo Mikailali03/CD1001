@@ -13,6 +13,7 @@ import {
   useGetMarketplaceJobDetails,
   useMarkJobArrived,
   useMarkJobEnRoute,
+  useReleaseMarketplaceJob,
   useScheduleMarketplaceJob,
 } from "@workspace/api-client-react";
 import { useColors } from "@/hooks/useColors";
@@ -171,7 +172,30 @@ export default function TechJobScreen() {
     },
   });
 
+  const releaseMutation = useReleaseMarketplaceJob({
+    mutation: {
+      onSuccess: () => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        invalidate(jobId);
+        Alert.alert(
+          t("tech.jobScreen.releasedTitle"),
+          t("tech.jobScreen.releasedBody"),
+          [{ text: t("common.done"), onPress: () => (router.canGoBack() ? router.back() : router.replace(TECH_HOME)) }],
+        );
+      },
+      onError: (err) => onActionError(err, t("tech.jobScreen.releaseError")),
+    },
+  });
+
+  function confirmRelease() {
+    Alert.alert(t("tech.jobScreen.releaseConfirmTitle"), t("tech.jobScreen.releaseConfirmBody"), [
+      { text: t("common.cancel"), style: "cancel" },
+      { text: t("tech.jobScreen.release"), style: "destructive", onPress: () => releaseMutation.mutate({ jobId }) },
+    ]);
+  }
+
   const busy =
+    releaseMutation.isPending ||
     acceptMutation.isPending ||
     scheduleMutation.isPending ||
     enRouteMutation.isPending ||
@@ -336,7 +360,8 @@ export default function TechJobScreen() {
             )
           )}
 
-          {isActiveMine && (
+          {/* Rescheduling stops once the technician sets off (the server enforces this). */}
+          {isActiveMine && status === "claimed" && (
             <JobScheduleSection
               job={job}
               hasSchedule={hasSchedule}
@@ -371,6 +396,18 @@ export default function TechJobScreen() {
               arrivedPending={arrivedMutation.isPending}
               completePending={completeMutation.isPending}
               busy={busy}
+            />
+          )}
+
+          {isMine && status === "claimed" && (
+            <Button
+              label={releaseMutation.isPending ? t("tech.jobScreen.releasing") : t("tech.jobScreen.release")}
+              icon="corner-up-left"
+              variant="ghost"
+              onPress={confirmRelease}
+              loading={releaseMutation.isPending}
+              disabled={busy}
+              accessibilityHint={t("tech.jobScreen.releaseHint")}
             />
           )}
 

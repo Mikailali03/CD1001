@@ -21,7 +21,7 @@ tags:
   - name: guides
     description: DIY guide library
   - name: marketplace
-    description: Service pro marketplace
+    description: CasaService requests to the Casa Dossier team
   - name: dashboard
     description: Dashboard summaries and analytics
   - name: user
@@ -36,6 +36,39 @@ tags:
     description: Admin-only platform management endpoints
 
 paths:
+  /maps/tiles/{z}/{x}/{y}:
+    get:
+      operationId: getMapTile
+      tags: [technician]
+      summary: Authenticated CARTO basemap tile (API key stays on the server)
+      parameters:
+        - name: z
+          in: path
+          required: true
+          schema: { type: integer, minimum: 8, maximum: 18 }
+        - name: x
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0 }
+        - name: y
+          in: path
+          required: true
+          schema: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: PNG map tile
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "400":
+          description: Invalid tile coordinates
+        "401":
+          description: Sign-in required
+        "502":
+          description: Map provider unavailable
+        "503":
+          description: Map key not configured
+
   /healthz:
     get:
       operationId: healthCheck
@@ -268,6 +301,55 @@ paths:
               schema:
                 $ref: "#/components/schemas/Asset"
 
+  /properties/{propertyId}/starter-assets:
+    get:
+      operationId: getStarterAssets
+      tags: [assets]
+      summary: Suggested starter assets for a home, based on its age and type
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: homeType
+          in: query
+          description: Defaults to a guess from the street address (a unit number means condo)
+          schema:
+            $ref: "#/components/schemas/HomeType"
+      responses:
+        "200":
+          description: Suggestions not already tracked on the property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StarterAssetSuggestions"
+    post:
+      operationId: addStarterAssets
+      tags: [assets]
+      summary: Add the chosen starter assets, with install years estimated from the year built
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddStarterAssetsBody"
+      responses:
+        "201":
+          description: Created assets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Asset"
+
   /assets/{assetId}:
     get:
       operationId: getAsset
@@ -312,7 +394,11 @@ paths:
     delete:
       operationId: deleteAsset
       tags: [assets]
-      summary: Remove an asset
+      summary: Remove an asset added by mistake
+      description: >
+        Owners can remove an asset only if it has no service records and was added
+        in the last 7 days; anything else must be retired (PATCH retiredAt) so its
+        history stays on the report. Admins can remove any asset.
       parameters:
         - name: assetId
           in: path
@@ -322,6 +408,8 @@ paths:
       responses:
         "204":
           description: Deleted
+        "409":
+          description: The asset has history or is older than 7 days; retire it instead
 
   # ─── Service Records ────────────────────────────────────────────────────────
   /assets/{assetId}/records:
@@ -584,7 +672,7 @@ paths:
     post:
       operationId: createMarketplaceJob
       tags: [marketplace]
-      summary: Post a service request to the marketplace
+      summary: Request service from the Casa Dossier team
       requestBody:
         required: true
         content:
@@ -789,6 +877,114 @@ paths:
           description: Job not yet scheduled or not in claimed status
         "404":
           description: Job not found or not assigned to you
+
+  /marketplace/jobs/{jobId}/cancel:
+    post:
+      operationId: cancelMarketplaceJob
+      tags: [marketplace]
+      summary: Homeowner cancels a service request (only before the technician sets off)
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelJobBody"
+      responses:
+        "200":
+          description: Request cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatusResult"
+        "404":
+          description: Job not found
+        "409":
+          description: The job can no longer be cancelled
+
+  /marketplace/jobs/{jobId}/release:
+    post:
+      operationId: releaseMarketplaceJob
+      tags: [technician]
+      summary: Technician releases an accepted job back to the open pool
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Job released
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobStatusResult"
+        "404":
+          description: Job not found or not assigned to you
+        "409":
+          description: The job can't be released from its current status
+
+  # ─── Service area ───────────────────────────────────────────────────────────
+  /service-area:
+    get:
+      operationId: getServiceArea
+      tags: [marketplace]
+      summary: The CasaService service area (center and radius)
+      responses:
+        "200":
+          description: Service area
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceArea"
+
+  /service-area/check:
+    get:
+      operationId: checkServiceArea
+      tags: [marketplace]
+      summary: Whether CasaService can take requests for a property
+      parameters:
+        - name: propertyId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Service-area check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceAreaCheck"
+        "404":
+          description: Property not found
+
+  /service-area/waitlist:
+    post:
+      operationId: joinServiceWaitlist
+      tags: [marketplace]
+      summary: Join the waitlist for a property outside the service area
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JoinServiceWaitlistBody"
+      responses:
+        "201":
+          description: On the waitlist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JoinServiceWaitlistResult"
+        "404":
+          description: Property not found
 
   # ─── Inbox ──────────────────────────────────────────────────────────────────
   /inbox:
@@ -1086,6 +1282,176 @@ paths:
           description: Deleted
 
   # ─── Admin ──────────────────────────────────────────────────────────────────
+  /properties/{propertyId}/unclaimed-history:
+    get:
+      operationId: getUnclaimedHistory
+      tags: [properties]
+      summary: Existing history at this property's address left by a previous owner (owner only)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Whether inheritable history exists, and the owner's claim on it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnclaimedHistory"
+
+  /properties/{propertyId}/ownership-claims:
+    post:
+      operationId: createOwnershipClaim
+      tags: [properties]
+      summary: Claim a previous owner's history by uploading proof of ownership (owner only)
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOwnershipClaimBody"
+      responses:
+        "201":
+          description: Claim submitted for review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnershipClaimSummary"
+        "404":
+          description: No unclaimed history at this address
+        "409":
+          description: A claim is already pending
+
+  /admin/ownership-claims:
+    get:
+      operationId: listAdminOwnershipClaims
+      tags: [admin]
+      summary: Ownership claims awaiting or past review
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+      responses:
+        "200":
+          description: Claims, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AdminOwnershipClaim"
+
+  /admin/ownership-claims/{claimId}/approve:
+    post:
+      operationId: approveOwnershipClaim
+      tags: [admin]
+      summary: Approve a claim, move the history to the claimant's home, and delete the document
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOwnershipClaim"
+
+  /admin/ownership-claims/{claimId}/reject:
+    post:
+      operationId: rejectOwnershipClaim
+      tags: [admin]
+      summary: Reject a claim with a reason and delete the document
+      parameters:
+        - name: claimId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectOwnershipClaimBody"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminOwnershipClaim"
+
+  /user/notification-preferences:
+    get:
+      operationId: getNotificationPreferences
+      tags: [user]
+      summary: Reminder settings, plus homes shared with the user and whether they get reminders for each
+      responses:
+        "200":
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+    patch:
+      operationId: updateNotificationPreferences
+      tags: [user]
+      summary: Turn reminder emails, push reminders or the weekly summary on or off
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationPreferencesBody"
+      responses:
+        "200":
+          description: Updated preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+
+  /properties/{propertyId}/reminder-subscription:
+    put:
+      operationId: setReminderSubscription
+      tags: [properties]
+      summary: Collaborator opts in or out of maintenance reminders for a shared home
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReminderSubscriptionBody"
+      responses:
+        "200":
+          description: Updated preferences
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationPreferences"
+        "404":
+          description: Not a collaborator on this home
+
   /admin/stats:
     get:
       operationId: getAdminStats
@@ -1546,6 +1912,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+
+  /properties/{propertyId}/report/email:
+    post:
+      operationId: emailPropertyReport
+      tags: [properties]
+      summary: Email the property report as a PDF from Casa Dossier to up to 5 addresses
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailPropertyReportBody"
+      responses:
+        "201":
+          description: Sent (failedRecipients lists any addresses that didn't go through)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportSendResult"
+        "429":
+          description: Daily sending limit reached
+
+  /properties/{propertyId}/report/sends:
+    get:
+      operationId: listReportSends
+      tags: [properties]
+      summary: Who the report was emailed to, newest first
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Report history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportSend"
 
   /properties/{propertyId}/report:
     get:
@@ -2243,6 +2657,189 @@ paths:
 
 components:
   schemas:
+    # ─── Emailed reports ───────────────────────────────────────────────────────
+    EmailPropertyReportBody:
+      type: object
+      required: [recipients, includeCosts]
+      properties:
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
+            format: email
+        message:
+          type: string
+          maxLength: 1000
+        includeCosts:
+          type: boolean
+
+    ReportSend:
+      type: object
+      required: [id, propertyId, senderUserId, recipients, includeCosts, createdAt]
+      properties:
+        id:
+          type: string
+        propertyId:
+          type: string
+        senderUserId:
+          type: string
+        recipients:
+          type: array
+          items:
+            type: string
+        includeCosts:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    ReportSendResult:
+      allOf:
+        - $ref: "#/components/schemas/ReportSend"
+        - type: object
+          required: [failedRecipients]
+          properties:
+            failedRecipients:
+              type: array
+              items:
+                type: string
+
+    # ─── Notification preferences ────────────────────────────────────────────
+    NotificationPreferences:
+      type: object
+      required: [emailReminders, pushReminders, weeklySummary, sharedHomes]
+      properties:
+        emailReminders:
+          type: boolean
+        pushReminders:
+          type: boolean
+        weeklySummary:
+          type: boolean
+        sharedHomes:
+          type: array
+          items:
+            type: object
+            required: [propertyId, name, address, receiveReminders]
+            properties:
+              propertyId:
+                type: string
+              name:
+                type: string
+              address:
+                type: string
+              receiveReminders:
+                type: boolean
+
+    UpdateNotificationPreferencesBody:
+      type: object
+      properties:
+        emailReminders:
+          type: boolean
+        pushReminders:
+          type: boolean
+        weeklySummary:
+          type: boolean
+
+    ReminderSubscriptionBody:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+
+    # ─── Ownership claims (inheriting a previous owner's history) ──────────────
+    OwnershipClaimSummary:
+      type: object
+      required: [id, status, documentType, createdAt]
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        documentType:
+          type: string
+          enum: [closing_document, photo_id]
+        rejectionReason:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        reviewedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    UnclaimedHistory:
+      type: object
+      required: [available, assetCount, recordCount, verifiedCount]
+      properties:
+        available:
+          type: boolean
+        assetCount:
+          type: integer
+        recordCount:
+          type: integer
+        verifiedCount:
+          type: integer
+        claim:
+          allOf:
+            - $ref: "#/components/schemas/OwnershipClaimSummary"
+          nullable: true
+
+    CreateOwnershipClaimBody:
+      type: object
+      required: [documentType, documentPath]
+      properties:
+        documentType:
+          type: string
+          enum: [closing_document, photo_id]
+        documentPath:
+          type: string
+          description: objectPath returned by /storage/uploads/request-url
+
+    RejectOwnershipClaimBody:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+
+    AdminOwnershipClaim:
+      allOf:
+        - $ref: "#/components/schemas/OwnershipClaimSummary"
+        - type: object
+          required: [claimantUserId, targetPropertyId, propertyAddress, hasDocument]
+          properties:
+            claimantUserId:
+              type: string
+            claimantName:
+              type: string
+              nullable: true
+            claimantEmail:
+              type: string
+              nullable: true
+            targetPropertyId:
+              type: string
+            propertyAddress:
+              type: string
+            hasDocument:
+              type: boolean
+            history:
+              allOf:
+                - $ref: "#/components/schemas/UnclaimedHistory"
+              nullable: true
+            ownerOfRecord:
+              type: array
+              nullable: true
+              description: Owner names on public property records (RentCast), when available
+              items:
+                type: string
+
     HealthStatus:
       type: object
       required: [status]
@@ -2584,6 +3181,85 @@ components:
           type: string
           format: date-time
           nullable: true
+        retiredReason:
+          type: string
+          enum: [replaced, removed, failed, other]
+          nullable: true
+        healthScore:
+          type: integer
+          description: 0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.
+        expectedLifespanYears:
+          type: integer
+          description: Expected service life, adjusted for the property's climate region. Set on GET responses.
+        lastServiceDate:
+          type: string
+          format: date
+          nullable: true
+        overdueTaskCount:
+          type: integer
+        estimatedReplacementCost:
+          type: number
+          nullable: true
+          description: Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.
+
+    HomeType:
+      type: string
+      enum: [single_family, townhouse, condo]
+
+    StarterAssetSuggestion:
+      type: object
+      required: [key, name, category, recommended, reasonCode, reason, estimatedInstallYear]
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          enum: [HVAC, Plumbing, Electrical, Roof, Appliance, Other]
+        recommended:
+          type: boolean
+          description: Pre-ticked in the checklist
+        reasonCode:
+          type: string
+          enum: [galvanized_pipes, polybutylene_pipes, knob_and_tube, aluminum_wiring]
+          nullable: true
+          description: Age-related reason, for the apps to translate
+        reason:
+          type: string
+          nullable: true
+          description: Why it's suggested for this home in particular (age-related checks)
+        estimatedInstallYear:
+          type: integer
+          nullable: true
+          description: The year built, when the original is likely still in place. Null when unknown.
+
+    StarterAssetSuggestions:
+      type: object
+      required: [homeType, yearBuilt, suggestions]
+      properties:
+        homeType:
+          $ref: "#/components/schemas/HomeType"
+        yearBuilt:
+          type: integer
+          nullable: true
+        suggestions:
+          type: array
+          items:
+            $ref: "#/components/schemas/StarterAssetSuggestion"
+
+    AddStarterAssetsBody:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            type: string
+        homeType:
+          $ref: "#/components/schemas/HomeType"
 
     CreateAssetBody:
       type: object
@@ -2640,7 +3316,8 @@ components:
           nullable: true
         status:
           type: string
-          enum: [verified, unverified, needs_attention]
+          description: '"verified" is set only by completed CasaService work and can''t be set here.'
+          enum: [unverified, needs_attention]
         notes:
           type: string
           nullable: true
@@ -2650,6 +3327,11 @@ components:
         retiredAt:
           type: string
           format: date-time
+          nullable: true
+          description: Set to retire the asset (requires retiredReason); null to reactivate it.
+        retiredReason:
+          type: string
+          enum: [replaced, removed, failed, other]
           nullable: true
         replacementCost:
           type: number
@@ -2675,6 +3357,11 @@ components:
           type: string
         cost:
           type: number
+          description: Amount the owner actually entered. Null if none was entered.
+        estimatedCost:
+          type: number
+          nullable: true
+          description: The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.
         nextServiceDate:
           type: string
           format: date
@@ -2706,8 +3393,6 @@ components:
           format: date
         receiptUrl:
           type: string
-        verified:
-          type: boolean
 
     # ─── Maintenance Task ───────────────────────────────────────────────────────
     MaintenanceTask:
@@ -2833,6 +3518,12 @@ components:
           type: string
         phone:
           type: string
+        emailReminders:
+          type: boolean
+        pushReminders:
+          type: boolean
+        weeklySummary:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -2887,7 +3578,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, en_route, arrived, completed]
+          enum: [open, claimed, en_route, arrived, completed, cancelled]
         city:
           type: string
         state:
@@ -2937,7 +3628,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, en_route, arrived, completed]
+          enum: [open, claimed, en_route, arrived, completed, cancelled]
         city:
           type: string
         state:
@@ -2969,7 +3660,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, en_route, arrived, completed]
+          enum: [open, claimed, en_route, arrived, completed, cancelled]
         assetId:
           type: string
         assetName:
@@ -3034,7 +3725,7 @@ components:
           enum: [low, medium, high, emergency]
         status:
           type: string
-          enum: [open, claimed, en_route, arrived, completed]
+          enum: [open, claimed, en_route, arrived, completed, cancelled]
         assetName:
           type: string
         assetCategory:
@@ -3062,6 +3753,66 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    CancelJobBody:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+
+    JobStatusResult:
+      type: object
+      required: [ok, status]
+      properties:
+        ok:
+          type: boolean
+        status:
+          type: string
+          enum: [open, claimed, en_route, arrived, completed, cancelled]
+
+    ServiceArea:
+      type: object
+      required: [name, centerLat, centerLng, radiusMiles]
+      properties:
+        name:
+          type: string
+        centerLat:
+          type: number
+        centerLng:
+          type: number
+        radiusMiles:
+          type: number
+
+    ServiceAreaCheck:
+      type: object
+      required: [inServiceArea, status, areaName, onWaitlist]
+      properties:
+        inServiceArea:
+          type: boolean
+        status:
+          type: string
+          enum: [inside, outside, unknown]
+        areaName:
+          type: string
+        onWaitlist:
+          type: boolean
+
+    JoinServiceWaitlistBody:
+      type: object
+      required: [propertyId]
+      properties:
+        propertyId:
+          type: string
+
+    JoinServiceWaitlistResult:
+      type: object
+      required: [ok, onWaitlist]
+      properties:
+        ok:
+          type: boolean
+        onWaitlist:
+          type: boolean
 
     ScheduleJobBody:
       type: object
@@ -3296,7 +4047,7 @@ components:
           type: string
         triggerEvent:
           type: string
-          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, collaborator_invited, new_feature_announcement, monthly_update, custom]
+          enum: [technician_accepted_job, job_completed, overdue_maintenance, maintenance_due_soon, weekly_summary, asset_end_of_life, property_transfer_initiated, collaborator_invited, new_feature_announcement, monthly_update, custom]
         conditions:
           type: object
           additionalProperties: true
@@ -3321,7 +4072,7 @@ components:
           type: string
         triggerEvent:
           type: string
-          enum: [technician_accepted_job, job_completed, overdue_maintenance, asset_end_of_life, property_transfer_initiated, collaborator_invited, new_feature_announcement, monthly_update, custom]
+          enum: [technician_accepted_job, job_completed, overdue_maintenance, maintenance_due_soon, weekly_summary, asset_end_of_life, property_transfer_initiated, collaborator_invited, new_feature_announcement, monthly_update, custom]
         conditions:
           type: object
           additionalProperties: true
@@ -3516,6 +4267,10 @@ components:
         folderId:
           type: string
           nullable: true
+        propertyId:
+          type: string
+          nullable: true
+          description: The home this document is about
         name:
           type: string
         objectPath:
@@ -3543,6 +4298,8 @@ components:
           type: integer
         folderId:
           type: string
+        propertyId:
+          type: string
 
     UpdateLockerFileBody:
       type: object
@@ -3550,6 +4307,9 @@ components:
         name:
           type: string
         folderId:
+          type: string
+          nullable: true
+        propertyId:
           type: string
           nullable: true
 
@@ -3651,7 +4411,7 @@ components:
     # ─── Capital outlook ────────────────────────────────────────────────────────
     CapitalOutlookAsset:
       type: object
-      required: [id, name, category, brand, model, installDate, installYear, replacementCost, expectedLifespanYears, replacementYear, yearsRemaining, urgency, ageYears, percentLifeUsed]
+      required: [id, name, category, brand, model, installDate, installYear, replacementCost, replacementCostIsEstimate, expectedLifespanYears, replacementYear, yearsRemaining, urgency, ageYears, percentLifeUsed]
       properties:
         id:
           type: string
@@ -3675,6 +4435,9 @@ components:
         replacementCost:
           type: number
           nullable: true
+        replacementCostIsEstimate:
+          type: boolean
+          description: True when replacementCost is Casa Dossier's regional estimate rather than an owner-entered figure
         expectedLifespanYears:
           type: integer
         replacementYear:
@@ -3695,12 +4458,15 @@ components:
 
     CapitalTimelineEntry:
       type: object
-      required: [year, projectedCost, assetNames]
+      required: [year, projectedCost, estimatedCost, assetNames]
       properties:
         year:
           type: integer
         projectedCost:
           type: number
+        estimatedCost:
+          type: number
+          description: The part of projectedCost that comes from estimates
         assetNames:
           type: array
           items:
@@ -3708,7 +4474,7 @@ components:
 
     CapitalNextReplacement:
       type: object
-      required: [name, year, cost]
+      required: [name, year, cost, costIsEstimate]
       properties:
         name:
           type: string
@@ -3716,13 +4482,18 @@ components:
           type: integer
         cost:
           type: number
+        costIsEstimate:
+          type: boolean
 
     CapitalOutlook:
       type: object
-      required: [totalTrackedValue, assets, timeline, summary]
+      required: [totalTrackedValue, estimatedTrackedValue, assets, timeline, summary]
       properties:
         totalTrackedValue:
           type: number
+        estimatedTrackedValue:
+          type: number
+          description: The part of totalTrackedValue that comes from estimates
         assets:
           type: array
           items:
@@ -3734,7 +4505,7 @@ components:
             $ref: "#/components/schemas/CapitalTimelineEntry"
         summary:
           type: object
-          required: [nextReplacement, next5YearCost, next10YearCost]
+          required: [nextReplacement, next5YearCost, next10YearCost, next5YearEstimatedCost, next10YearEstimatedCost]
           properties:
             nextReplacement:
               allOf:
@@ -3743,6 +4514,10 @@ components:
             next5YearCost:
               type: number
             next10YearCost:
+              type: number
+            next5YearEstimatedCost:
+              type: number
+            next10YearEstimatedCost:
               type: number
 
     # ─── Investment ledger ──────────────────────────────────────────────────────
@@ -3782,12 +4557,17 @@ components:
             $ref: "#/components/schemas/LedgerCategoryTotal"
         totals:
           type: object
-          required: [actual, expected]
+          required: [actual, expected, estimatedCompleted]
           properties:
             actual:
               type: number
+              description: Costs the owner entered on service records
             expected:
               type: number
+              description: Estimated cost of open tasks due in the range
+            estimatedCompleted:
+              type: number
+              description: Estimates on tasks completed without an entered cost. Not counted in actual.
 
     # ─── Property report ────────────────────────────────────────────────────────
     ReportAsset:
@@ -3936,7 +4716,7 @@ components:
 
     AssetScanResult:
       type: object
-      description: Parsed straight from the AI response; fields are best-effort
+      description: AI response validated against this schema on the server; fields are best-effort
       properties:
         brand:
           type: string
@@ -4022,6 +4802,8 @@ components:
           enum: [pending, completed, cancelled]
         token:
           type: string
+        includeDocuments:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -4049,6 +4831,9 @@ components:
           type: string
           format: email
           description: Ignored — the sender's verified email is used
+        includeDocuments:
+          type: boolean
+          description: Also move the sender's Digital Locker documents tagged to this home
 
     TransferClaimProperty:
       type: object

@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { FieldError } from "@/components/field-error";
 import { useToast } from "@/hooks/use-toast";
-import { useSubscription } from "@/contexts/subscription-context";
+import { useSubscription, isBasicPlus } from "@/contexts/subscription-context";
 import { apiErrorMessage } from "@/lib/upload";
 import { Users, X, Lock, Mail, UserCheck, Clock } from "lucide-react";
 
@@ -30,12 +30,11 @@ export function CollaboratorsPanel({ propertyId, isOwner }: Props) {
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
 
-  const isManagedPlus =
-    subscription?.tier === "managed" || subscription?.tier === "concierge";
+  const hasCollaborators = isBasicPlus(subscription?.tier);
 
   const { data: collaborators = [], isLoading } = useListCollaborators(propertyId, {
     query: {
-      enabled: !!propertyId && isOwner && isManagedPlus,
+      enabled: !!propertyId && isOwner && hasCollaborators,
       queryKey: getListCollaboratorsQueryKey(propertyId),
     },
   });
@@ -99,7 +98,7 @@ export function CollaboratorsPanel({ propertyId, isOwner }: Props) {
       <CardContent className="space-y-4">
         {subscriptionLoading ? (
           <p className="text-xs text-muted-foreground text-center py-2">{t("common.loading")}</p>
-        ) : !isManagedPlus ? (
+        ) : !hasCollaborators ? (
           <div className="rounded-lg border border-dashed p-4 flex flex-col items-center gap-2 text-center">
             <div className="bg-muted rounded-full p-2">
               <Lock className="h-4 w-4 text-muted-foreground" />
@@ -113,7 +112,7 @@ export function CollaboratorsPanel({ propertyId, isOwner }: Props) {
               className="mt-1 text-xs h-7"
               onClick={openUpgradeModal}
             >
-              {t("collaborators.upgradeToManaged")}
+              {t("collaborators.upgradeToBasic")}
             </Button>
           </div>
         ) : (

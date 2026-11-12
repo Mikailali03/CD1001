@@ -46,6 +46,7 @@ type RawAsset = {
   notes?: string | null;
   condition?: string;
   lastServiceDate?: string | null;
+  healthScore?: number | null;
 };
 
 function isUnderWarranty(warrantyExpiry?: string | null): boolean {
@@ -298,6 +299,7 @@ export default function AssetsScreen() {
                 installDate={item.asset.installDate}
                 warrantyExpiry={item.asset.warrantyExpiry}
                 status={item.asset.status}
+                healthScore={item.asset.healthScore}
                 onPress={() => {
                   Haptics.selectionAsync();
                   router.push(`/asset/${item.asset.id}`);

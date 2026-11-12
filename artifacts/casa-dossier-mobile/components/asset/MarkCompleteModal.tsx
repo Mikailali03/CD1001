@@ -29,7 +29,7 @@ export function MarkCompleteModal({
 }) {
   const { t } = useTranslation();
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(task?.estimatedCost ? String(Number(task.estimatedCost)) : "");
+  const [cost, setCost] = useState("");
   const [isDiy, setIsDiy] = useState(task?.isDiy ?? true);
   const [techName, setTechName] = useState(task?.isDiy !== false ? "Homeowner (DIY)" : "");
   const [company, setCompany] = useState("");
@@ -134,7 +134,7 @@ export function MarkCompleteModal({
               style={[modalStyles.input, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card, fontFamily: "Inter_400Regular" }]}
               value={cost}
               onChangeText={setCost}
-              placeholder="0.00"
+              placeholder={task?.estimatedCost ? `est. ${Number(task.estimatedCost)}` : "0.00"}
               placeholderTextColor={colors.mutedForeground}
               keyboardType="decimal-pad"
             />

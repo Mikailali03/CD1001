@@ -40,6 +40,7 @@ import type { MaintenanceTask } from "@/components/asset/types";
 import { resolveStorageUrl } from "@/lib/config";
 import { invalidatePropertyData } from "@/lib/query-invalidation";
 import { normCategory } from "@/components/asset/utils";
+import { useStorageAuthHeaders } from "@/hooks/useStorageAuthHeaders";
 
 // ── Main asset detail screen ───────────────────────────────────────────────────
 export default function AssetDetailScreen() {
@@ -49,6 +50,7 @@ export default function AssetDetailScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
+  const storageHeaders = useStorageAuthHeaders();
   const [activeTask, setActiveTask] = useState<MaintenanceTask | null>(null);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -83,7 +85,7 @@ export default function AssetDetailScreen() {
 
   const cat = normCategory(a.category);
   const cfg = CATEGORY_CONFIG[cat] ?? CATEGORY_CONFIG.Other!;
-  const score = calcAssetScore({ name: a.name, installDate: a.installDate, warrantyExpiry: a.warrantyExpiry, status: a.status, category: cat });
+  const score = calcAssetScore({ name: a.name, installDate: a.installDate, warrantyExpiry: a.warrantyExpiry, status: a.status, category: cat, healthScore: a.healthScore });
   const { color: gradeColor } = gradeFromScore(score);
   const underWarranty = a.warrantyExpiry ? new Date(a.warrantyExpiry) > new Date() : false;
 
@@ -152,7 +154,7 @@ export default function AssetDetailScreen() {
           {/* Life-used bar */}
           {a.installDate && (
             <View style={{ width: "100%", marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border }}>
-              <LifeBar installDate={a.installDate} category={cat} name={a.name} colors={colors} />
+              <LifeBar installDate={a.installDate} category={cat} name={a.name} lifespanYears={a.expectedLifespanYears} colors={colors} />
             </View>
           )}
         </View>
@@ -161,7 +163,7 @@ export default function AssetDetailScreen() {
         {!!a.photoUrl && (
           <View style={[detailStyles.section, { backgroundColor: colors.card, borderColor: colors.border, padding: 0, overflow: "hidden" }]}>
             <Image
-              source={{ uri: resolveStorageUrl(a.photoUrl) }}
+              source={{ uri: resolveStorageUrl(a.photoUrl), headers: storageHeaders }}
               style={{ width: "100%", height: 200 }}
               contentFit="cover"
             />
@@ -205,9 +207,15 @@ export default function AssetDetailScreen() {
               colors={colors}
             />
           )}
-          {a.replacementCost != null && Number(a.replacementCost) > 0 && (
+          {a.replacementCost != null && Number(a.replacementCost) > 0 ? (
             <SpecRow label={t("assetDetail.spec.replacementCost")} value={`$${Number(a.replacementCost).toLocaleString()}`} colors={colors} />
-          )}
+          ) : a.estimatedReplacementCost != null ? (
+            <SpecRow
+              label={t("assetDetail.spec.replacementCost")}
+              value={t("common.estimatedAmount", { amount: `$${Number(a.estimatedReplacementCost).toLocaleString()}` })}
+              colors={colors}
+            />
+          ) : null}
           {!a.brand && !a.model && !a.serialNumber && !a.installDate && !a.warrantyExpiry && (
             <Text style={[{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular", paddingVertical: 8 }]}>
               {t("assetDetail.noSpecs")}
@@ -324,6 +332,11 @@ export default function AssetDetailScreen() {
         onSaved={() => {
           queryClient.invalidateQueries({ queryKey: getGetAssetQueryKey(a.id) });
           invalidatePropertyData(queryClient, a.propertyId);
+        }}
+        onReplace={() => router.push({ pathname: "/add-asset", params: { propertyId: a.propertyId } })}
+        onRemoved={() => {
+          invalidatePropertyData(queryClient, a.propertyId);
+          router.back();
         }}
       />
     </View>

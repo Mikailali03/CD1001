@@ -8,9 +8,9 @@ import { useColors } from "@/hooks/useColors";
 
 // ── Recent Activity Row ────────────────────────────────────────────────────────
 export function ActivityRow({
-  description, assetName, companyName, date, colors,
+  description, assetName, companyName, verified, date, colors,
 }: {
-  description: string; assetName?: string; companyName?: string; date: string;
+  description: string; assetName?: string; companyName?: string; verified?: boolean; date: string;
   colors: ReturnType<typeof useColors>;
 }) {
   const { t } = useTranslation();
@@ -29,7 +29,7 @@ export function ActivityRow({
               {assetName} · 
             </Text>
           ) : null}
-          {companyName === "CasaService" ? (
+          {verified ? (
             <CasaServiceBadge />
           ) : (
             <Text style={[actStyles.meta, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>

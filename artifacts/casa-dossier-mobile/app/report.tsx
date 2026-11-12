@@ -26,6 +26,8 @@ import { parseISO } from "date-fns";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { formatDate } from "@/lib/dates";
+import { provenanceLabel } from "@/lib/provenance";
+import { EmailReportSheet } from "@/components/report/EmailReportSheet";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 type ReportData = PropertyReport;
@@ -37,7 +39,7 @@ function fmtDate(d: string | null | undefined) {
 }
 
 function performer(r: ServiceRecord, t: TFunction) {
-  if (r.companyName === "CasaService") {
+  if (r.verified) {
     return r.technicianName ? t("report.casaServiceWithTech", { name: r.technicianName }) : t("report.casaService");
   }
   return r.companyName ?? r.technicianName ?? t("report.homeownerDiy");
@@ -64,6 +66,7 @@ function AssetCard({ asset, retired, colors }: {
           {retired && asset.retiredAt && (
             <Text style={[assetStyles.retired, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
               {t("report.decommissioned", { date: fmtDate(asset.retiredAt) })}
+              {asset.retiredReason ? ` · ${t(`retire.reason.${asset.retiredReason}`)}` : ""}
             </Text>
           )}
         </View>
@@ -104,11 +107,14 @@ function AssetCard({ asset, retired, colors }: {
                     {r.description}
                   </Text>
                   <Text style={[assetStyles.recPerf, {
-                    color: r.companyName === "CasaService" ? "#92400e" : colors.mutedForeground,
-                    fontFamily: r.companyName === "CasaService" ? "Inter_600SemiBold" : "Inter_400Regular",
+                    color: r.verified ? "#92400e" : colors.mutedForeground,
+                    fontFamily: r.verified ? "Inter_600SemiBold" : "Inter_400Regular",
                   }]}>
                     {performer(r, t)}
                     {r.cost != null && Number(r.cost) > 0 ? ` · $${Number(r.cost).toLocaleString()}` : ""}
+                  </Text>
+                  <Text style={[assetStyles.recPerf, { color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 10 }]}>
+                    {provenanceLabel(r, t)}
                   </Text>
                 </View>
               ))}
@@ -178,22 +184,7 @@ export default function ReportScreen() {
   const loading = report.isPending;
   const error = report.isError;
 
-  async function handleShare() {
-    if (!data) return;
-    const p = data.property;
-    const lines = [
-      t("report.share.title", { name: p.name }),
-      [p.address, p.city, p.state].filter(Boolean).join(", "),
-      p.yearBuilt ? t("report.share.built", { year: p.yearBuilt }) : null,
-      p.sqft ? t("report.share.sqft", { sqft: p.sqft.toLocaleString() }) : null,
-      "",
-      t("report.share.assets", { active: data.activeAssets.length, retired: data.retiredAssets.length }),
-      t("report.share.events", { count: data.totalEvents }),
-      "",
-      t("report.share.generated", { date: formatDate(parseISO(data.generatedAt), "MMM d, yyyy") }),
-    ].filter(Boolean).join("\n");
-    await Share.share({ message: lines });
-  }
+  const [emailOpen, setEmailOpen] = useState(false);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -205,8 +196,8 @@ export default function ReportScreen() {
         <Text style={[hdrStyles.title, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
           {t("report.title")}
         </Text>
-        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("report.shareLabel")} onPress={handleShare} style={hdrStyles.share} hitSlop={10} disabled={!data}>
-          <Feather name="share" size={20} color={data ? colors.foreground : colors.mutedForeground} />
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={t("reportShare.emailCta")} onPress={() => setEmailOpen(true)} style={hdrStyles.share} hitSlop={10} disabled={!data}>
+          <Feather name="mail" size={20} color={data ? colors.foreground : colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
@@ -275,7 +266,7 @@ export default function ReportScreen() {
                   {data.totalEvents}
                 </Text>
                 <Text style={[propStyles.eventsLabel, { color: colors.mutedForeground, fontFamily: "Inter_400Regular" }]}>
-                  {t("report.auditedEvents")}
+                  {t("report.serviceRecords")}
                 </Text>
               </View>
               <View style={propStyles.eventsItem}>
@@ -323,6 +314,9 @@ export default function ReportScreen() {
           )}
         </ScrollView>
       )}
+      {propertyId ? (
+        <EmailReportSheet propertyId={propertyId} visible={emailOpen} onClose={() => setEmailOpen(false)} colors={colors} />
+      ) : null}
     </View>
   );
 }

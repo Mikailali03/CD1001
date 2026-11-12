@@ -1,51 +1,9 @@
 import { db, emailTemplatesTable, emailTriggersTable, type TriggerEvent } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
-import { logger } from "./logger.js";
 import { getAppUrl } from "./appUrl.js";
+import { sendEmail, type EmailMessage } from "./emailDelivery.js";
 
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const DEFAULT_FROM = "Casa Dossier <noreply@casadossier.com>";
-
-export interface EmailMessage {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}
-
-/**
- * Send a transactional email through Resend. A no-op (logged) when
- * RESEND_API_KEY isn't configured. Rejects on delivery failure, so callers on
- * a request path should fire and forget with `.catch(...)`.
- */
-export async function sendEmail({ to, subject, html, text }: EmailMessage): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    logger.info({ to, subject }, "RESEND_API_KEY not set, skipping email");
-    return;
-  }
-
-  const res = await fetch(RESEND_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: process.env.EMAIL_FROM || DEFAULT_FROM,
-      to: [to],
-      // Subjects are plain text and must stay on one line.
-      subject: subject.replace(/[\r\n]+/g, " "),
-      html,
-      ...(text ? { text } : {}),
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Resend responded ${res.status}: ${detail.slice(0, 500)}`);
-  }
-}
+export { sendEmail, type EmailMessage } from "./emailDelivery.js";
 
 export function escapeHtml(value: string): string {
   return value
@@ -56,15 +14,19 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-/** Replace `{{name}}` placeholders. Unknown placeholders render as empty. */
+/**
+ * Replace `{{name}}` placeholders. Unknown placeholders render as empty.
+ * Names in `raw` hold HTML the server built itself (e.g. a task list) and are
+ * inserted unescaped.
+ */
 export function renderTemplate(
   template: string,
   variables: Record<string, string>,
-  { escape }: { escape: boolean },
+  { escape, raw }: { escape: boolean; raw?: ReadonlySet<string> },
 ): string {
   return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_match, name: string) => {
     const value = variables[name] ?? "";
-    return escape ? escapeHtml(value) : value;
+    return escape && !raw?.has(name) ? escapeHtml(value) : value;
   });
 }
 
@@ -87,21 +49,23 @@ async function getTriggerTemplate(event: TriggerEvent) {
  * Send the email for a Communication Hub event: the admin's template if an
  * active trigger links one, otherwise the built-in default.
  */
-async function sendEventEmail(
+export async function sendEventEmail(
   event: TriggerEvent,
   to: string,
   variables: Record<string, string>,
   fallback: Omit<EmailMessage, "to">,
+  options: { rawVariables?: ReadonlySet<string>; headers?: Record<string, string> } = {},
 ): Promise<void> {
   const template = await getTriggerTemplate(event);
   if (!template) {
-    await sendEmail({ to, ...fallback });
+    await sendEmail({ to, headers: options.headers, ...fallback });
     return;
   }
   await sendEmail({
     to,
     subject: renderTemplate(template.subject, variables, { escape: false }),
-    html: renderTemplate(template.bodyHtml, variables, { escape: true }),
+    html: renderTemplate(template.bodyHtml, variables, { escape: true, raw: options.rawVariables }),
+    headers: options.headers,
   });
 }
 
@@ -109,7 +73,7 @@ function formatAddress(property: { address: string; city?: string | null; state?
   return [property.address, property.city, property.state].filter(Boolean).join(", ");
 }
 
-function layout(bodyHtml: string): string {
+export function layout(bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1a1a1a;">
@@ -119,7 +83,7 @@ ${bodyHtml}
 </html>`;
 }
 
-function button(href: string, label: string): string {
+export function button(href: string, label: string): string {
   return `<a href="${escapeHtml(href)}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600;">${escapeHtml(label)}</a>`;
 }
 

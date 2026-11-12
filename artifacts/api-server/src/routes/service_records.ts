@@ -11,6 +11,8 @@ import {
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleAsset } from "../lib/access.js";
 import { toDateOnly } from "../lib/dates.js";
+import { recordAuditInBackground } from "../lib/audit.js";
+import { isReservedCompanyName, RESERVED_COMPANY_NAME_ERROR } from "../lib/provenance.js";
 
 const router = Router();
 
@@ -41,9 +43,18 @@ router.post("/assets/:assetId/records", requireAuth(), async (req, res) => {
     return;
   }
 
-  // "verified" is never client-settable: only records created by a CasaService
-  // technician completing a marketplace job are verified.
-  const { verified: _verified, date, nextServiceDate, ...rest } = body;
+  if (asset.retiredAt) {
+    res.status(409).json({ error: "This asset is retired, so no new records can be added." });
+    return;
+  }
+  if (isReservedCompanyName(body.companyName)) {
+    res.status(400).json({ error: RESERVED_COMPANY_NAME_ERROR });
+    return;
+  }
+
+  // Records created here are always self-reported: "verified" isn't in the body
+  // schema, and only a CasaService technician completing a job creates verified ones.
+  const { date, nextServiceDate, ...rest } = body;
   const [record] = await db
     .insert(serviceRecordsTable)
     .values({
@@ -52,8 +63,18 @@ router.post("/assets/:assetId/records", requireAuth(), async (req, res) => {
       date: toDateOnly(date),
       nextServiceDate: toDateOnly(nextServiceDate) ?? null,
       cost: body.cost != null ? String(body.cost) : null,
+      verified: false,
+      createdByUserId: req.userId,
     })
     .returning();
+  recordAuditInBackground({
+    actorUserId: req.userId,
+    action: "service_record.created",
+    entityType: "service_record",
+    entityId: record!.id,
+    propertyId: asset.propertyId,
+    details: { assetId, date: record!.date, description: record!.description },
+  });
   res.status(201).json(record);
 });
 

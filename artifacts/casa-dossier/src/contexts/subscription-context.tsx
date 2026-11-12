@@ -23,10 +23,6 @@ export function isBasicPlus(tier: SubscriptionTier | undefined | null): boolean 
   return TIER_RANK[tier ?? "essential"] >= TIER_RANK["basic"];
 }
 
-export function isManagedPlus(tier: SubscriptionTier | undefined | null): boolean {
-  return TIER_RANK[tier ?? "essential"] >= TIER_RANK["managed"];
-}
-
 export type SubscriptionData = Subscription;
 
 /** Only allow redirects to Stripe-hosted pages. */

@@ -7,6 +7,8 @@ export const TRIGGER_EVENTS = [
   "technician_accepted_job",
   "job_completed",
   "overdue_maintenance",
+  "maintenance_due_soon",
+  "weekly_summary",
   "asset_end_of_life",
   "property_transfer_initiated",
   "collaborator_invited",

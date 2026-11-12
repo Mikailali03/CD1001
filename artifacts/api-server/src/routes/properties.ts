@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { propertiesTable, subscriptionsTable, TIER_PROPERTY_LIMITS } from "@workspace/db";
-import { eq, and, desc, count } from "drizzle-orm";
+import { eq, and, desc, count, isNull } from "drizzle-orm";
 import {
   CreatePropertyBody,
   UpdatePropertyBody,
@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-zod";
 import { assetsTable, maintenanceTasksTable, serviceRecordsTable } from "@workspace/db";
 import { calcAssetScore, calcHealthScore } from "../health-score.js";
+import { loadAssetServiceContext } from "../lib/assetHealth.js";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getAccessibleProperty, getOwnedProperty, getAccessibleProperties } from "../lib/access.js";
 // getOwnedProperty is still used for PATCH (owner-only edit)
@@ -103,7 +104,11 @@ router.get("/properties/:propertyId/summary", requireAuth(), async (req, res) =>
     return;
   }
 
-  const assets = await db.select().from(assetsTable).where(eq(assetsTable.propertyId, propertyId));
+  // Retired assets keep their history but no longer count toward the summary or score.
+  const assets = await db
+    .select()
+    .from(assetsTable)
+    .where(and(eq(assetsTable.propertyId, propertyId), isNull(assetsTable.retiredAt)));
   const totalAssets = assets.length;
   const verifiedAssets = assets.filter((a) => a.status === "verified").length;
 
@@ -132,7 +137,8 @@ router.get("/properties/:propertyId/summary", requireAuth(), async (req, res) =>
   }
   const assetsByCategory = Object.entries(categoryMap).map(([category, count]) => ({ category, count }));
 
-  const assetScores = assets.map((a) => calcAssetScore(a));
+  const serviceCtx = await loadAssetServiceContext(assets.map((a) => a.id), property.state);
+  const assetScores = assets.map((a) => calcAssetScore(a, serviceCtx));
   const fifteenDaysAgo = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
   const recentCompletedCount = tasks.filter((t) => {
     const ca = t.task.completedAt;

@@ -17,7 +17,7 @@ export function TaskCompleteForm({
 }) {
   const { t } = useTranslation();
   const [notes, setNotes] = useState("");
-  const [cost, setCost] = useState(task.estimatedCost ? String(Number(task.estimatedCost)) : "");
+  const [cost, setCost] = useState("");
   const [isDiy, setIsDiy] = useState<boolean>(task.isDiy ?? true);
   const [technicianName, setTechnicianName] = useState(task.isDiy !== false ? DIY_TECHNICIAN_NAME : "");
   const [companyName, setCompanyName] = useState("");
@@ -70,7 +70,7 @@ export function TaskCompleteForm({
             type="number"
             min={0}
             step="0.01"
-            placeholder="0.00"
+            placeholder={task.estimatedCost ? `est. ${Number(task.estimatedCost)}` : "0.00"}
             value={cost}
             onChange={(e) => setCost(e.target.value)}
             className="text-sm h-8 bg-background"

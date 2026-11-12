@@ -8,6 +8,22 @@
 import * as zod from "zod";
 
 /**
+ * @summary Authenticated CARTO basemap tile (API key stays on the server)
+ */
+export const getMapTilePathZMin = 8;
+export const getMapTilePathZMax = 18;
+
+export const getMapTilePathXMin = 0;
+
+export const getMapTilePathYMin = 0;
+
+export const GetMapTileParams = zod.object({
+  z: zod.coerce.number().min(getMapTilePathZMin).max(getMapTilePathZMax),
+  x: zod.coerce.number().min(getMapTilePathXMin),
+  y: zod.coerce.number().min(getMapTilePathYMin),
+});
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -241,7 +257,18 @@ export const GetPropertySummaryResponse = zod.object({
           technicianName: zod.string().optional(),
           companyName: zod.string().optional(),
           description: zod.string(),
-          cost: zod.number().optional(),
+          cost: zod
+            .number()
+            .optional()
+            .describe(
+              "Amount the owner actually entered. Null if none was entered.",
+            ),
+          estimatedCost: zod
+            .number()
+            .nullish()
+            .describe(
+              "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+            ),
           nextServiceDate: zod.coerce.date().optional(),
           receiptUrl: zod.string().optional(),
           verified: zod.boolean().optional(),
@@ -339,6 +366,27 @@ export const ListAssetsResponseItem = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
   retiredAt: zod.coerce.date().nullish(),
+  retiredReason: zod.enum(["replaced", "removed", "failed", "other"]).nullish(),
+  healthScore: zod
+    .number()
+    .optional()
+    .describe(
+      "0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.",
+    ),
+  expectedLifespanYears: zod
+    .number()
+    .optional()
+    .describe(
+      "Expected service life, adjusted for the property's climate region. Set on GET responses.",
+    ),
+  lastServiceDate: zod.coerce.date().nullish(),
+  overdueTaskCount: zod.number().optional(),
+  estimatedReplacementCost: zod
+    .number()
+    .nullish()
+    .describe(
+      "Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.",
+    ),
 });
 export const ListAssetsResponse = zod.array(ListAssetsResponseItem);
 
@@ -368,6 +416,77 @@ export const CreateAssetBody = zod.object({
   notes: zod.string().optional(),
   photoUrl: zod.string().optional(),
   replacementCost: zod.number().optional(),
+});
+
+/**
+ * @summary Suggested starter assets for a home, based on its age and type
+ */
+export const GetStarterAssetsParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetStarterAssetsQueryParams = zod.object({
+  homeType: zod
+    .enum(["single_family", "townhouse", "condo"])
+    .optional()
+    .describe(
+      "Defaults to a guess from the street address (a unit number means condo)",
+    ),
+});
+
+export const GetStarterAssetsResponse = zod.object({
+  homeType: zod.enum(["single_family", "townhouse", "condo"]),
+  yearBuilt: zod.number().nullable(),
+  suggestions: zod.array(
+    zod.object({
+      key: zod.string(),
+      name: zod.string(),
+      category: zod.enum([
+        "HVAC",
+        "Plumbing",
+        "Electrical",
+        "Roof",
+        "Appliance",
+        "Other",
+      ]),
+      recommended: zod.boolean().describe("Pre-ticked in the checklist"),
+      reasonCode: zod
+        .enum([
+          "galvanized_pipes",
+          "polybutylene_pipes",
+          "knob_and_tube",
+          "aluminum_wiring",
+        ])
+        .nullable()
+        .describe("Age-related reason, for the apps to translate"),
+      reason: zod
+        .string()
+        .nullable()
+        .describe(
+          "Why it's suggested for this home in particular (age-related checks)",
+        ),
+      estimatedInstallYear: zod
+        .number()
+        .nullable()
+        .describe(
+          "The year built, when the original is likely still in place. Null when unknown.",
+        ),
+    }),
+  ),
+});
+
+/**
+ * @summary Add the chosen starter assets, with install years estimated from the year built
+ */
+export const AddStarterAssetsParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const addStarterAssetsBodyKeysMax = 20;
+
+export const AddStarterAssetsBody = zod.object({
+  keys: zod.array(zod.string()).min(1).max(addStarterAssetsBodyKeysMax),
+  homeType: zod.enum(["single_family", "townhouse", "condo"]).optional(),
 });
 
 /**
@@ -406,6 +525,27 @@ export const GetAssetResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
   retiredAt: zod.coerce.date().nullish(),
+  retiredReason: zod.enum(["replaced", "removed", "failed", "other"]).nullish(),
+  healthScore: zod
+    .number()
+    .optional()
+    .describe(
+      "0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.",
+    ),
+  expectedLifespanYears: zod
+    .number()
+    .optional()
+    .describe(
+      "Expected service life, adjusted for the property's climate region. Set on GET responses.",
+    ),
+  lastServiceDate: zod.coerce.date().nullish(),
+  overdueTaskCount: zod.number().optional(),
+  estimatedReplacementCost: zod
+    .number()
+    .nullish()
+    .describe(
+      "Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.",
+    ),
 });
 
 /**
@@ -433,10 +573,21 @@ export const UpdateAssetBody = zod.object({
   serialNumber: zod.string().nullish(),
   installDate: zod.coerce.date().nullish(),
   warrantyExpiry: zod.coerce.date().nullish(),
-  status: zod.enum(["verified", "unverified", "needs_attention"]).optional(),
+  status: zod
+    .enum(["unverified", "needs_attention"])
+    .optional()
+    .describe(
+      '\"verified\" is set only by completed CasaService work and can\'t be set here.',
+    ),
   notes: zod.string().nullish(),
   photoUrl: zod.string().nullish(),
-  retiredAt: zod.coerce.date().nullish(),
+  retiredAt: zod.coerce
+    .date()
+    .nullish()
+    .describe(
+      "Set to retire the asset (requires retiredReason); null to reactivate it.",
+    ),
+  retiredReason: zod.enum(["replaced", "removed", "failed", "other"]).nullish(),
   replacementCost: zod.number().nullish(),
 });
 
@@ -469,10 +620,33 @@ export const UpdateAssetResponse = zod.object({
   createdAt: zod.coerce.date(),
   updatedAt: zod.coerce.date().optional(),
   retiredAt: zod.coerce.date().nullish(),
+  retiredReason: zod.enum(["replaced", "removed", "failed", "other"]).nullish(),
+  healthScore: zod
+    .number()
+    .optional()
+    .describe(
+      "0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.",
+    ),
+  expectedLifespanYears: zod
+    .number()
+    .optional()
+    .describe(
+      "Expected service life, adjusted for the property's climate region. Set on GET responses.",
+    ),
+  lastServiceDate: zod.coerce.date().nullish(),
+  overdueTaskCount: zod.number().optional(),
+  estimatedReplacementCost: zod
+    .number()
+    .nullish()
+    .describe(
+      "Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.",
+    ),
 });
 
 /**
- * @summary Remove an asset
+ * Owners can remove an asset only if it has no service records and was added in the last 7 days; anything else must be retired (PATCH retiredAt) so its history stays on the report. Admins can remove any asset.
+
+ * @summary Remove an asset added by mistake
  */
 export const DeleteAssetParams = zod.object({
   assetId: zod.coerce.string(),
@@ -492,7 +666,16 @@ export const ListServiceRecordsResponseItem = zod.object({
   technicianName: zod.string().optional(),
   companyName: zod.string().optional(),
   description: zod.string(),
-  cost: zod.number().optional(),
+  cost: zod
+    .number()
+    .optional()
+    .describe("Amount the owner actually entered. Null if none was entered."),
+  estimatedCost: zod
+    .number()
+    .nullish()
+    .describe(
+      "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+    ),
   nextServiceDate: zod.coerce.date().optional(),
   receiptUrl: zod.string().optional(),
   verified: zod.boolean().optional(),
@@ -517,7 +700,6 @@ export const CreateServiceRecordBody = zod.object({
   cost: zod.number().optional(),
   nextServiceDate: zod.coerce.date().optional(),
   receiptUrl: zod.string().optional(),
-  verified: zod.boolean().optional(),
 });
 
 /**
@@ -534,7 +716,16 @@ export const GetServiceRecordResponse = zod.object({
   technicianName: zod.string().optional(),
   companyName: zod.string().optional(),
   description: zod.string(),
-  cost: zod.number().optional(),
+  cost: zod
+    .number()
+    .optional()
+    .describe("Amount the owner actually entered. Null if none was entered."),
+  estimatedCost: zod
+    .number()
+    .nullish()
+    .describe(
+      "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+    ),
   nextServiceDate: zod.coerce.date().optional(),
   receiptUrl: zod.string().optional(),
   verified: zod.boolean().optional(),
@@ -714,6 +905,9 @@ export const GetUserProfileResponse = zod.object({
   role: zod.enum(["homeowner", "technician", "admin"]),
   technicianNumber: zod.string().optional(),
   phone: zod.string().optional(),
+  emailReminders: zod.boolean().optional(),
+  pushReminders: zod.boolean().optional(),
+  weeklySummary: zod.boolean().optional(),
   createdAt: zod.coerce.date().optional(),
   updatedAt: zod.coerce.date().optional(),
 });
@@ -741,6 +935,9 @@ export const UpsertUserProfileResponse = zod.object({
   role: zod.enum(["homeowner", "technician", "admin"]),
   technicianNumber: zod.string().optional(),
   phone: zod.string().optional(),
+  emailReminders: zod.boolean().optional(),
+  pushReminders: zod.boolean().optional(),
+  weeklySummary: zod.boolean().optional(),
   createdAt: zod.coerce.date().optional(),
   updatedAt: zod.coerce.date().optional(),
 });
@@ -759,7 +956,14 @@ export const ListMarketplaceJobsResponseItem = zod.object({
   assetSerialNumber: zod.string().optional(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]).optional(),
-  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
   city: zod.string().optional(),
   state: zod.string().optional(),
   latitude: zod.number().optional(),
@@ -775,7 +979,7 @@ export const ListMarketplaceJobsResponse = zod.array(
 );
 
 /**
- * @summary Post a service request to the marketplace
+ * @summary Request service from the Casa Dossier team
  */
 export const CreateMarketplaceJobBody = zod.object({
   assetId: zod.string(),
@@ -791,7 +995,14 @@ export const ListOpenMarketplaceJobsResponseItem = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
   city: zod.string(),
   state: zod.string(),
   zipCode: zod.string().optional(),
@@ -816,7 +1027,14 @@ export const GetMarketplaceJobDetailsResponse = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
   assetId: zod.string().optional(),
   assetName: zod.string(),
   assetCategory: zod.string(),
@@ -840,7 +1058,18 @@ export const GetMarketplaceJobDetailsResponse = zod.object({
         technicianName: zod.string().optional(),
         companyName: zod.string().optional(),
         description: zod.string(),
-        cost: zod.number().optional(),
+        cost: zod
+          .number()
+          .optional()
+          .describe(
+            "Amount the owner actually entered. Null if none was entered.",
+          ),
+        estimatedCost: zod
+          .number()
+          .nullish()
+          .describe(
+            "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+          ),
         nextServiceDate: zod.coerce.date().optional(),
         receiptUrl: zod.string().optional(),
         verified: zod.boolean().optional(),
@@ -871,7 +1100,14 @@ export const AcceptMarketplaceJobResponse = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
   assetId: zod.string().optional(),
   assetName: zod.string(),
   assetCategory: zod.string(),
@@ -895,7 +1131,18 @@ export const AcceptMarketplaceJobResponse = zod.object({
         technicianName: zod.string().optional(),
         companyName: zod.string().optional(),
         description: zod.string(),
-        cost: zod.number().optional(),
+        cost: zod
+          .number()
+          .optional()
+          .describe(
+            "Amount the owner actually entered. Null if none was entered.",
+          ),
+        estimatedCost: zod
+          .number()
+          .nullish()
+          .describe(
+            "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+          ),
         nextServiceDate: zod.coerce.date().optional(),
         receiptUrl: zod.string().optional(),
         verified: zod.boolean().optional(),
@@ -922,7 +1169,14 @@ export const ListAssignedJobsResponseItem = zod.object({
   id: zod.string(),
   description: zod.string(),
   urgency: zod.enum(["low", "medium", "high", "emergency"]),
-  status: zod.enum(["open", "claimed", "en_route", "arrived", "completed"]),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
   assetName: zod.string(),
   assetCategory: zod.string(),
   assetBrand: zod.string().optional(),
@@ -999,6 +1253,81 @@ export const CompleteMarketplaceJobBody = zod.object({
 export const CompleteMarketplaceJobResponse = zod.object({
   ok: zod.boolean().optional(),
   serviceRecordId: zod.string().optional(),
+});
+
+/**
+ * @summary Homeowner cancels a service request (only before the technician sets off)
+ */
+export const CancelMarketplaceJobParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const cancelMarketplaceJobBodyReasonMax = 500;
+
+export const CancelMarketplaceJobBody = zod.object({
+  reason: zod.string().max(cancelMarketplaceJobBodyReasonMax).optional(),
+});
+
+export const CancelMarketplaceJobResponse = zod.object({
+  ok: zod.boolean(),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
+});
+
+/**
+ * @summary Technician releases an accepted job back to the open pool
+ */
+export const ReleaseMarketplaceJobParams = zod.object({
+  jobId: zod.coerce.string(),
+});
+
+export const ReleaseMarketplaceJobResponse = zod.object({
+  ok: zod.boolean(),
+  status: zod.enum([
+    "open",
+    "claimed",
+    "en_route",
+    "arrived",
+    "completed",
+    "cancelled",
+  ]),
+});
+
+/**
+ * @summary The CasaService service area (center and radius)
+ */
+export const GetServiceAreaResponse = zod.object({
+  name: zod.string(),
+  centerLat: zod.number(),
+  centerLng: zod.number(),
+  radiusMiles: zod.number(),
+});
+
+/**
+ * @summary Whether CasaService can take requests for a property
+ */
+export const CheckServiceAreaQueryParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const CheckServiceAreaResponse = zod.object({
+  inServiceArea: zod.boolean(),
+  status: zod.enum(["inside", "outside", "unknown"]),
+  areaName: zod.string(),
+  onWaitlist: zod.boolean(),
+});
+
+/**
+ * @summary Join the waitlist for a property outside the service area
+ */
+export const JoinServiceWaitlistBody = zod.object({
+  propertyId: zod.string(),
 });
 
 /**
@@ -1183,7 +1512,18 @@ export const GetDashboardResponse = zod.object({
       technicianName: zod.string().optional(),
       companyName: zod.string().optional(),
       description: zod.string(),
-      cost: zod.number().optional(),
+      cost: zod
+        .number()
+        .optional()
+        .describe(
+          "Amount the owner actually entered. Null if none was entered.",
+        ),
+      estimatedCost: zod
+        .number()
+        .nullish()
+        .describe(
+          "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+        ),
       nextServiceDate: zod.coerce.date().optional(),
       receiptUrl: zod.string().optional(),
       verified: zod.boolean().optional(),
@@ -1307,6 +1647,10 @@ export const ListLockerFilesResponseItem = zod.object({
   id: zod.string(),
   userId: zod.string(),
   folderId: zod.string().nullish(),
+  propertyId: zod
+    .string()
+    .nullish()
+    .describe("The home this document is about"),
   name: zod.string(),
   objectPath: zod.string(),
   contentType: zod.string(),
@@ -1324,6 +1668,7 @@ export const CreateLockerFileBody = zod.object({
   contentType: zod.string(),
   size: zod.number().optional(),
   folderId: zod.string().optional(),
+  propertyId: zod.string().optional(),
 });
 
 /**
@@ -1336,12 +1681,17 @@ export const UpdateLockerFileParams = zod.object({
 export const UpdateLockerFileBody = zod.object({
   name: zod.string().optional(),
   folderId: zod.string().nullish(),
+  propertyId: zod.string().nullish(),
 });
 
 export const UpdateLockerFileResponse = zod.object({
   id: zod.string(),
   userId: zod.string(),
   folderId: zod.string().nullish(),
+  propertyId: zod
+    .string()
+    .nullish()
+    .describe("The home this document is about"),
   name: zod.string(),
   objectPath: zod.string(),
   contentType: zod.string(),
@@ -1354,6 +1704,269 @@ export const UpdateLockerFileResponse = zod.object({
  */
 export const DeleteLockerFileParams = zod.object({
   fileId: zod.coerce.string(),
+});
+
+/**
+ * @summary Existing history at this property's address left by a previous owner (owner only)
+ */
+export const GetUnclaimedHistoryParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const GetUnclaimedHistoryResponse = zod.object({
+  available: zod.boolean(),
+  assetCount: zod.number(),
+  recordCount: zod.number(),
+  verifiedCount: zod.number(),
+  claim: zod
+    .object({
+      id: zod.string(),
+      status: zod.enum(["pending", "approved", "rejected"]),
+      documentType: zod.enum(["closing_document", "photo_id"]),
+      rejectionReason: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+      reviewedAt: zod.coerce.date().nullish(),
+    })
+    .nullish(),
+});
+
+/**
+ * @summary Claim a previous owner's history by uploading proof of ownership (owner only)
+ */
+export const CreateOwnershipClaimParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const CreateOwnershipClaimBody = zod.object({
+  documentType: zod.enum(["closing_document", "photo_id"]),
+  documentPath: zod
+    .string()
+    .describe("objectPath returned by \/storage\/uploads\/request-url"),
+});
+
+/**
+ * @summary Ownership claims awaiting or past review
+ */
+export const ListAdminOwnershipClaimsQueryParams = zod.object({
+  status: zod.enum(["pending", "approved", "rejected"]).optional(),
+});
+
+export const ListAdminOwnershipClaimsResponseItem = zod
+  .object({
+    id: zod.string(),
+    status: zod.enum(["pending", "approved", "rejected"]),
+    documentType: zod.enum(["closing_document", "photo_id"]),
+    rejectionReason: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    reviewedAt: zod.coerce.date().nullish(),
+  })
+  .and(
+    zod.object({
+      claimantUserId: zod.string(),
+      claimantName: zod.string().nullish(),
+      claimantEmail: zod.string().nullish(),
+      targetPropertyId: zod.string(),
+      propertyAddress: zod.string(),
+      hasDocument: zod.boolean(),
+      history: zod
+        .object({
+          available: zod.boolean(),
+          assetCount: zod.number(),
+          recordCount: zod.number(),
+          verifiedCount: zod.number(),
+          claim: zod
+            .object({
+              id: zod.string(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              documentType: zod.enum(["closing_document", "photo_id"]),
+              rejectionReason: zod.string().nullish(),
+              createdAt: zod.coerce.date(),
+              reviewedAt: zod.coerce.date().nullish(),
+            })
+            .nullish(),
+        })
+        .nullish(),
+      ownerOfRecord: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "Owner names on public property records (RentCast), when available",
+        ),
+    }),
+  );
+export const ListAdminOwnershipClaimsResponse = zod.array(
+  ListAdminOwnershipClaimsResponseItem,
+);
+
+/**
+ * @summary Approve a claim, move the history to the claimant's home, and delete the document
+ */
+export const ApproveOwnershipClaimParams = zod.object({
+  claimId: zod.coerce.string(),
+});
+
+export const ApproveOwnershipClaimResponse = zod
+  .object({
+    id: zod.string(),
+    status: zod.enum(["pending", "approved", "rejected"]),
+    documentType: zod.enum(["closing_document", "photo_id"]),
+    rejectionReason: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    reviewedAt: zod.coerce.date().nullish(),
+  })
+  .and(
+    zod.object({
+      claimantUserId: zod.string(),
+      claimantName: zod.string().nullish(),
+      claimantEmail: zod.string().nullish(),
+      targetPropertyId: zod.string(),
+      propertyAddress: zod.string(),
+      hasDocument: zod.boolean(),
+      history: zod
+        .object({
+          available: zod.boolean(),
+          assetCount: zod.number(),
+          recordCount: zod.number(),
+          verifiedCount: zod.number(),
+          claim: zod
+            .object({
+              id: zod.string(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              documentType: zod.enum(["closing_document", "photo_id"]),
+              rejectionReason: zod.string().nullish(),
+              createdAt: zod.coerce.date(),
+              reviewedAt: zod.coerce.date().nullish(),
+            })
+            .nullish(),
+        })
+        .nullish(),
+      ownerOfRecord: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "Owner names on public property records (RentCast), when available",
+        ),
+    }),
+  );
+
+/**
+ * @summary Reject a claim with a reason and delete the document
+ */
+export const RejectOwnershipClaimParams = zod.object({
+  claimId: zod.coerce.string(),
+});
+
+export const RejectOwnershipClaimBody = zod.object({
+  reason: zod.string().min(1),
+});
+
+export const RejectOwnershipClaimResponse = zod
+  .object({
+    id: zod.string(),
+    status: zod.enum(["pending", "approved", "rejected"]),
+    documentType: zod.enum(["closing_document", "photo_id"]),
+    rejectionReason: zod.string().nullish(),
+    createdAt: zod.coerce.date(),
+    reviewedAt: zod.coerce.date().nullish(),
+  })
+  .and(
+    zod.object({
+      claimantUserId: zod.string(),
+      claimantName: zod.string().nullish(),
+      claimantEmail: zod.string().nullish(),
+      targetPropertyId: zod.string(),
+      propertyAddress: zod.string(),
+      hasDocument: zod.boolean(),
+      history: zod
+        .object({
+          available: zod.boolean(),
+          assetCount: zod.number(),
+          recordCount: zod.number(),
+          verifiedCount: zod.number(),
+          claim: zod
+            .object({
+              id: zod.string(),
+              status: zod.enum(["pending", "approved", "rejected"]),
+              documentType: zod.enum(["closing_document", "photo_id"]),
+              rejectionReason: zod.string().nullish(),
+              createdAt: zod.coerce.date(),
+              reviewedAt: zod.coerce.date().nullish(),
+            })
+            .nullish(),
+        })
+        .nullish(),
+      ownerOfRecord: zod
+        .array(zod.string())
+        .nullish()
+        .describe(
+          "Owner names on public property records (RentCast), when available",
+        ),
+    }),
+  );
+
+/**
+ * @summary Reminder settings, plus homes shared with the user and whether they get reminders for each
+ */
+export const GetNotificationPreferencesResponse = zod.object({
+  emailReminders: zod.boolean(),
+  pushReminders: zod.boolean(),
+  weeklySummary: zod.boolean(),
+  sharedHomes: zod.array(
+    zod.object({
+      propertyId: zod.string(),
+      name: zod.string(),
+      address: zod.string(),
+      receiveReminders: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * @summary Turn reminder emails, push reminders or the weekly summary on or off
+ */
+export const UpdateNotificationPreferencesBody = zod.object({
+  emailReminders: zod.boolean().optional(),
+  pushReminders: zod.boolean().optional(),
+  weeklySummary: zod.boolean().optional(),
+});
+
+export const UpdateNotificationPreferencesResponse = zod.object({
+  emailReminders: zod.boolean(),
+  pushReminders: zod.boolean(),
+  weeklySummary: zod.boolean(),
+  sharedHomes: zod.array(
+    zod.object({
+      propertyId: zod.string(),
+      name: zod.string(),
+      address: zod.string(),
+      receiveReminders: zod.boolean(),
+    }),
+  ),
+});
+
+/**
+ * @summary Collaborator opts in or out of maintenance reminders for a shared home
+ */
+export const SetReminderSubscriptionParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const SetReminderSubscriptionBody = zod.object({
+  enabled: zod.boolean(),
+});
+
+export const SetReminderSubscriptionResponse = zod.object({
+  emailReminders: zod.boolean(),
+  pushReminders: zod.boolean(),
+  weeklySummary: zod.boolean(),
+  sharedHomes: zod.array(
+    zod.object({
+      propertyId: zod.string(),
+      name: zod.string(),
+      address: zod.string(),
+      receiveReminders: zod.boolean(),
+    }),
+  ),
 });
 
 /**
@@ -1482,6 +2095,8 @@ export const ListEmailTriggersResponseItem = zod.object({
     "technician_accepted_job",
     "job_completed",
     "overdue_maintenance",
+    "maintenance_due_soon",
+    "weekly_summary",
     "asset_end_of_life",
     "property_transfer_initiated",
     "collaborator_invited",
@@ -1509,6 +2124,8 @@ export const CreateEmailTriggerBody = zod.object({
     "technician_accepted_job",
     "job_completed",
     "overdue_maintenance",
+    "maintenance_due_soon",
+    "weekly_summary",
     "asset_end_of_life",
     "property_transfer_initiated",
     "collaborator_invited",
@@ -1535,6 +2152,8 @@ export const UpdateEmailTriggerBody = zod.object({
     "technician_accepted_job",
     "job_completed",
     "overdue_maintenance",
+    "maintenance_due_soon",
+    "weekly_summary",
     "asset_end_of_life",
     "property_transfer_initiated",
     "collaborator_invited",
@@ -1555,6 +2174,8 @@ export const UpdateEmailTriggerResponse = zod.object({
     "technician_accepted_job",
     "job_completed",
     "overdue_maintenance",
+    "maintenance_due_soon",
+    "weekly_summary",
     "asset_end_of_life",
     "property_transfer_initiated",
     "collaborator_invited",
@@ -1591,6 +2212,8 @@ export const ToggleEmailTriggerResponse = zod.object({
     "technician_accepted_job",
     "job_completed",
     "overdue_maintenance",
+    "maintenance_due_soon",
+    "weekly_summary",
     "asset_end_of_life",
     "property_transfer_initiated",
     "collaborator_invited",
@@ -1800,6 +2423,29 @@ export const GenerateStewardshipPlanResponse = zod.object({
     createdAt: zod.coerce.date(),
     updatedAt: zod.coerce.date().optional(),
     retiredAt: zod.coerce.date().nullish(),
+    retiredReason: zod
+      .enum(["replaced", "removed", "failed", "other"])
+      .nullish(),
+    healthScore: zod
+      .number()
+      .optional()
+      .describe(
+        "0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.",
+      ),
+    expectedLifespanYears: zod
+      .number()
+      .optional()
+      .describe(
+        "Expected service life, adjusted for the property's climate region. Set on GET responses.",
+      ),
+    lastServiceDate: zod.coerce.date().nullish(),
+    overdueTaskCount: zod.number().optional(),
+    estimatedReplacementCost: zod
+      .number()
+      .nullish()
+      .describe(
+        "Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.",
+      ),
   }),
   tasks: zod.array(
     zod.object({
@@ -1827,6 +2473,9 @@ export const GetCapitalOutlookParams = zod.object({
 
 export const GetCapitalOutlookResponse = zod.object({
   totalTrackedValue: zod.number(),
+  estimatedTrackedValue: zod
+    .number()
+    .describe("The part of totalTrackedValue that comes from estimates"),
   assets: zod.array(
     zod.object({
       id: zod.string(),
@@ -1845,6 +2494,11 @@ export const GetCapitalOutlookResponse = zod.object({
       installDate: zod.string().nullable(),
       installYear: zod.number().nullable(),
       replacementCost: zod.number().nullable(),
+      replacementCostIsEstimate: zod
+        .boolean()
+        .describe(
+          "True when replacementCost is Casa Dossier's regional estimate rather than an owner-entered figure",
+        ),
       expectedLifespanYears: zod.number(),
       replacementYear: zod.number().nullable(),
       yearsRemaining: zod.number().nullable(),
@@ -1858,6 +2512,9 @@ export const GetCapitalOutlookResponse = zod.object({
       zod.object({
         year: zod.number(),
         projectedCost: zod.number(),
+        estimatedCost: zod
+          .number()
+          .describe("The part of projectedCost that comes from estimates"),
         assetNames: zod.array(zod.string()),
       }),
     )
@@ -1868,10 +2525,13 @@ export const GetCapitalOutlookResponse = zod.object({
         name: zod.string(),
         year: zod.number(),
         cost: zod.number(),
+        costIsEstimate: zod.boolean(),
       })
       .nullable(),
     next5YearCost: zod.number(),
     next10YearCost: zod.number(),
+    next5YearEstimatedCost: zod.number(),
+    next10YearEstimatedCost: zod.number(),
   }),
 });
 
@@ -1907,7 +2567,18 @@ export const GetInvestmentLedgerResponse = zod.object({
         technicianName: zod.string().optional(),
         companyName: zod.string().optional(),
         description: zod.string(),
-        cost: zod.number().optional(),
+        cost: zod
+          .number()
+          .optional()
+          .describe(
+            "Amount the owner actually entered. Null if none was entered.",
+          ),
+        estimatedCost: zod
+          .number()
+          .nullish()
+          .describe(
+            "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+          ),
         nextServiceDate: zod.coerce.date().optional(),
         receiptUrl: zod.string().optional(),
         verified: zod.boolean().optional(),
@@ -1928,10 +2599,54 @@ export const GetInvestmentLedgerResponse = zod.object({
     }),
   ),
   totals: zod.object({
-    actual: zod.number(),
-    expected: zod.number(),
+    actual: zod.number().describe("Costs the owner entered on service records"),
+    expected: zod
+      .number()
+      .describe("Estimated cost of open tasks due in the range"),
+    estimatedCompleted: zod
+      .number()
+      .describe(
+        "Estimates on tasks completed without an entered cost. Not counted in actual.",
+      ),
   }),
 });
+
+/**
+ * @summary Email the property report as a PDF from Casa Dossier to up to 5 addresses
+ */
+export const EmailPropertyReportParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const emailPropertyReportBodyRecipientsMax = 5;
+
+export const emailPropertyReportBodyMessageMax = 1000;
+
+export const EmailPropertyReportBody = zod.object({
+  recipients: zod
+    .array(zod.string().email())
+    .min(1)
+    .max(emailPropertyReportBodyRecipientsMax),
+  message: zod.string().max(emailPropertyReportBodyMessageMax).optional(),
+  includeCosts: zod.boolean(),
+});
+
+/**
+ * @summary Who the report was emailed to, newest first
+ */
+export const ListReportSendsParams = zod.object({
+  propertyId: zod.coerce.string(),
+});
+
+export const ListReportSendsResponseItem = zod.object({
+  id: zod.string(),
+  propertyId: zod.string(),
+  senderUserId: zod.string(),
+  recipients: zod.array(zod.string()),
+  includeCosts: zod.boolean(),
+  createdAt: zod.coerce.date(),
+});
+export const ListReportSendsResponse = zod.array(ListReportSendsResponseItem);
 
 /**
  * @summary Full property history report (assets with their service records)
@@ -1993,6 +2708,29 @@ export const GetPropertyReportResponse = zod.object({
         createdAt: zod.coerce.date(),
         updatedAt: zod.coerce.date().optional(),
         retiredAt: zod.coerce.date().nullish(),
+        retiredReason: zod
+          .enum(["replaced", "removed", "failed", "other"])
+          .nullish(),
+        healthScore: zod
+          .number()
+          .optional()
+          .describe(
+            "0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.",
+          ),
+        expectedLifespanYears: zod
+          .number()
+          .optional()
+          .describe(
+            "Expected service life, adjusted for the property's climate region. Set on GET responses.",
+          ),
+        lastServiceDate: zod.coerce.date().nullish(),
+        overdueTaskCount: zod.number().optional(),
+        estimatedReplacementCost: zod
+          .number()
+          .nullish()
+          .describe(
+            "Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.",
+          ),
       })
       .and(
         zod.object({
@@ -2004,7 +2742,18 @@ export const GetPropertyReportResponse = zod.object({
               technicianName: zod.string().optional(),
               companyName: zod.string().optional(),
               description: zod.string(),
-              cost: zod.number().optional(),
+              cost: zod
+                .number()
+                .optional()
+                .describe(
+                  "Amount the owner actually entered. Null if none was entered.",
+                ),
+              estimatedCost: zod
+                .number()
+                .nullish()
+                .describe(
+                  "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+                ),
               nextServiceDate: zod.coerce.date().optional(),
               receiptUrl: zod.string().optional(),
               verified: zod.boolean().optional(),
@@ -2045,6 +2794,29 @@ export const GetPropertyReportResponse = zod.object({
         createdAt: zod.coerce.date(),
         updatedAt: zod.coerce.date().optional(),
         retiredAt: zod.coerce.date().nullish(),
+        retiredReason: zod
+          .enum(["replaced", "removed", "failed", "other"])
+          .nullish(),
+        healthScore: zod
+          .number()
+          .optional()
+          .describe(
+            "0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses.",
+          ),
+        expectedLifespanYears: zod
+          .number()
+          .optional()
+          .describe(
+            "Expected service life, adjusted for the property's climate region. Set on GET responses.",
+          ),
+        lastServiceDate: zod.coerce.date().nullish(),
+        overdueTaskCount: zod.number().optional(),
+        estimatedReplacementCost: zod
+          .number()
+          .nullish()
+          .describe(
+            "Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set.",
+          ),
       })
       .and(
         zod.object({
@@ -2056,7 +2828,18 @@ export const GetPropertyReportResponse = zod.object({
               technicianName: zod.string().optional(),
               companyName: zod.string().optional(),
               description: zod.string(),
-              cost: zod.number().optional(),
+              cost: zod
+                .number()
+                .optional()
+                .describe(
+                  "Amount the owner actually entered. Null if none was entered.",
+                ),
+              estimatedCost: zod
+                .number()
+                .nullish()
+                .describe(
+                  "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+                ),
               nextServiceDate: zod.coerce.date().optional(),
               receiptUrl: zod.string().optional(),
               verified: zod.boolean().optional(),
@@ -2148,6 +2931,7 @@ export const GetPendingPropertyTransferResponse = zod.union([
     toUserId: zod.string().nullable(),
     status: zod.enum(["pending", "completed", "cancelled"]),
     token: zod.string(),
+    includeDocuments: zod.boolean().optional(),
     createdAt: zod.coerce.date(),
     expiresAt: zod.coerce.date().nullable(),
     completedAt: zod.coerce.date().nullable(),
@@ -2170,6 +2954,12 @@ export const InitiatePropertyTransferBody = zod.object({
     .email()
     .optional()
     .describe("Ignored — the sender's verified email is used"),
+  includeDocuments: zod
+    .boolean()
+    .optional()
+    .describe(
+      "Also move the sender's Digital Locker documents tagged to this home",
+    ),
 });
 
 /**
@@ -2188,6 +2978,7 @@ export const CancelPropertyTransferResponse = zod.object({
   toUserId: zod.string().nullable(),
   status: zod.enum(["pending", "completed", "cancelled"]),
   token: zod.string(),
+  includeDocuments: zod.boolean().optional(),
   createdAt: zod.coerce.date(),
   expiresAt: zod.coerce.date().nullable(),
   completedAt: zod.coerce.date().nullable(),
@@ -2244,6 +3035,7 @@ export const ClaimPropertyTransferResponse = zod.object({
     toUserId: zod.string().nullable(),
     status: zod.enum(["pending", "completed", "cancelled"]),
     token: zod.string(),
+    includeDocuments: zod.boolean().optional(),
     createdAt: zod.coerce.date(),
     expiresAt: zod.coerce.date().nullable(),
     completedAt: zod.coerce.date().nullable(),
@@ -2285,7 +3077,9 @@ export const ScanAssetDataPlateResponse = zod
       .nullish(),
     suggestedName: zod.string().nullish(),
   })
-  .describe("Parsed straight from the AI response; fields are best-effort");
+  .describe(
+    "AI response validated against this schema on the server; fields are best-effort",
+  );
 
 /**
  * @summary Generate an AI maintenance plan for an asset (owner only)
@@ -2364,7 +3158,16 @@ export const CompleteMaintenanceTaskResponse = zod.object({
     technicianName: zod.string().optional(),
     companyName: zod.string().optional(),
     description: zod.string(),
-    cost: zod.number().optional(),
+    cost: zod
+      .number()
+      .optional()
+      .describe("Amount the owner actually entered. Null if none was entered."),
+    estimatedCost: zod
+      .number()
+      .nullish()
+      .describe(
+        "The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend.",
+      ),
     nextServiceDate: zod.coerce.date().optional(),
     receiptUrl: zod.string().optional(),
     verified: zod.boolean().optional(),

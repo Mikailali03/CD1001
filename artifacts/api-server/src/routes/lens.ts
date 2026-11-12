@@ -6,8 +6,9 @@ import { eq } from "drizzle-orm";
 import { openai } from "@workspace/integrations-openai-ai-server";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { getOwnedAsset } from "../lib/access.js";
-import { aiRateLimit, refundAiUse, reserveAiUse } from "../lib/subscription.js";
+import { aiRateLimit, FREE_AI_ALLOWANCE, refundAiUse, reserveAiUse } from "../lib/subscription.js";
 import { parseAiTasks } from "../lib/aiTasks.js";
+import { parseAssetScan } from "../lib/aiScan.js";
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.post("/assets/scan", requireAuth(), aiRateLimit(), async (req, res) => {
   const { imageBase64, mimeType } = ScanBody.parse(req.body);
 
   if (!(await reserveAiUse(req.userId, "scans"))) {
-    res.status(403).json({ error: "Free tier allows 1 AI data plate scan. Upgrade to Basic for unlimited scans." });
+    res.status(403).json({ error: `Free tier allows ${FREE_AI_ALLOWANCE} AI data plate scans. Upgrade to Basic for unlimited scans.` });
     return;
   }
 
@@ -68,15 +69,14 @@ For "suggestedName": a short plain-English name like "Carrier Central AC Unit" o
     throw err;
   }
 
-  const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/, "").trim();
-
-  try {
-    res.json(JSON.parse(cleaned));
-  } catch {
+  const scan = parseAssetScan(raw);
+  if (!scan) {
     await refundAiUse(req.userId, "scans");
-    req.log.error({ raw }, "AI Lens: failed to parse OCR response");
+    req.log.error({ raw }, "AI Lens: scan response failed validation");
     res.status(502).json({ error: "Could not read the label. Try a clearer photo." });
+    return;
   }
+  res.json(scan);
 });
 
 const GenerateTasksParams = z.object({ assetId: z.string() });
@@ -89,9 +89,13 @@ router.post("/assets/:assetId/generate-tasks", requireAuth(), aiRateLimit(), asy
     res.status(404).json({ error: "Asset not found" });
     return;
   }
+  if (asset.retiredAt) {
+    res.status(409).json({ error: "This asset is retired. Reactivate it first." });
+    return;
+  }
 
   if (!(await reserveAiUse(req.userId, "plans"))) {
-    res.status(403).json({ error: "Free tier allows 1 AI maintenance plan. Upgrade to Basic for unlimited plans." });
+    res.status(403).json({ error: `Free tier allows ${FREE_AI_ALLOWANCE} AI maintenance plans. Upgrade to Basic for unlimited plans.` });
     return;
   }
 
@@ -145,7 +149,7 @@ Field rules:
   }
 
   const tasks = parseAiTasks(raw);
-  if (!tasks) {
+  if (!tasks || tasks.length === 0) {
     await refundAiUse(req.userId, "plans");
     req.log.error({ raw }, "Autonomous task gen: failed to parse AI response");
     res.status(502).json({ error: "Couldn't generate a plan right now. Please try again." });
@@ -176,11 +180,6 @@ Field rules:
           .then((rows) => rows[0]!);
       })
   );
-
-  await db
-    .update(assetsTable)
-    .set({ status: "verified", updatedAt: new Date() })
-    .where(eq(assetsTable.id, assetId));
 
   res.json({ tasks: inserted, taskCount: inserted.length });
 });

@@ -22,13 +22,20 @@ import { useTranslation } from "react-i18next";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { useColors } from "@/hooks/useColors";
 import { useSignOut } from "@/hooks/useSignOut";
-import { deleteUserAccount } from "@workspace/api-client-react";
+import {
+  deleteUserAccount,
+  getGetUserProfileQueryKey,
+  upsertUserProfile,
+  useGetUserProfile,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiErrorMessage } from "@/hooks/useRole";
 import { requestNotificationPermission, syncNotifications } from "@/lib/notifications";
 import { ActionRow } from "@/components/settings/ActionRow";
 import { FieldRow } from "@/components/settings/FieldRow";
 import { SectionLabel } from "@/components/settings/SectionLabel";
 import { SettingsCard } from "@/components/settings/SettingsCard";
+import { ReminderSettingsCard } from "@/components/settings/ReminderSettingsCard";
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -40,10 +47,26 @@ export default function SettingsScreen() {
   const signOut = useSignOut();
   const [deletingAccount, setDeletingAccount] = useState(false);
 
-  const [firstName, setFirstName] = useState(user?.firstName ?? "");
-  const [lastName, setLastName] = useState(user?.lastName ?? "");
+  const queryClient = useQueryClient();
+  const { data: profile, isFetched: profileFetched } = useGetUserProfile({
+    query: { queryKey: getGetUserProfileQueryKey(), retry: false },
+  });
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileDirty, setProfileDirty] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+  // Fill the form once the saved profile loads; a new account has none yet
+  // (404), so fall back to the sign-in account's name.
+  useEffect(() => {
+    if (profileLoaded || !user || !profileFetched) return;
+    setFirstName(profile?.firstName ?? user.firstName ?? "");
+    setLastName(profile?.lastName ?? user.lastName ?? "");
+    setPhone(profile?.phone ?? "");
+    setProfileLoaded(true);
+  }, [profileLoaded, user, profile, profileFetched]);
 
   const [notifStatus, setNotifStatus] = useState<"granted" | "denied" | "undetermined">("undetermined");
 
@@ -63,13 +86,30 @@ export default function SettingsScreen() {
     setLastName(v);
     setProfileDirty(true);
   };
+  const handlePhoneChange = (v: string) => {
+    setPhone(v);
+    setProfileDirty(true);
+  };
 
   const handleSaveProfile = async () => {
     if (!profileDirty) return;
+    if (!firstName.trim()) {
+      Alert.alert(t("common.error"), t("settings.firstNameRequired"));
+      return;
+    }
     setSavingProfile(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await user?.update({ firstName: firstName.trim(), lastName: lastName.trim() });
+      // The app reads its own profile (reminders, reports, technician names),
+      // so save there; then keep the sign-in account's name in step.
+      const saved = await upsertUserProfile({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        phone: phone.trim() || undefined,
+        email: user?.primaryEmailAddress?.emailAddress ?? undefined,
+      });
+      queryClient.setQueryData(getGetUserProfileQueryKey(), saved);
+      user?.update({ firstName: firstName.trim(), lastName: lastName.trim() }).catch(() => {});
       setProfileDirty(false);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -209,6 +249,17 @@ export default function SettingsScreen() {
               style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
               placeholderTextColor={colors.mutedForeground}
               placeholder={t("settings.lastName")}
+              returnKeyType="next"
+            />
+          </FieldRow>
+          <FieldRow label={t("settings.phone")} colors={colors}>
+            <TextInput
+              value={phone}
+              onChangeText={handlePhoneChange}
+              style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+              placeholderTextColor={colors.mutedForeground}
+              placeholder={t("settings.phone")}
+              keyboardType="phone-pad"
               returnKeyType="done"
               onSubmitEditing={handleSaveProfile}
             />
@@ -251,6 +302,12 @@ export default function SettingsScreen() {
             last
           />
         </SettingsCard>
+
+        {/* Maintenance reminders (saved on the server) */}
+        <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 8 }}>
+          <SectionLabel label={t("settings.sections.reminders")} colors={colors} />
+        </View>
+        <ReminderSettingsCard colors={colors} />
 
         {/* Language */}
         <View style={{ paddingHorizontal: 20, marginTop: 20, marginBottom: 8 }}>

@@ -12,10 +12,15 @@ export const serviceRecordsTable = pgTable("service_records", {
   companyName: text("company_name"),
   description: text("description").notNull(),
   cost: numeric("cost", { precision: 10, scale: 2 }),
+  // Set when a task was completed without an entered cost: the task's estimate,
+  // kept for reference but never counted as actual spend (cost stays null).
+  estimatedCost: numeric("estimated_cost", { precision: 10, scale: 2 }),
   nextServiceDate: text("next_service_date"),
   receiptUrl: text("receipt_url"),
   verified: boolean("verified").notNull().default(false),
   casaServiceTechId: text("casa_service_tech_id"),
+  // Null for records created before this column existed.
+  createdByUserId: text("created_by_user_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (t) => [
   index("service_records_asset_id_idx").on(t.assetId),

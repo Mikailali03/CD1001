@@ -2,17 +2,16 @@ import React, { useEffect, useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import MapView, { Marker, type Region } from "react-native-maps";
 import Constants from "expo-constants";
-import type { TechJobSummary } from "@workspace/api-client-react";
+import type { ServiceArea, TechJobSummary } from "@workspace/api-client-react";
 import { useTranslation } from "react-i18next";
 import { useColors } from "@/hooks/useColors";
 import { urgencyOf } from "./ui";
 
-export const ATLANTA_REGION: Region = {
-  latitude: 33.749,
-  longitude: -84.388,
-  latitudeDelta: 0.9,
-  longitudeDelta: 0.9,
-};
+/** A map region that fits the service area (a degree of latitude is ~69 miles). */
+export function regionForServiceArea(area: Pick<ServiceArea, "centerLat" | "centerLng" | "radiusMiles">): Region {
+  const delta = Math.max(0.2, (area.radiusMiles * 2) / 69 * 0.9);
+  return { latitude: area.centerLat, longitude: area.centerLng, latitudeDelta: delta, longitudeDelta: delta };
+}
 
 /**
  * Android's Google Maps SDK crashes on mount without an API key, so the map is
@@ -31,6 +30,8 @@ type Props = {
   jobs: TechJobSummary[];
   selectedId: string | null;
   onSelect: (jobId: string | null) => void;
+  /** The CasaService area from GET /service-area; the map opens centered on it. */
+  area: Pick<ServiceArea, "centerLat" | "centerLng" | "radiusMiles">;
 };
 
 /**
@@ -38,7 +39,7 @@ type Props = {
  * (never the property's own location — the address is revealed only after
  * accepting). User location is not shown: expo-location isn't a dependency.
  */
-export function JobsMap({ jobs, selectedId, onSelect }: Props) {
+export function JobsMap({ jobs, selectedId, onSelect, area }: Props) {
   const { t } = useTranslation();
   const colors = useColors();
   const categoryOf = (job: TechJobSummary) =>
@@ -76,7 +77,7 @@ export function JobsMap({ jobs, selectedId, onSelect }: Props) {
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        initialRegion={ATLANTA_REGION}
+        initialRegion={regionForServiceArea(area)}
         onPress={(e) => {
           // Tapping empty map clears the selection; marker taps are handled below.
           if (e.nativeEvent.action !== "marker-press") onSelect(null);

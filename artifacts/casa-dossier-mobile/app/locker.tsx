@@ -18,7 +18,6 @@ import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
-import { useAuth } from "@clerk/expo";
 import { useRouter } from "expo-router";
 import {
   useListLockerFiles,
@@ -35,6 +34,8 @@ import { useTranslation } from "react-i18next";
 import { resolveStorageUrl, storageUrlForObjectPath } from "@/lib/config";
 import { isUpgradeRequiredError } from "@/lib/api-errors";
 import { UploadRejectedError, uploadFailureMessage, uploadPickedFile } from "@/hooks/useImageUpload";
+import { useSelectedProperty } from "@/context/PropertyContext";
+import { useStorageAuthHeaders } from "@/hooks/useStorageAuthHeaders";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const NUM_COLS = 3;
@@ -44,9 +45,9 @@ type FolderTabId = "all" | "unorganized" | string;
 
 export default function LockerScreen() {
   const { t } = useTranslation();
+  const { selectedProperty } = useSelectedProperty();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { getToken } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [uploading, setUploading] = useState(false);
@@ -91,27 +92,12 @@ export default function LockerScreen() {
     setRefreshing(false);
   };
 
-  // Locker documents are private on the server, so image requests must carry
-  // the session token. Clerk tokens are short-lived, so keep a fresh one.
-  const [authToken, setAuthToken] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    const refresh = () =>
-      getToken()
-        .then((t) => { if (alive) setAuthToken(t); })
-        .catch(() => {});
-    refresh();
-    const id = setInterval(refresh, 45_000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, [getToken]);
+  const storageHeaders = useStorageAuthHeaders();
 
   function photoSource(f: LockerFile) {
     return {
       uri: resolveStorageUrl(storageUrlForObjectPath(f.objectPath)),
-      headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+      headers: storageHeaders,
     };
   }
 
@@ -164,6 +150,8 @@ export default function LockerScreen() {
               activeFolderId !== "all" && activeFolderId !== "unorganized"
                 ? activeFolderId
                 : undefined,
+            // Tags the document to this home so it can go with it in a transfer.
+            propertyId: selectedProperty?.id,
           },
         });
 

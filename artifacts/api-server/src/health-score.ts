@@ -1,4 +1,7 @@
-import { getExpectedLifespan } from "@workspace/maintenance-specs";
+import { calcAssetHealth, calcHomeHealth, CRITICAL_ASSET_SCORE } from "@workspace/maintenance-specs";
+
+// Thin server wrappers around the shared formula in @workspace/maintenance-specs,
+// so the API, web and mobile all compute the same scores.
 
 export type AssetHealthScore = {
   assetId: string;
@@ -10,84 +13,47 @@ export type AssetHealthScore = {
   installDate?: string | null;
 };
 
-export function calcAssetScore(asset: {
+export type AssetForScore = {
   id: string;
   name: string;
   category: string;
   installDate?: string | null;
-}): AssetHealthScore {
-  const lifespanYears = getExpectedLifespan(asset.category, asset.name);
+  warrantyExpiry?: string | null;
+  status?: string | null;
+};
 
-  if (!asset.installDate) {
-    return {
-      assetId: asset.id,
-      assetName: asset.name,
-      category: asset.category,
-      score: 50,
-      ageYears: 0,
-      lifespanYears,
-      installDate: asset.installDate,
-    };
-  }
+export type AssetServiceContext = {
+  /** Latest service date per asset id; assets missing from the map have never been serviced. */
+  lastServiceDates: Map<string, string>;
+  /** Overdue open-task count per asset id. */
+  overdueCounts: Map<string, number>;
+  state?: string | null;
+  now?: Date;
+};
 
-  const installMs = new Date(asset.installDate).getTime();
-  const ageYears = (Date.now() - installMs) / (1000 * 60 * 60 * 24 * 365.25);
-  const raw = (1 - ageYears / lifespanYears) * 100;
-  const score = Math.round(Math.max(0, Math.min(100, raw)));
-
+/** `state` overrides ctx.state, for callers scoring assets from several properties. */
+export function calcAssetScore(asset: AssetForScore, ctx?: AssetServiceContext, state?: string | null): AssetHealthScore {
+  const { score, ageYears, lifespanYears } = calcAssetHealth(
+    {
+      ...asset,
+      lastServiceDate: ctx ? (ctx.lastServiceDates.get(asset.id) ?? null) : undefined,
+      overdueTaskCount: ctx?.overdueCounts.get(asset.id) ?? 0,
+    },
+    { state: state ?? ctx?.state, now: ctx?.now },
+  );
   return {
     assetId: asset.id,
     assetName: asset.name,
     category: asset.category,
     score,
-    ageYears: Math.round(ageYears * 10) / 10,
+    ageYears: ageYears ?? 0,
     lifespanYears,
     installDate: asset.installDate,
   };
 }
 
-export function calcOverdueScore(overdueCount: number): number {
-  return Math.max(0, 100 - overdueCount * 15);
-}
+export const CRITICAL_THRESHOLD = CRITICAL_ASSET_SCORE;
 
-const CRITICAL_THRESHOLD = 40;
-const NON_CRITICAL_WEIGHT = 0.1;
-
-export function calcHealthScore(
-  assetScores: AssetHealthScore[],
-  overdueCount: number,
-  recentCompletedCount = 0
-): { score: number; grade: "A" | "B" | "C" | "D" | "F"; assetAgeScore: number; overdueScore: number } {
-  let assetAgeScore: number;
-
-  if (assetScores.length === 0) {
-    assetAgeScore = 100;
-  } else {
-    const critical = assetScores.filter((s) => s.score < CRITICAL_THRESHOLD);
-    if (critical.length === 0) {
-      // No critical assets — treat asset condition as perfect
-      assetAgeScore = 100;
-    } else {
-      // Weighted average: critical assets at weight 1.0, non-critical at 0.1
-      const totalWeight = critical.length * 1.0 + (assetScores.length - critical.length) * NON_CRITICAL_WEIGHT;
-      const weightedSum =
-        critical.reduce((sum, s) => sum + s.score * 1.0, 0) +
-        assetScores.filter((s) => s.score >= CRITICAL_THRESHOLD).reduce((sum, s) => sum + s.score * NON_CRITICAL_WEIGHT, 0);
-      assetAgeScore = Math.round(weightedSum / totalWeight);
-    }
-  }
-
-  const overdueScore = calcOverdueScore(overdueCount);
-  const rawScore = Math.round(assetAgeScore * 0.5 + overdueScore * 0.5);
-  // +1 per maintenance task completed in the last 15 days, capped at 100
-  const score = Math.min(100, rawScore + recentCompletedCount);
-
-  const grade =
-    score >= 90 ? "A"
-    : score >= 75 ? "B"
-    : score >= 60 ? "C"
-    : score >= 45 ? "D"
-    : "F";
-
-  return { score, grade, assetAgeScore, overdueScore };
+export function calcHealthScore(assetScores: AssetHealthScore[], overdueCount: number, recentCompletedCount = 0) {
+  return calcHomeHealth(assetScores.map((s) => s.score), overdueCount, recentCompletedCount);
 }

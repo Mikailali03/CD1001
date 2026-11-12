@@ -5,6 +5,119 @@
  * Casa Dossier — Home Maintenance OS API
  * OpenAPI spec version: 0.1.0
  */
+export interface EmailPropertyReportBody {
+  /**
+   * @minItems 1
+   * @maxItems 5
+   */
+  recipients: string[];
+  /** @maxLength 1000 */
+  message?: string;
+  includeCosts: boolean;
+}
+
+export interface ReportSend {
+  id: string;
+  propertyId: string;
+  senderUserId: string;
+  recipients: string[];
+  includeCosts: boolean;
+  createdAt: string;
+}
+
+export type ReportSendResult = ReportSend & {
+  failedRecipients: string[];
+};
+
+export type NotificationPreferencesSharedHomesItem = {
+  propertyId: string;
+  name: string;
+  address: string;
+  receiveReminders: boolean;
+};
+
+export interface NotificationPreferences {
+  emailReminders: boolean;
+  pushReminders: boolean;
+  weeklySummary: boolean;
+  sharedHomes: NotificationPreferencesSharedHomesItem[];
+}
+
+export interface UpdateNotificationPreferencesBody {
+  emailReminders?: boolean;
+  pushReminders?: boolean;
+  weeklySummary?: boolean;
+}
+
+export interface ReminderSubscriptionBody {
+  enabled: boolean;
+}
+
+export type OwnershipClaimSummaryStatus =
+  (typeof OwnershipClaimSummaryStatus)[keyof typeof OwnershipClaimSummaryStatus];
+
+export const OwnershipClaimSummaryStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
+
+export type OwnershipClaimSummaryDocumentType =
+  (typeof OwnershipClaimSummaryDocumentType)[keyof typeof OwnershipClaimSummaryDocumentType];
+
+export const OwnershipClaimSummaryDocumentType = {
+  closing_document: "closing_document",
+  photo_id: "photo_id",
+} as const;
+
+export interface OwnershipClaimSummary {
+  id: string;
+  status: OwnershipClaimSummaryStatus;
+  documentType: OwnershipClaimSummaryDocumentType;
+  rejectionReason?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+}
+
+export interface UnclaimedHistory {
+  available: boolean;
+  assetCount: number;
+  recordCount: number;
+  verifiedCount: number;
+  claim?: OwnershipClaimSummary | null;
+}
+
+export type CreateOwnershipClaimBodyDocumentType =
+  (typeof CreateOwnershipClaimBodyDocumentType)[keyof typeof CreateOwnershipClaimBodyDocumentType];
+
+export const CreateOwnershipClaimBodyDocumentType = {
+  closing_document: "closing_document",
+  photo_id: "photo_id",
+} as const;
+
+export interface CreateOwnershipClaimBody {
+  documentType: CreateOwnershipClaimBodyDocumentType;
+  /** objectPath returned by /storage/uploads/request-url */
+  documentPath: string;
+}
+
+export interface RejectOwnershipClaimBody {
+  /** @minLength 1 */
+  reason: string;
+}
+
+export type AdminOwnershipClaim = OwnershipClaimSummary & {
+  claimantUserId: string;
+  claimantName?: string | null;
+  claimantEmail?: string | null;
+  targetPropertyId: string;
+  propertyAddress: string;
+  hasDocument: boolean;
+  history?: UnclaimedHistory | null;
+  /** Owner names on public property records (RentCast), when available */
+  ownerOfRecord?: string[] | null;
+};
+
 export interface HealthStatus {
   status: string;
 }
@@ -173,7 +286,10 @@ export interface ServiceRecord {
   technicianName?: string;
   companyName?: string;
   description: string;
+  /** Amount the owner actually entered. Null if none was entered. */
   cost?: number;
+  /** The task's estimate, kept when a task was completed without entering a cost. Never counted as actual spend. */
+  estimatedCost?: number | null;
   nextServiceDate?: string;
   receiptUrl?: string;
   verified?: boolean;
@@ -221,6 +337,17 @@ export const AssetStatus = {
   needs_attention: "needs_attention",
 } as const;
 
+export type AssetRetiredReason =
+  | (typeof AssetRetiredReason)[keyof typeof AssetRetiredReason]
+  | null;
+
+export const AssetRetiredReason = {
+  replaced: "replaced",
+  removed: "removed",
+  failed: "failed",
+  other: "other",
+} as const;
+
 export interface Asset {
   id: string;
   propertyId: string;
@@ -239,6 +366,78 @@ export interface Asset {
   createdAt: string;
   updatedAt?: string;
   retiredAt?: string | null;
+  retiredReason?: AssetRetiredReason;
+  /** 0–100, from the shared formula (age vs regional lifespan, service history, overdue tasks). Set on GET responses. */
+  healthScore?: number;
+  /** Expected service life, adjusted for the property's climate region. Set on GET responses. */
+  expectedLifespanYears?: number;
+  lastServiceDate?: string | null;
+  overdueTaskCount?: number;
+  /** Casa Dossier's regional estimate. Shown only as an estimate, when replacementCost isn't set. */
+  estimatedReplacementCost?: number | null;
+}
+
+export type HomeType = (typeof HomeType)[keyof typeof HomeType];
+
+export const HomeType = {
+  single_family: "single_family",
+  townhouse: "townhouse",
+  condo: "condo",
+} as const;
+
+export type StarterAssetSuggestionCategory =
+  (typeof StarterAssetSuggestionCategory)[keyof typeof StarterAssetSuggestionCategory];
+
+export const StarterAssetSuggestionCategory = {
+  HVAC: "HVAC",
+  Plumbing: "Plumbing",
+  Electrical: "Electrical",
+  Roof: "Roof",
+  Appliance: "Appliance",
+  Other: "Other",
+} as const;
+
+/**
+ * Age-related reason, for the apps to translate
+ */
+export type StarterAssetSuggestionReasonCode =
+  | (typeof StarterAssetSuggestionReasonCode)[keyof typeof StarterAssetSuggestionReasonCode]
+  | null;
+
+export const StarterAssetSuggestionReasonCode = {
+  galvanized_pipes: "galvanized_pipes",
+  polybutylene_pipes: "polybutylene_pipes",
+  knob_and_tube: "knob_and_tube",
+  aluminum_wiring: "aluminum_wiring",
+} as const;
+
+export interface StarterAssetSuggestion {
+  key: string;
+  name: string;
+  category: StarterAssetSuggestionCategory;
+  /** Pre-ticked in the checklist */
+  recommended: boolean;
+  /** Age-related reason, for the apps to translate */
+  reasonCode: StarterAssetSuggestionReasonCode;
+  /** Why it's suggested for this home in particular (age-related checks) */
+  reason: string | null;
+  /** The year built, when the original is likely still in place. Null when unknown. */
+  estimatedInstallYear: number | null;
+}
+
+export interface StarterAssetSuggestions {
+  homeType: HomeType;
+  yearBuilt: number | null;
+  suggestions: StarterAssetSuggestion[];
+}
+
+export interface AddStarterAssetsBody {
+  /**
+   * @minItems 1
+   * @maxItems 20
+   */
+  keys: string[];
+  homeType?: HomeType;
 }
 
 export type CreateAssetBodyCategory =
@@ -280,13 +479,26 @@ export const UpdateAssetBodyCategory = {
   Other: "Other",
 } as const;
 
+/**
+ * "verified" is set only by completed CasaService work and can't be set here.
+ */
 export type UpdateAssetBodyStatus =
   (typeof UpdateAssetBodyStatus)[keyof typeof UpdateAssetBodyStatus];
 
 export const UpdateAssetBodyStatus = {
-  verified: "verified",
   unverified: "unverified",
   needs_attention: "needs_attention",
+} as const;
+
+export type UpdateAssetBodyRetiredReason =
+  | (typeof UpdateAssetBodyRetiredReason)[keyof typeof UpdateAssetBodyRetiredReason]
+  | null;
+
+export const UpdateAssetBodyRetiredReason = {
+  replaced: "replaced",
+  removed: "removed",
+  failed: "failed",
+  other: "other",
 } as const;
 
 export interface UpdateAssetBody {
@@ -297,10 +509,13 @@ export interface UpdateAssetBody {
   serialNumber?: string | null;
   installDate?: string | null;
   warrantyExpiry?: string | null;
+  /** "verified" is set only by completed CasaService work and can't be set here. */
   status?: UpdateAssetBodyStatus;
   notes?: string | null;
   photoUrl?: string | null;
+  /** Set to retire the asset (requires retiredReason); null to reactivate it. */
   retiredAt?: string | null;
+  retiredReason?: UpdateAssetBodyRetiredReason;
   replacementCost?: number | null;
 }
 
@@ -312,7 +527,6 @@ export interface CreateServiceRecordBody {
   cost?: number;
   nextServiceDate?: string;
   receiptUrl?: string;
-  verified?: boolean;
 }
 
 export interface CreateMaintenanceTaskBody {
@@ -389,6 +603,9 @@ export interface UserProfile {
   role: UserProfileRole;
   technicianNumber?: string;
   phone?: string;
+  emailReminders?: boolean;
+  pushReminders?: boolean;
+  weeklySummary?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -435,6 +652,7 @@ export const MarketplaceJobStatus = {
   en_route: "en_route",
   arrived: "arrived",
   completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface MarketplaceJob {
@@ -496,6 +714,7 @@ export const TechJobSummaryStatus = {
   en_route: "en_route",
   arrived: "arrived",
   completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface TechJobSummary {
@@ -532,6 +751,7 @@ export const TechJobDetailStatus = {
   en_route: "en_route",
   arrived: "arrived",
   completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface TechJobDetail {
@@ -583,6 +803,7 @@ export const AssignedJobSummaryStatus = {
   en_route: "en_route",
   arrived: "arrived",
   completed: "completed",
+  cancelled: "cancelled",
 } as const;
 
 export interface AssignedJobSummary {
@@ -602,6 +823,60 @@ export interface AssignedJobSummary {
   scheduledAt?: string;
   acceptedAt: string;
   createdAt: string;
+}
+
+export interface CancelJobBody {
+  /** @maxLength 500 */
+  reason?: string;
+}
+
+export type JobStatusResultStatus =
+  (typeof JobStatusResultStatus)[keyof typeof JobStatusResultStatus];
+
+export const JobStatusResultStatus = {
+  open: "open",
+  claimed: "claimed",
+  en_route: "en_route",
+  arrived: "arrived",
+  completed: "completed",
+  cancelled: "cancelled",
+} as const;
+
+export interface JobStatusResult {
+  ok: boolean;
+  status: JobStatusResultStatus;
+}
+
+export interface ServiceArea {
+  name: string;
+  centerLat: number;
+  centerLng: number;
+  radiusMiles: number;
+}
+
+export type ServiceAreaCheckStatus =
+  (typeof ServiceAreaCheckStatus)[keyof typeof ServiceAreaCheckStatus];
+
+export const ServiceAreaCheckStatus = {
+  inside: "inside",
+  outside: "outside",
+  unknown: "unknown",
+} as const;
+
+export interface ServiceAreaCheck {
+  inServiceArea: boolean;
+  status: ServiceAreaCheckStatus;
+  areaName: string;
+  onWaitlist: boolean;
+}
+
+export interface JoinServiceWaitlistBody {
+  propertyId: string;
+}
+
+export interface JoinServiceWaitlistResult {
+  ok: boolean;
+  onWaitlist: boolean;
 }
 
 export interface ScheduleJobBody {
@@ -786,6 +1061,8 @@ export const EmailTriggerTriggerEvent = {
   technician_accepted_job: "technician_accepted_job",
   job_completed: "job_completed",
   overdue_maintenance: "overdue_maintenance",
+  maintenance_due_soon: "maintenance_due_soon",
+  weekly_summary: "weekly_summary",
   asset_end_of_life: "asset_end_of_life",
   property_transfer_initiated: "property_transfer_initiated",
   collaborator_invited: "collaborator_invited",
@@ -815,6 +1092,8 @@ export const UpsertEmailTriggerBodyTriggerEvent = {
   technician_accepted_job: "technician_accepted_job",
   job_completed: "job_completed",
   overdue_maintenance: "overdue_maintenance",
+  maintenance_due_soon: "maintenance_due_soon",
+  weekly_summary: "weekly_summary",
   asset_end_of_life: "asset_end_of_life",
   property_transfer_initiated: "property_transfer_initiated",
   collaborator_invited: "collaborator_invited",
@@ -921,6 +1200,8 @@ export interface LockerFile {
   id: string;
   userId: string;
   folderId?: string | null;
+  /** The home this document is about */
+  propertyId?: string | null;
   name: string;
   objectPath: string;
   contentType: string;
@@ -934,11 +1215,13 @@ export interface CreateLockerFileBody {
   contentType: string;
   size?: number;
   folderId?: string;
+  propertyId?: string;
 }
 
 export interface UpdateLockerFileBody {
   name?: string;
   folderId?: string | null;
+  propertyId?: string | null;
 }
 
 export interface OkResult {
@@ -1030,6 +1313,8 @@ export interface CapitalOutlookAsset {
   installDate: string | null;
   installYear: number | null;
   replacementCost: number | null;
+  /** True when replacementCost is Casa Dossier's regional estimate rather than an owner-entered figure */
+  replacementCostIsEstimate: boolean;
   expectedLifespanYears: number;
   replacementYear: number | null;
   yearsRemaining: number | null;
@@ -1041,6 +1326,8 @@ export interface CapitalOutlookAsset {
 export interface CapitalTimelineEntry {
   year: number;
   projectedCost: number;
+  /** The part of projectedCost that comes from estimates */
+  estimatedCost: number;
   assetNames: string[];
 }
 
@@ -1048,16 +1335,21 @@ export interface CapitalNextReplacement {
   name: string;
   year: number;
   cost: number;
+  costIsEstimate: boolean;
 }
 
 export type CapitalOutlookSummary = {
   nextReplacement: CapitalNextReplacement | null;
   next5YearCost: number;
   next10YearCost: number;
+  next5YearEstimatedCost: number;
+  next10YearEstimatedCost: number;
 };
 
 export interface CapitalOutlook {
   totalTrackedValue: number;
+  /** The part of totalTrackedValue that comes from estimates */
+  estimatedTrackedValue: number;
   assets: CapitalOutlookAsset[];
   /** One entry per year from the current year through +20 */
   timeline: CapitalTimelineEntry[];
@@ -1076,8 +1368,12 @@ export interface LedgerCategoryTotal {
 }
 
 export type InvestmentLedgerTotals = {
+  /** Costs the owner entered on service records */
   actual: number;
+  /** Estimated cost of open tasks due in the range */
   expected: number;
+  /** Estimates on tasks completed without an entered cost. Not counted in actual. */
+  estimatedCompleted: number;
 };
 
 export interface InvestmentLedger {
@@ -1181,7 +1477,7 @@ export const AssetScanResultCategory = {
 } as const;
 
 /**
- * Parsed straight from the AI response; fields are best-effort
+ * AI response validated against this schema on the server; fields are best-effort
  */
 export interface AssetScanResult {
   brand?: string | null;
@@ -1238,6 +1534,7 @@ export interface PropertyTransfer {
   toUserId: string | null;
   status: PropertyTransferStatus;
   token: string;
+  includeDocuments?: boolean;
   createdAt: string;
   expiresAt: string | null;
   completedAt: string | null;
@@ -1248,6 +1545,8 @@ export interface InitiatePropertyTransferBody {
   toEmail: string;
   /** Ignored — the sender's verified email is used */
   fromEmail?: string;
+  /** Also move the sender's Digital Locker documents tagged to this home */
+  includeDocuments?: boolean;
 }
 
 export interface TransferClaimProperty {
@@ -1483,6 +1782,13 @@ export type ListAssetsParams = {
   includeRetired?: boolean;
 };
 
+export type GetStarterAssetsParams = {
+  /**
+   * Defaults to a guess from the street address (a unit number means condo)
+   */
+  homeType?: HomeType;
+};
+
 export type ListGuidesParams = {
   category?: string;
   difficulty?: string;
@@ -1506,9 +1812,26 @@ export type CompleteMarketplaceJob200 = {
   serviceRecordId?: string;
 };
 
+export type CheckServiceAreaParams = {
+  propertyId: string;
+};
+
 export type ListLockerFilesParams = {
   folderId?: string;
 };
+
+export type ListAdminOwnershipClaimsParams = {
+  status?: ListAdminOwnershipClaimsStatus;
+};
+
+export type ListAdminOwnershipClaimsStatus =
+  (typeof ListAdminOwnershipClaimsStatus)[keyof typeof ListAdminOwnershipClaimsStatus];
+
+export const ListAdminOwnershipClaimsStatus = {
+  pending: "pending",
+  approved: "approved",
+  rejected: "rejected",
+} as const;
 
 export type ListAdminUsersParams = {
   search?: string;

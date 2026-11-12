@@ -11,10 +11,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { ReceiptUpload } from "@/components/receipt-upload";
 import { Calendar, CheckCircle2, DollarSign, FileText, Hammer, Loader2, Plus, UserCheck, UserRound, X } from "lucide-react";
 
 // ── Inline Add Service Record Form ────────────────────────────────────────────
 const TODAY = new Date().toISOString().split("T")[0]!;
+// Work logged this long after it happened gets a nudge to attach a receipt,
+// since the record will show it was added later.
+const LATE_ENTRY_DAYS = 30;
 
 // Stored sentinel the server also writes for DIY records; not a display string.
 const DIY_TECHNICIAN_NAME = "Homeowner (DIY)";
@@ -39,6 +43,10 @@ export function AddServiceRecordForm({ assetId, propertyId, onSuccess }: {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<ServiceFormState>(BLANK);
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const isLateEntry =
+    !!form.date && Date.now() - new Date(`${form.date}T12:00:00`).getTime() > LATE_ENTRY_DAYS * 24 * 60 * 60 * 1000;
   const uid = useId();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -50,6 +58,7 @@ export function AddServiceRecordForm({ assetId, propertyId, onSuccess }: {
         queryClient.invalidateQueries({ queryKey: getListServiceRecordsQueryKey(assetId) });
         queryClient.invalidateQueries({ queryKey: getGetPropertySummaryQueryKey(propertyId) });
         setForm(BLANK);
+        setReceiptUrl(null);
         setOpen(false);
         onSuccess();
       },
@@ -81,6 +90,7 @@ export function AddServiceRecordForm({ assetId, propertyId, onSuccess }: {
         technicianName: form.technicianName.trim() || undefined,
         companyName: form.companyName.trim() || undefined,
         cost: form.cost ? parseFloat(form.cost) : undefined,
+        receiptUrl: receiptUrl ?? undefined,
       },
     });
   }
@@ -199,12 +209,24 @@ export function AddServiceRecordForm({ assetId, propertyId, onSuccess }: {
             </div>
           </div>
         )}
+        <div className="space-y-1.5">
+          <Label htmlFor={`${uid}-receipt`} className="text-xs font-semibold">{t("assetDetail.record.receiptOptional")}</Label>
+          {isLateEntry && !receiptUrl && (
+            <p className="text-[11px] text-amber-700">{t("assetDetail.record.lateEntryHint")}</p>
+          )}
+          <ReceiptUpload
+            id={`${uid}-receipt`}
+            value={receiptUrl}
+            onChange={setReceiptUrl}
+            onUploadingChange={setReceiptUploading}
+          />
+        </div>
         <div className="flex gap-2 pt-0.5">
           <Button
             variant="outline"
             size="sm"
             className="flex-1 h-8 text-xs"
-            onClick={() => { setOpen(false); setForm(BLANK); }}
+            onClick={() => { setOpen(false); setForm(BLANK); setReceiptUrl(null); }}
             disabled={mutation.isPending}
           >
             {t("common.cancel")}
@@ -213,7 +235,7 @@ export function AddServiceRecordForm({ assetId, propertyId, onSuccess }: {
             size="sm"
             className="flex-1 h-8 text-xs gap-1.5"
             onClick={handleSubmit}
-            disabled={!form.description.trim() || mutation.isPending}
+            disabled={!form.description.trim() || mutation.isPending || receiptUploading}
           >
             {mutation.isPending ? (
               <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("common.saving")}</>

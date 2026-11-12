@@ -41,7 +41,7 @@ const PLANS: Plan[] = [
     icon: "shield",
     accentColor: "#94a3b8",
     paid: false,
-    features: ["oneProperty", "oneFreeScan", "manualTasks", "assetTracking", "serviceLog", "diyGuides"],
+    features: ["oneProperty", "fiveFreeScans", "fiveFreePlans", "manualTasks", "assetTracking", "serviceLog", "diyGuides"],
   },
   {
     id: "basic",
@@ -50,7 +50,7 @@ const PLANS: Plan[] = [
     accentColor: "#10b981",
     badge: "mostPopular",
     paid: true,
-    features: ["oneProperty", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "healthScoring", "fullHistory"],
+    features: ["oneProperty", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "healthScoring", "collaborators", "fullHistory"],
   },
   {
     id: "managed",
@@ -59,7 +59,7 @@ const PLANS: Plan[] = [
     accentColor: "#3b82f6",
     badge: "forLandlords",
     paid: true,
-    features: ["upToFive", "proOnboarding", "filterDelivery", "fifteenOff", "oneCredit", "inspection"],
+    features: ["upToFive", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "collaborators"],
   },
   {
     id: "concierge",
@@ -68,9 +68,13 @@ const PLANS: Plan[] = [
     accentColor: "#f59e0b",
     badge: "bestValue",
     paid: true,
-    features: ["unlimitedProperties", "prioritySupport", "twentyFiveOff", "fourCredits", "advisor"],
+    features: ["unlimitedProperties", "unlimitedScans", "aiPlans", "ledger", "capitalOutlook", "collaborators"],
   },
 ];
+
+// Managed and Concierge are hidden until their offerings are finalised. They stay
+// visible only to someone already on them, so they can see and manage their plan.
+const HIDDEN_PLANS: SubscriptionTier[] = ["managed", "concierge"];
 
 export default function UpgradeScreen() {
   const router = useRouter();
@@ -84,6 +88,7 @@ export default function UpgradeScreen() {
 
   const currentTier: SubscriptionTier = subscription?.tier ?? "essential";
   const currentRank = TIER_RANK[currentTier];
+  const visiblePlans = PLANS.filter((p) => !HIDDEN_PLANS.includes(p.id) || p.id === currentTier);
 
   async function handleUpgrade(tier: SubscriptionTier) {
     if (tier === "essential") return; // the free plan has no checkout
@@ -164,7 +169,7 @@ export default function UpgradeScreen() {
           )}
 
           {/* Plan cards */}
-          {PLANS.map((plan) => {
+          {visiblePlans.map((plan) => {
             const isCurrentPlan = plan.id === currentTier;
             const isDowngrade = TIER_RANK[plan.id] < currentRank;
             const busy = loadingTier === plan.id;

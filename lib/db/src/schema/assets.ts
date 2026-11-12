@@ -5,6 +5,7 @@ import { propertiesTable } from "./properties";
 
 export const assetCategoryEnum = ["HVAC", "Plumbing", "Electrical", "Roof", "Appliance", "Structural", "Other"] as const;
 export const assetStatusEnum = ["verified", "unverified", "needs_attention"] as const;
+export const assetRetiredReasonEnum = ["replaced", "removed", "failed", "other"] as const;
 
 export const assetsTable = pgTable("assets", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -23,6 +24,7 @@ export const assetsTable = pgTable("assets", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   retiredAt: timestamp("retired_at"),
+  retiredReason: text("retired_reason").$type<typeof assetRetiredReasonEnum[number]>(),
 }, (t) => [
   index("assets_property_id_idx").on(t.propertyId),
 ]);

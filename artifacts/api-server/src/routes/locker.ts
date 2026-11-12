@@ -5,6 +5,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { ObjectStorageService, isUploadedBy } from "../lib/objectStorage.js";
 import { requireTier } from "../lib/subscription.js";
+import { getOwnedProperty } from "../lib/access.js";
 import { z } from "zod";
 
 const router = Router();
@@ -18,12 +19,14 @@ const CreateFileBody = z.object({
   contentType: z.string().min(1),
   size: z.number().int().optional(),
   folderId: z.string().optional(),
+  propertyId: z.string().optional(),
 });
 const FolderParams = z.object({ folderId: z.string() });
 const FileParams = z.object({ fileId: z.string() });
 const UpdateFileBody = z.object({
   name: z.string().min(1).max(500).optional(),
   folderId: z.string().nullable().optional(),
+  propertyId: z.string().nullable().optional(),
 });
 
 // ── Folders ───────────────────────────────────────────────────────────────────
@@ -113,13 +116,27 @@ router.post("/locker/files", requireAuth(), requireTier("basic"), async (req, re
     res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const { folderId, ...rest } = parsed.data;
+  const { folderId, propertyId: requestedPropertyId, ...rest } = parsed.data;
+  // Clients tag uploads with the home being viewed; only the owner's documents
+  // can follow a home in a transfer, so anything else is filed untagged.
+  const propertyId =
+    requestedPropertyId && (await getOwnedProperty(requestedPropertyId, req.userId))
+      ? requestedPropertyId
+      : null;
   // Only objects this user uploaded may be filed, and each only once —
   // otherwise a user could claim someone else's upload and lock them out of it.
   if (!isUploadedBy(rest.objectPath, req.userId)) {
     res.status(400).json({ error: "Invalid objectPath" });
     return;
   }
+  // Size and type come from the stored bytes, not the client's description.
+  const upload = await objectStorageService.checkUpload(rest.objectPath);
+  if (!upload.ok) {
+    res.status(upload.status).json({ error: upload.error });
+    return;
+  }
+  rest.contentType = upload.contentType;
+  rest.size = upload.size;
   const [alreadyFiled] = await db
     .select({ id: lockerFilesTable.id })
     .from(lockerFilesTable)
@@ -141,7 +158,7 @@ router.post("/locker/files", requireAuth(), requireTier("basic"), async (req, re
   }
   const [file] = await db
     .insert(lockerFilesTable)
-    .values({ ...rest, folderId: folderId ?? null, userId: req.userId })
+    .values({ ...rest, folderId: folderId ?? null, propertyId, userId: req.userId })
     .returning();
   res.status(201).json(file);
 });
@@ -159,6 +176,10 @@ router.patch("/locker/files/:fileId", requireAuth(), async (req, res) => {
     .where(and(eq(lockerFilesTable.id, fileId), eq(lockerFilesTable.userId, req.userId)));
   if (!existing) {
     res.status(404).json({ error: "File not found" });
+    return;
+  }
+  if (parsed.data.propertyId && !(await getOwnedProperty(parsed.data.propertyId, req.userId))) {
+    res.status(404).json({ error: "Property not found" });
     return;
   }
   const [file] = await db

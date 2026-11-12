@@ -66,8 +66,21 @@ const mocks = vi.hoisted(() => {
     selectCallIdx = 0;
   };
 
+  // Which of the user's properties have service history (kept as unclaimed dossiers)
+  const dbSelectDistinctWhere = vi.fn().mockResolvedValue([]);
+  const dbSelectDistinct = vi.fn(() => {
+    const chain: Record<string, unknown> = {
+      from: vi.fn(() => chain),
+      innerJoin: vi.fn(() => chain),
+      where: dbSelectDistinctWhere,
+    };
+    return chain;
+  });
+
+  const txInsert = vi.fn(() => ({ values: vi.fn().mockResolvedValue(undefined) }));
+
   const dbTransaction = vi.fn(async (cb: (tx: unknown) => Promise<void>) => {
-    const tx = { delete: txDelete, update: txUpdate, select: txSelect };
+    const tx = { delete: txDelete, update: txUpdate, select: txSelect, insert: txInsert };
     await cb(tx);
   });
 
@@ -84,7 +97,10 @@ const mocks = vi.hoisted(() => {
     txSelect,
     txSelectWhere,
     dbSelectImpl,
+    dbSelectDistinct,
+    dbSelectDistinctWhere,
     dbTransaction,
+    txInsert,
     resetSelectQueue,
   };
 });
@@ -106,10 +122,14 @@ vi.mock("@workspace/db", () => {
   const marketplaceJobsTable = { __table: "marketplaceJobsTable" };
   const propertyCollaboratorsTable = { __table: "propertyCollaboratorsTable" };
   const serviceRecordsTable = { __table: "serviceRecordsTable" };
+  const ownershipClaimsTable = { __table: "ownershipClaimsTable" };
+  const auditLogTable = { __table: "auditLogTable" };
+  const serviceWaitlistTable = { __table: "serviceWaitlistTable" };
 
   return {
     db: {
       select: mocks.dbSelectImpl,
+      selectDistinct: mocks.dbSelectDistinct,
       transaction: mocks.dbTransaction,
     },
     // drizzle helpers — return their arguments (enough for the route to compose them)
@@ -130,6 +150,9 @@ vi.mock("@workspace/db", () => {
     marketplaceJobsTable,
     propertyCollaboratorsTable,
     serviceRecordsTable,
+    ownershipClaimsTable,
+    auditLogTable,
+    serviceWaitlistTable,
   };
 });
 
@@ -164,6 +187,8 @@ vi.mock("../../lib/logger.js", () => ({
 // ---------------------------------------------------------------------------
 // Build a minimal test Express app
 // ---------------------------------------------------------------------------
+vi.mock("../../lib/ensureProfile.js", () => ({ ensureProfile: vi.fn(() => Promise.resolve()) }));
+
 // Import the router AFTER vi.mock() calls so it picks up mocked modules.
 const { default: userProfileRouter } = await import("../user-profile.js");
 
@@ -195,11 +220,13 @@ describe("DELETE /api/user", () => {
     mocks.txUpdate.mockReturnValue({
       set: vi.fn(() => ({ where: vi.fn().mockResolvedValue(undefined) })),
     });
+    mocks.dbSelectDistinctWhere.mockResolvedValue([]);
     mocks.dbTransaction.mockImplementation(async (cb) => {
       const tx = {
         delete: mocks.txDelete,
         update: mocks.txUpdate,
         select: mocks.txSelect,
+        insert: mocks.txInsert,
       };
       await cb(tx);
     });
@@ -231,6 +258,29 @@ describe("DELETE /api/user", () => {
     expect(deletedTableNames).toContain("propertiesTable");
     expect(deletedTableNames).toContain("pushTokensTable");
     expect(deletedTableNames).toContain("subscriptionsTable");
+  });
+
+  it("keeps a home with service history as an unclaimed dossier instead of deleting it", async () => {
+    // subscription, locker files, owned properties, then asset photos and receipts
+    mocks.resetSelectQueue([], [], [{ id: "home-1", photoUrl: null }], [], []);
+    mocks.dbSelectDistinctWhere.mockResolvedValue([{ propertyId: "home-1" }]);
+    mocks.txSelectWhere
+      .mockResolvedValueOnce([]) // marketplace jobs assigned to this user
+      .mockResolvedValueOnce([{ id: "home-1", address: "12 Oak St", city: "Atlanta", state: "GA", zipCode: "30301" }])
+      .mockResolvedValueOnce([]); // the home's assets
+
+    const res = await request(buildApp()).delete("/api/user");
+    expect(res.status).toBe(204);
+
+    // The home row is updated (owner detached), and the release is audited.
+    const updatedTables = mocks.txUpdate.mock.calls.map((call) => ((call as unknown[])[0] as { __table: string }).__table);
+    expect(updatedTables).toContain("propertiesTable");
+    const setCall = mocks.txUpdate.mock.results
+      .map((r) => (r.value as { set: ReturnType<typeof vi.fn> }).set)
+      .flatMap((set) => set.mock.calls.map(([values]) => values as Record<string, unknown>))
+      .find((values) => "releasedAt" in values);
+    expect(setCall).toMatchObject({ userId: null, ownerEmail: null, photoUrl: null, normalizedAddress: "12 oak st|30301" });
+    expect(mocks.txInsert).toHaveBeenCalled();
   });
 
   it("deletes the Clerk user as the final step", async () => {

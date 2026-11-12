@@ -21,6 +21,9 @@ import {
 import { GeneratingStep } from "@/components/add-asset/generating-step";
 import { DoneStep } from "@/components/add-asset/done-step";
 
+// Free-tier AI scans; matches FREE_AI_ALLOWANCE in the API (lib/subscription.ts).
+const FREE_AI_ALLOWANCE = 5;
+
 type Props = {
   propertyId: string;
   open: boolean;
@@ -43,7 +46,7 @@ export function AddAssetDialog({ propertyId, open, onOpenChange, onCreated }: Pr
   const { t } = useTranslation();
   const { toast } = useToast();
   const { subscription, openUpgradeModal } = useSubscription();
-  const aiScanLocked = subscription?.tier === "essential" && (subscription?.aiScansUsed ?? 0) >= 1;
+  const aiScanLocked = subscription?.tier === "essential" && (subscription?.aiScansUsed ?? 0) >= FREE_AI_ALLOWANCE;
 
   const [step, setStep] = useState<Step>("method");
   const [imageFile, setImageFile] = useState<File | null>(null);
