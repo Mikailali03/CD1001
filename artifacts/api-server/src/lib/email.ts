@@ -1,51 +1,9 @@
 import { db, emailTemplatesTable, emailTriggersTable, type TriggerEvent } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
-import { logger } from "./logger.js";
 import { getAppUrl } from "./appUrl.js";
+import { sendEmail, type EmailMessage } from "./emailDelivery.js";
 
-const RESEND_ENDPOINT = "https://api.resend.com/emails";
-const DEFAULT_FROM = "Casa Dossier <noreply@casadossier.com>";
-
-export interface EmailMessage {
-  to: string;
-  subject: string;
-  html: string;
-  text?: string;
-}
-
-/**
- * Send a transactional email through Resend. A no-op (logged) when
- * RESEND_API_KEY isn't configured. Rejects on delivery failure, so callers on
- * a request path should fire and forget with `.catch(...)`.
- */
-export async function sendEmail({ to, subject, html, text }: EmailMessage): Promise<void> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    logger.info({ to, subject }, "RESEND_API_KEY not set, skipping email");
-    return;
-  }
-
-  const res = await fetch(RESEND_ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: process.env.EMAIL_FROM || DEFAULT_FROM,
-      to: [to],
-      // Subjects are plain text and must stay on one line.
-      subject: subject.replace(/[\r\n]+/g, " "),
-      html,
-      ...(text ? { text } : {}),
-    }),
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`Resend responded ${res.status}: ${detail.slice(0, 500)}`);
-  }
-}
+export { sendEmail, type EmailMessage } from "./emailDelivery.js";
 
 export function escapeHtml(value: string): string {
   return value
