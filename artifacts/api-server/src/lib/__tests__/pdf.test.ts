@@ -63,4 +63,29 @@ describe("renderReportPdf", () => {
     expect(noCosts).toContain("Personal copy");
     expect(xrefIsValid(Buffer.from(noCosts, "latin1"))).toBe(true);
   });
+
+  it("uses the dossier layout: readable install dates, record counts, and no unsupported claims", () => {
+    const pdf = renderReportPdf(report, { includeCosts: false, sentBy: null }).toString("latin1");
+    expect(pdf).toContain("INSTALLED: Apr 2019");
+    expect(pdf).toContain("S/N: S123");
+    expect(pdf).toContain("1 Verified");
+    expect(pdf).toContain("1 Self-reported");
+    expect(pdf).toContain("CURRENT OPERATIONAL INVENTORY");
+    expect(pdf).toContain("/BaseFont /Courier");
+    expect(pdf).not.toMatch(/Audited|Official|Chain of Custody/);
+    expect(xrefIsValid(Buffer.from(pdf, "latin1"))).toBe(true);
+  });
+
+  it("continues a long service history onto the next page", () => {
+    const [asset] = report.activeAssets;
+    const long = {
+      ...report,
+      activeAssets: [{ ...asset!, records: Array.from({ length: 40 }, (_, i) => ({ ...asset!.records[1]!, id: `r${i}` })) }],
+    } as PropertyReportData;
+    const pdf = renderReportPdf(long, { includeCosts: true, sentBy: null });
+    const text = pdf.toString("latin1");
+    // Parentheses are escaped inside PDF strings.
+    expect(text).toContain("Water Heater \\(continued\\)");
+    expect(xrefIsValid(pdf)).toBe(true);
+  });
 });
