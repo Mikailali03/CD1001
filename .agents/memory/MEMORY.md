@@ -1,2 +1,3 @@
 - [Metro install/watch races](metro-install-watch-races.md) — transient pnpm package paths can crash Expo after unrelated workspace installs; do not recreate them as dependencies.
 - [Expo Go preview handshake](expo-preview-transport.md) — native signing headers can trigger a blocking CLI login prompt that ordinary browser/JSON checks miss.
+- [Email sending domain](email-sending-domain.md) — use notifications.casadossier.com for notification email, not the main domain.
